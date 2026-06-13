@@ -1,0 +1,9 @@
+[package]
+name = "cian-lua"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Lua configuration host for cian (mlua): keymaps, themes, ext-open DSL"
+
+[dependencies]

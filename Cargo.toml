@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/cian-core",
+    "crates/cian-tui",
+    "crates/cian-pty",
+    "crates/cian-lua",
+    "crates/cian-bin",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT"
+
+[workspace.dependencies]
+cian-core = { path = "crates/cian-core" }
+cian-tui  = { path = "crates/cian-tui"  }
+cian-pty  = { path = "crates/cian-pty"  }
+cian-lua  = { path = "crates/cian-lua"  }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

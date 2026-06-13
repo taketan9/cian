@@ -1,0 +1,17 @@
+[package]
+name = "cian"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "cian: a modern two-pane file manager for the terminal"
+
+[[bin]]
+name = "cian"
+path = "src/main.rs"
+
+[dependencies]
+cian-core = { workspace = true }
+cian-tui  = { workspace = true }
+cian-pty  = { workspace = true }
+cian-lua  = { workspace = true }

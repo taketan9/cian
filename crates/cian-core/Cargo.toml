@@ -1,0 +1,9 @@
+[package]
+name = "cian-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Domain logic for cian: file operations, marks, history, bookmarks, masks, search"
+
+[dependencies]

@@ -1,0 +1,10 @@
+[package]
+name = "cian-tui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Terminal UI for cian: ratatui rendering, input, layout, popups"
+
+[dependencies]
+cian-core = { workspace = true }

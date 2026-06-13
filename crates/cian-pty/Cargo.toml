@@ -1,0 +1,9 @@
+[package]
+name = "cian-pty"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "PTY-backed shell pane for cian (portable-pty + alacritty_terminal)"
+
+[dependencies]
