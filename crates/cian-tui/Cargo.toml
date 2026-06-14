@@ -11,3 +11,6 @@ cian-core = { workspace = true }
 ratatui   = { workspace = true }
 crossterm = { workspace = true }
 anyhow    = { workspace = true }
+arboard   = { workspace = true }
+toml      = { workspace = true }
+serde     = { workspace = true }
