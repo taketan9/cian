@@ -8,6 +8,7 @@ description = "Terminal UI for cian: ratatui rendering, input, layout, popups"
 
 [dependencies]
 cian-core = { workspace = true }
+cian-lua  = { workspace = true }
 ratatui   = { workspace = true }
 crossterm = { workspace = true }
 anyhow    = { workspace = true }

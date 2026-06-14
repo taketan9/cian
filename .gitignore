@@ -4,3 +4,6 @@
 
 # あふ本体（リファレンス資料）はリポジトリ管理対象外。手元のみで参照。
 /あふ/
+
+# Local handoff doc for cross-session continuity; not part of the project.
+/HANDOFF.md

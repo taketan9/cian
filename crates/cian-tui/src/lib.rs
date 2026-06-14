@@ -1,11 +1,14 @@
+use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use anyhow::Result;
 use cian_core::ops::{self, Conflict, OpReport};
 use cian_core::Pane;
+use cian_lua::Config;
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
     KeyModifiers, KeyboardEnhancementFlags, MouseButton, MouseEvent, MouseEventKind,
@@ -23,12 +26,172 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragra
 use ratatui::{Frame, Terminal};
 use serde::{Deserialize, Serialize};
 
-// cian accent (cian-blue, kept consistent across the app)
-const CIAN_ACCENT: Color = Color::Cyan;
-const STATUS_BG: Color = Color::Rgb(40, 40, 55);
-const SELECTED_BG: Color = Color::Rgb(60, 60, 90);
-const VISUAL_BG: Color = Color::Rgb(80, 60, 30);
-const MARK_FG: Color = Color::Yellow;
+/// Resolved colour palette. Defaults match the original built-in theme; a
+/// `~/.config/cian/init.lua` calling `cian.set_theme{...}` overrides any field.
+#[derive(Debug, Clone, Copy)]
+struct ResolvedTheme {
+    accent: Color,
+    status_bg: Color,
+    selected_bg: Color,
+    visual_bg: Color,
+    mark_fg: Color,
+}
+
+impl Default for ResolvedTheme {
+    fn default() -> Self {
+        Self {
+            accent: Color::Cyan, // cian-blue, kept consistent across the app
+            status_bg: Color::Rgb(40, 40, 55),
+            selected_bg: Color::Rgb(60, 60, 90),
+            visual_bg: Color::Rgb(80, 60, 30),
+            mark_fg: Color::Yellow,
+        }
+    }
+}
+
+/// Process-wide resolved theme. Set once at startup from the Lua config so the
+/// stateless draw helpers can read it without threading it through every call.
+static THEME: OnceLock<ResolvedTheme> = OnceLock::new();
+
+fn theme() -> &'static ResolvedTheme {
+    THEME.get_or_init(ResolvedTheme::default)
+}
+
+/// Remappable normal-mode actions. Keys the user binds via `cian.set_keymap`
+/// resolve to one of these; the default key handling is otherwise untouched.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    CursorDown,
+    CursorUp,
+    CursorBottom,
+    PageUp,
+    PageDown,
+    Parent,
+    EnterDir,
+    Quit,
+    Search,
+    SearchNext,
+    SearchPrev,
+    History,
+    Shortcuts,
+    Copy,
+    Move,
+    Delete,
+    Rename,
+    NewFile,
+    NewDir,
+    OpenOther,
+    OpenOtherTab,
+    OpenExternal,
+    CopyPath,
+    CopyFileRef,
+    MarkDown,
+    MarkUp,
+    InvertMarks,
+    Visual,
+    Command,
+}
+
+/// Map a Lua action name to an [`Action`]. Unknown names are reported as
+/// config errors rather than silently ignored.
+fn action_from_name(name: &str) -> Option<Action> {
+    Some(match name {
+        "cursor_down" => Action::CursorDown,
+        "cursor_up" => Action::CursorUp,
+        "cursor_bottom" => Action::CursorBottom,
+        "page_up" => Action::PageUp,
+        "page_down" => Action::PageDown,
+        "parent" => Action::Parent,
+        "enter" => Action::EnterDir,
+        "quit" => Action::Quit,
+        "search" => Action::Search,
+        "search_next" => Action::SearchNext,
+        "search_prev" => Action::SearchPrev,
+        "history" => Action::History,
+        "shortcuts" => Action::Shortcuts,
+        "copy" => Action::Copy,
+        "move" => Action::Move,
+        "delete" => Action::Delete,
+        "rename" => Action::Rename,
+        "new_file" => Action::NewFile,
+        "new_dir" => Action::NewDir,
+        "open_other" => Action::OpenOther,
+        "open_other_tab" => Action::OpenOtherTab,
+        "open_external" => Action::OpenExternal,
+        "copy_path" => Action::CopyPath,
+        "copy_file_ref" => Action::CopyFileRef,
+        "mark_down" => Action::MarkDown,
+        "mark_up" => Action::MarkUp,
+        "invert_marks" => Action::InvertMarks,
+        "visual" => Action::Visual,
+        "command" => Action::Command,
+        _ => return None,
+    })
+}
+
+/// Parse a user colour spec: `#rrggbb`, `r,g,b`, or a named colour.
+fn parse_color(s: &str) -> Option<Color> {
+    let s = s.trim();
+    if let Some(hex) = s.strip_prefix('#') {
+        if hex.len() == 6 {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+            return Some(Color::Rgb(r, g, b));
+        }
+        return None;
+    }
+    if s.contains(',') {
+        let parts: Vec<&str> = s.split(',').map(|x| x.trim()).collect();
+        if parts.len() == 3 {
+            let r = parts[0].parse::<u8>().ok()?;
+            let g = parts[1].parse::<u8>().ok()?;
+            let b = parts[2].parse::<u8>().ok()?;
+            return Some(Color::Rgb(r, g, b));
+        }
+        return None;
+    }
+    match s.to_lowercase().as_str() {
+        "black" => Some(Color::Black),
+        "red" => Some(Color::Red),
+        "green" => Some(Color::Green),
+        "yellow" => Some(Color::Yellow),
+        "blue" => Some(Color::Blue),
+        "magenta" => Some(Color::Magenta),
+        "cyan" => Some(Color::Cyan),
+        "white" => Some(Color::White),
+        "gray" | "grey" => Some(Color::Gray),
+        "darkgray" | "darkgrey" => Some(Color::DarkGray),
+        "lightred" => Some(Color::LightRed),
+        "lightgreen" => Some(Color::LightGreen),
+        "lightyellow" => Some(Color::LightYellow),
+        "lightblue" => Some(Color::LightBlue),
+        "lightmagenta" => Some(Color::LightMagenta),
+        "lightcyan" => Some(Color::LightCyan),
+        _ => None,
+    }
+}
+
+/// Resolve a Lua [`Theme`] into a concrete palette, collecting any invalid
+/// colour specs as human-readable errors (the default is kept for those).
+fn resolve_theme(t: &cian_lua::Theme) -> (ResolvedTheme, Vec<String>) {
+    let mut c = ResolvedTheme::default();
+    let mut errors = Vec::new();
+    let mut apply = |spec: &Option<String>, slot: &mut Color, label: &str| {
+        if let Some(s) = spec {
+            match parse_color(s) {
+                Some(col) => *slot = col,
+                None => errors.push(format!("theme.{}: invalid color {:?}", label, s)),
+            }
+        }
+    };
+    apply(&t.accent, &mut c.accent, "accent");
+    apply(&t.status_bg, &mut c.status_bg, "status_bg");
+    apply(&t.selected_bg, &mut c.selected_bg, "selected_bg");
+    apply(&t.visual_bg, &mut c.visual_bg, "visual_bg");
+    apply(&t.mark_fg, &mut c.mark_fg, "mark_fg");
+    (c, errors)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusedPane {
@@ -207,29 +370,50 @@ pub struct App {
     last_search_query: Option<String>,
     pub shortcuts: ShortcutStore,
     pending_g: bool,
+    config: Config,
+    /// User keymap overrides: plain character keys (no Ctrl) the user bound via
+    /// `cian.set_keymap`. Only contains entries the user set; everything else
+    /// falls through to the built-in defaults.
+    keymap: HashMap<char, Action>,
 }
 
 impl App {
-    pub fn new(left: PathBuf, right: PathBuf) -> Result<Self> {
+    pub fn new(left: PathBuf, right: PathBuf, config: Config) -> Result<Self> {
+        // Build the keymap from user overrides (invalid action names are
+        // validated and reported separately in `run`).
+        let mut keymap: HashMap<char, Action> = HashMap::new();
+        for (c, name) in &config.keymaps {
+            if let Some(a) = action_from_name(name) {
+                keymap.insert(*c, a);
+            }
+        }
+        let clipboard_on_copy = config.options.clipboard_on_copy.unwrap_or(true);
+        let mask = config
+            .options
+            .mask
+            .clone()
+            .unwrap_or_else(|| "*.*".to_string());
         Ok(Self {
             left: PaneTabs::single(Pane::new(left)?),
             right: PaneTabs::single(Pane::new(right)?),
             shell: ShellTabs::new(),
             focused: FocusedPane::Left,
             mode: Mode::Normal,
-            mask: "*.*".to_string(),
+            mask,
             command_buffer: String::new(),
             message: None,
             last_file_pane: FocusedPane::Left,
             should_quit: false,
             visual_anchor: None,
-            clipboard_on_copy: true,
+            clipboard_on_copy,
             clipboard: arboard::Clipboard::new().ok(),
             popup: Popup::None,
             layout_rects: LayoutRects::default(),
             last_search_query: None,
             shortcuts: ShortcutStore::load_or_default(),
             pending_g: false,
+            config,
+            keymap,
         })
     }
 
@@ -330,6 +514,26 @@ impl App {
         let Some(pane) = self.active_pane() else { return };
         let Some(entry) = pane.selected() else { return };
         let path = entry.path.clone();
+        // Extension-dispatch execution: if the user registered an `on_open`
+        // handler for this extension in init.lua, run it instead of the OS open.
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        if !ext.is_empty() && self.config.has_ext_open(&ext) {
+            match self.config.run_ext_open(&ext, &path) {
+                Some(Ok(())) => {
+                    self.message = Some(format!("opened via lua: {}", path.display()));
+                    return;
+                }
+                Some(Err(e)) => {
+                    self.message = Some(format!("on_open({}) error: {}", ext, e));
+                    return;
+                }
+                None => {}
+            }
+        }
         match os_open(&path) {
             Ok(()) => self.message = Some(format!("opened: {}", path.display())),
             Err(e) => self.message = Some(format!("open failed: {}", e)),
@@ -952,6 +1156,17 @@ impl App {
             // anything else: fall through to normal handling
         }
 
+        // User keymap overrides: plain character keys (no Ctrl). Only keys the
+        // user explicitly bound appear here, so default behaviour is untouched
+        // for everything else.
+        if !ctrl {
+            if let KeyCode::Char(c) = key.code {
+                if let Some(action) = self.keymap.get(&c).copied() {
+                    return self.execute_action(action);
+                }
+            }
+        }
+
         match (ctrl, shift, key.code) {
             (false, _, KeyCode::Char('q')) => self.start_quit_confirm(),
             (false, false, KeyCode::Char(':')) => {
@@ -1075,6 +1290,78 @@ impl App {
                 }
             }
             _ => {}
+        }
+        Ok(())
+    }
+
+    /// Run a remappable action (dispatched from a user keymap override). The
+    /// bodies mirror the default key handlers exactly so behaviour is identical
+    /// whether triggered by a default key or a user-bound one.
+    fn execute_action(&mut self, action: Action) -> Result<()> {
+        match action {
+            Action::CursorDown => {
+                if let Some(p) = self.active_pane_mut() { p.move_cursor(1); }
+            }
+            Action::CursorUp => {
+                if let Some(p) = self.active_pane_mut() { p.move_cursor(-1); }
+            }
+            Action::CursorBottom => {
+                if let Some(p) = self.active_pane_mut() {
+                    if !p.entries.is_empty() { p.cursor = p.entries.len() - 1; }
+                }
+            }
+            Action::PageUp => {
+                if let Some(p) = self.active_pane_mut() { p.move_cursor(-10); }
+            }
+            Action::PageDown => {
+                if let Some(p) = self.active_pane_mut() { p.move_cursor(10); }
+            }
+            Action::Parent => {
+                if let Some(p) = self.active_pane_mut() { p.go_parent()?; }
+            }
+            Action::EnterDir => {
+                if let Some(p) = self.active_pane_mut() {
+                    let is_dir = p.selected().map(|e| e.is_dir).unwrap_or(false);
+                    if is_dir { p.enter_selected()?; }
+                }
+            }
+            Action::Quit => self.start_quit_confirm(),
+            Action::Search => self.start_search(),
+            Action::SearchNext => self.jump_to_next_match(true),
+            Action::SearchPrev => self.jump_to_next_match(false),
+            Action::History => self.start_history(),
+            Action::Shortcuts => self.start_shortcuts(),
+            Action::Copy => self.start_transfer(PendingOp::Copy),
+            Action::Move => self.start_transfer(PendingOp::Move),
+            Action::Delete => self.start_delete(),
+            Action::Rename => self.start_rename(),
+            Action::NewFile => self.start_new_file(),
+            Action::NewDir => self.start_new_dir(),
+            Action::OpenOther => self.open_in_other_pane(false)?,
+            Action::OpenOtherTab => self.open_in_other_pane(true)?,
+            Action::OpenExternal => self.open_externally(),
+            Action::CopyPath => self.copy_paths_to_clipboard(),
+            Action::CopyFileRef => self.copy_file_refs_to_clipboard(),
+            Action::MarkDown => {
+                if let Some(p) = self.active_pane_mut() {
+                    let i = p.cursor; p.toggle_mark_at(i); p.move_cursor(1);
+                }
+            }
+            Action::MarkUp => {
+                if let Some(p) = self.active_pane_mut() {
+                    let i = p.cursor; p.toggle_mark_at(i); p.move_cursor(-1);
+                }
+            }
+            Action::InvertMarks => {
+                if let Some(p) = self.active_pane_mut() {
+                    for i in 0..p.entries.len() { p.toggle_mark_at(i); }
+                }
+            }
+            Action::Visual => self.visual_start(),
+            Action::Command => {
+                self.mode = Mode::Command;
+                self.command_buffer.clear();
+            }
         }
         Ok(())
     }
@@ -1227,7 +1514,33 @@ fn shortcut_icon(target: &str) -> &'static str {
 }
 
 pub fn run(left: PathBuf, right: PathBuf) -> Result<()> {
-    let mut app = App::new(left, right)?;
+    // Load user config (never fails; problems are reported below).
+    let config = cian_lua::load();
+
+    // Resolve and install the colour theme before any drawing happens.
+    let (resolved, theme_errors) = resolve_theme(&config.theme);
+    let _ = THEME.set(resolved);
+
+    // Collect all non-fatal config issues for a single startup notice.
+    let mut startup_errors = config.errors.clone();
+    startup_errors.extend(theme_errors);
+    for (c, name) in &config.keymaps {
+        if action_from_name(name).is_none() {
+            startup_errors.push(format!("keymap: unknown action {:?} (key '{}')", name, c));
+        }
+    }
+
+    let mut app = App::new(left, right, config)?;
+    if !startup_errors.is_empty() {
+        let mut lines = vec!["config loaded with issues:".to_string(), String::new()];
+        let total = startup_errors.len();
+        lines.extend(startup_errors.into_iter().take(10));
+        if total > 10 {
+            lines.push(format!("... and {} more", total - 10));
+        }
+        app.popup = Popup::Notice { lines };
+    }
+
     let mut stdout = io::stdout();
     enable_raw_mode()?;
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -1485,7 +1798,7 @@ fn shell_tabs_title<'a>(tabs: &'a ShellTabs, focused: bool) -> Line<'a> {
         let label = format!(" shell {} ", i + 1);
         let style = if i == tabs.active {
             if focused {
-                Style::default().fg(Color::Black).bg(CIAN_ACCENT).add_modifier(Modifier::BOLD)
+                Style::default().fg(Color::Black).bg(theme().accent).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White).bg(Color::DarkGray)
             }
@@ -1530,12 +1843,12 @@ fn draw_file_pane(
         let marked = pane.is_marked(i);
         let in_visual = visual_range.map(|(a, b)| i >= a && i <= b).unwrap_or(false);
         let mark_symbol = if marked { "● " } else { "  " };
-        let mark_style = Style::default().fg(MARK_FG).add_modifier(Modifier::BOLD);
+        let mark_style = Style::default().fg(theme().mark_fg).add_modifier(Modifier::BOLD);
         let name_style = if e.is_dir {
             Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
         } else { Style::default() };
         let icon_style = if e.is_dir {
-            Style::default().fg(CIAN_ACCENT)
+            Style::default().fg(theme().accent)
         } else {
             Style::default().fg(Color::Rgb(180, 180, 200))
         };
@@ -1544,12 +1857,12 @@ fn draw_file_pane(
             Span::styled(format!("{}  ", icon_for(e)), icon_style),
             Span::styled(e.name.clone(), name_style),
         ]));
-        if in_visual { item = item.style(Style::default().bg(VISUAL_BG)); }
+        if in_visual { item = item.style(Style::default().bg(theme().visual_bg)); }
         item
     }).collect();
 
     let list = List::new(items).block(block).highlight_style(
-        Style::default().bg(SELECTED_BG).add_modifier(Modifier::BOLD),
+        Style::default().bg(theme().selected_bg).add_modifier(Modifier::BOLD),
     );
 
     let mut state = ListState::default();
@@ -1559,7 +1872,7 @@ fn draw_file_pane(
 
 fn draw_shell_placeholder(f: &mut Frame, area: Rect, tabs: &ShellTabs, focused: bool) {
     let border_style = if focused {
-        Style::default().fg(CIAN_ACCENT).add_modifier(Modifier::BOLD)
+        Style::default().fg(theme().accent).add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::DarkGray)
     };
@@ -1586,7 +1899,7 @@ fn draw_command_line(f: &mut Frame, area: Rect, buf: &str) {
 
 fn focus_badge_color(mode: Mode) -> Color {
     match mode {
-        Mode::Normal => CIAN_ACCENT,
+        Mode::Normal => theme().accent,
         Mode::Visual => Color::Rgb(255, 140, 0),
         Mode::Search => Color::Rgb(80, 200, 120),
         Mode::Command => Color::Rgb(200, 100, 200),
@@ -1607,13 +1920,13 @@ fn draw_status(f: &mut Frame, area: Rect, app: &App) {
     };
     let dim_sep = Span::styled(
         "  ▏  ",
-        Style::default().fg(Color::Rgb(90, 90, 110)).bg(STATUS_BG),
+        Style::default().fg(Color::Rgb(90, 90, 110)).bg(theme().status_bg),
     );
-    let pad = Span::styled(" ", Style::default().bg(STATUS_BG));
+    let pad = Span::styled(" ", Style::default().bg(theme().status_bg));
     let chip = |label: String, fg: Color| {
         Span::styled(
             label,
-            Style::default().fg(fg).bg(STATUS_BG).add_modifier(Modifier::BOLD),
+            Style::default().fg(fg).bg(theme().status_bg).add_modifier(Modifier::BOLD),
         )
     };
 
@@ -1627,7 +1940,7 @@ fn draw_status(f: &mut Frame, area: Rect, app: &App) {
         dim_sep.clone(),
         chip(
             format!("marks {}", mark_count),
-            if mark_count > 0 { MARK_FG } else { Color::Rgb(140, 140, 160) },
+            if mark_count > 0 { theme().mark_fg } else { Color::Rgb(140, 140, 160) },
         ),
         dim_sep.clone(),
         chip(format!("mask {}", app.mask), Color::Rgb(180, 180, 220)),
@@ -1639,15 +1952,15 @@ fn draw_status(f: &mut Frame, area: Rect, app: &App) {
             spans.push(Span::styled(
                 format!("◂ {}", msg),
                 Style::default()
-                    .fg(CIAN_ACCENT)
-                    .bg(STATUS_BG)
+                    .fg(theme().accent)
+                    .bg(theme().status_bg)
                     .add_modifier(Modifier::ITALIC | Modifier::BOLD),
             ));
         }
     }
 
     let line = Line::from(spans);
-    let p = Paragraph::new(line).style(Style::default().bg(STATUS_BG));
+    let p = Paragraph::new(line).style(Style::default().bg(theme().status_bg));
     f.render_widget(p, area);
 }
 
@@ -1761,7 +2074,7 @@ fn draw_popup(f: &mut Frame, area: Rect, popup: &Popup) {
     f.render_widget(Clear, rect);
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(CIAN_ACCENT).add_modifier(Modifier::BOLD))
+        .border_style(Style::default().fg(theme().accent).add_modifier(Modifier::BOLD))
         .title(title);
     let inner = rect.inner(Margin { vertical: 1, horizontal: 2 });
     f.render_widget(block, rect);
@@ -1774,7 +2087,7 @@ fn draw_popup(f: &mut Frame, area: Rect, popup: &Popup) {
     f.render_widget(p, body_area);
 
     let footer_p = Paragraph::new(footer).style(
-        Style::default().fg(Color::Black).bg(CIAN_ACCENT).add_modifier(Modifier::BOLD),
+        Style::default().fg(Color::Black).bg(theme().accent).add_modifier(Modifier::BOLD),
     );
     f.render_widget(footer_p, footer_area);
 }

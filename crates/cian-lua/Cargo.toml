@@ -7,3 +7,7 @@ license.workspace = true
 description = "Lua configuration host for cian (mlua): keymaps, themes, ext-open DSL"
 
 [dependencies]
+# Lua 5.4 embedded (vendored) so cian stays a single self-contained binary
+# with no external Lua dependency. Default (non-send) features keep the runtime
+# single-threaded, which is all the TUI needs.
+mlua = { version = "0.10", features = ["lua54", "vendored"] }
