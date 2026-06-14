@@ -15,3 +15,4 @@ cian-core = { workspace = true }
 cian-tui  = { workspace = true }
 cian-pty  = { workspace = true }
 cian-lua  = { workspace = true }
+anyhow    = { workspace = true }

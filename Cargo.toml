@@ -21,6 +21,11 @@ cian-tui  = { path = "crates/cian-tui"  }
 cian-pty  = { path = "crates/cian-pty"  }
 cian-lua  = { path = "crates/cian-lua"  }
 
+# External crates (pinned at workspace level so all crates use the same version)
+ratatui   = "0.29"
+crossterm = "0.28"
+anyhow    = "1"
+
 [profile.release]
 opt-level = 3
 lto = "thin"

@@ -7,3 +7,4 @@ license.workspace = true
 description = "Domain logic for cian: file operations, marks, history, bookmarks, masks, search"
 
 [dependencies]
+anyhow = { workspace = true }
