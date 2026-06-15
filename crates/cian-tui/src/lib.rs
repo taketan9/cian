@@ -444,14 +444,14 @@ pub struct ShellPane {
 }
 
 impl ShellPane {
-    fn new() -> Self {
+    fn new(shell_cmd: String) -> Self {
         Self {
             tabs: Vec::new(),
             active: 0,
             zoom_pane: false,
             rows: 24,
             cols: 80,
-            shell_cmd: cian_pty::default_shell(),
+            shell_cmd,
             error: None,
         }
     }
@@ -737,10 +737,15 @@ impl App {
             .mask
             .clone()
             .unwrap_or_else(|| "*.*".to_string());
+        let shell_cmd = config
+            .options
+            .shell
+            .clone()
+            .unwrap_or_else(cian_pty::default_shell);
         Ok(Self {
             left: PaneTabs::single(Pane::new(left)?),
             right: PaneTabs::single(Pane::new(right)?),
-            shell: ShellPane::new(),
+            shell: ShellPane::new(shell_cmd),
             focused: FocusedPane::Left,
             mode: Mode::Normal,
             mask,

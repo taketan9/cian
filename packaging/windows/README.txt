@@ -14,14 +14,21 @@ Quick start (no install)
       .\cian.exe
 
 Install so you can type `cian` anywhere
-  Right-click install.ps1 -> "Run with PowerShell", or in a terminal:
+  Default (current user, no admin needed):
       powershell -ExecutionPolicy Bypass -File .\install.ps1
   Then open a NEW terminal and run:
       cian
 
+  Install into Program Files for all users (run PowerShell as administrator):
+      powershell -ExecutionPolicy Bypass -File .\install.ps1 -Dest "C:\Program Files\cian" -AllUsers
+
 What it does
-  - Copies cian.exe to %LOCALAPPDATA%\Programs\cian
-  - Adds that folder to your user PATH (no admin rights needed)
+  - Copies cian.exe to the install folder (default %LOCALAPPDATA%\Programs\cian,
+    or whatever you pass to -Dest)
+  - Unblocks it so it runs from a terminal (no "Access is denied")
+  - Adds the folder to PATH (user PATH by default; machine PATH with -AllUsers)
+  - Removes a previous per-user install if you install somewhere else, so the
+    terminal doesn't pick up a stale copy
   - If you have no config yet, writes examples\init.lua to
     %USERPROFILE%\.config\cian\init.lua
 

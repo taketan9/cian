@@ -45,6 +45,8 @@ pub struct Theme {
 pub struct Options {
     pub clipboard_on_copy: Option<bool>,
     pub mask: Option<String>,
+    /// Program to run in the embedded shell panel (e.g. "powershell.exe").
+    pub shell: Option<String>,
 }
 
 /// Mutable accumulator shared with the Lua callbacks during script execution.
@@ -238,6 +240,12 @@ fn install_api(lua: &Lua, builder: &Rc<RefCell<Builder>>) -> mlua::Result<()> {
                         Ok(v) => bm.options.mask = Some(v),
                         Err(_) => {
                             bm.errors.push("set_option: mask expects a string".into())
+                        }
+                    },
+                    "shell" => match String::from_lua(val, lua) {
+                        Ok(v) => bm.options.shell = Some(v),
+                        Err(_) => {
+                            bm.errors.push("set_option: shell expects a string".into())
                         }
                     },
                     other => bm

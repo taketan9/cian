@@ -26,6 +26,9 @@ cian.set_theme({
 ----------------------------------------------------------------------
 cian.set_option("clipboard_on_copy", true) -- also push paths to the OS clipboard on copy/move
 cian.set_option("mask", "*.*")              -- default file mask shown in the status bar
+-- Program for the embedded shell panel. Defaults to $SHELL (Unix) / cmd.exe
+-- (Windows). On Windows, use PowerShell with:
+-- cian.set_option("shell", "powershell.exe")   -- or "pwsh.exe" for PowerShell 7
 
 ----------------------------------------------------------------------
 -- Keymaps — bind a single key to an action name. These are *additive

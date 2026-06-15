@@ -102,6 +102,14 @@ Windows runner and packages a ready-to-carry zip:
    powershell -ExecutionPolicy Bypass -File .\install.ps1
    ```
 
-   Open a new terminal and type `cian`. See `packaging/windows/README.txt` in
-   the zip for details. Use a Nerd Font terminal (Windows Terminal / WezTerm)
-   for the file-type icons.
+   The default installs for the current user (no admin) under
+   `%LOCALAPPDATA%\Programs\cian`. To install into Program Files for all users,
+   run an **elevated** PowerShell and pass a destination:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\install.ps1 -Dest "C:\Program Files\cian" -AllUsers
+   ```
+
+   The installer unblocks the exe (so a terminal launch isn't "Access denied")
+   and adds the folder to PATH. Open a new terminal and type `cian`. Use a Nerd
+   Font terminal (Windows Terminal / WezTerm) for the file-type icons.

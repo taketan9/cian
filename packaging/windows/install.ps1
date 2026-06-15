@@ -1,11 +1,24 @@
-# cian — offline installer for Windows (x64)
-#
-# Copies cian.exe to %LOCALAPPDATA%\Programs\cian and adds that folder to your
-# user PATH so you can launch it by typing `cian` in any terminal. No admin
-# rights and no network access required.
-#
-# Usage (from this folder):
-#   powershell -ExecutionPolicy Bypass -File .\install.ps1
+<#
+cian — offline installer for Windows (x64).
+
+Copies cian.exe to an install folder, clears the "downloaded from the internet"
+mark so it runs from a terminal, and adds the folder to PATH so you can launch
+it by typing `cian`. No network access required.
+
+Examples:
+  # Default: install for the current user (no admin rights needed)
+  powershell -ExecutionPolicy Bypass -File .\install.ps1
+
+  # Install into Program Files for all users
+  # (run this from an *elevated* PowerShell: Run as administrator)
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 -Dest "C:\Program Files\cian" -AllUsers
+#>
+param(
+    # Where to install cian.exe.
+    [string]$Dest = (Join-Path $env:LOCALAPPDATA "Programs\cian"),
+    # Put the folder on the system (machine) PATH instead of the user PATH.
+    [switch]$AllUsers
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -15,22 +28,52 @@ if (-not (Test-Path $exe)) {
     exit 1
 }
 
-$dest = Join-Path $env:LOCALAPPDATA "Programs\cian"
-New-Item -ItemType Directory -Force -Path $dest | Out-Null
-Copy-Item -Path $exe -Destination $dest -Force
-Write-Host "Installed cian.exe to $dest"
+function Test-Admin {
+    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+    (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
+        [Security.Principal.WindowsBuiltinRole]::Administrator)
+}
 
-# Add to the user PATH if it is not already there.
-$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($null -eq $userPath) { $userPath = "" }
-$already = ($userPath -split ';') -contains $dest
-if (-not $already) {
-    $newPath = if ($userPath.TrimEnd(';') -eq "") { $dest } else { "$($userPath.TrimEnd(';'));$dest" }
-    [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-    Write-Host "Added $dest to your user PATH."
-    Write-Host "Open a NEW terminal for the change to take effect."
+$scope = if ($AllUsers) { "Machine" } else { "User" }
+
+# Writing under Program Files, or editing the machine PATH, needs elevation.
+$needsAdmin = $AllUsers -or ($Dest -like "$env:ProgramFiles*") `
+    -or ($Dest -like "${env:ProgramFiles(x86)}*")
+if ($needsAdmin -and -not (Test-Admin)) {
+    Write-Error "Installing to '$Dest' (or -AllUsers) needs an elevated PowerShell. Right-click PowerShell -> Run as administrator, then re-run."
+    exit 1
+}
+
+# Copy and unblock.
+New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+$destExe = Join-Path $Dest "cian.exe"
+Copy-Item -Path $exe -Destination $destExe -Force
+Unblock-File -Path $destExe   # so a terminal launch isn't "Access denied"
+Write-Host "Installed cian.exe to $Dest"
+
+# If a previous per-user install exists elsewhere, remove it so the terminal
+# doesn't pick up a stale copy with a different PATH entry.
+$defaultUserDest = Join-Path $env:LOCALAPPDATA "Programs\cian"
+if (($Dest -ne $defaultUserDest) -and (Test-Path $defaultUserDest)) {
+    Remove-Item -Recurse -Force $defaultUserDest -ErrorAction SilentlyContinue
+    $up = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($up) {
+        $cleaned = (($up -split ';') | Where-Object { $_ -and ($_ -ne $defaultUserDest) }) -join ';'
+        [Environment]::SetEnvironmentVariable("Path", $cleaned, "User")
+    }
+    Write-Host "Removed a previous install at $defaultUserDest"
+}
+
+# Add Dest to the chosen PATH scope (de-duplicated).
+$path = [Environment]::GetEnvironmentVariable("Path", $scope)
+if ($null -eq $path) { $path = "" }
+$parts = ($path -split ';') | Where-Object { $_ }
+if ($parts -notcontains $Dest) {
+    $parts += $Dest
+    [Environment]::SetEnvironmentVariable("Path", ($parts -join ';'), $scope)
+    Write-Host "Added $Dest to the $scope PATH. Open a NEW terminal for it to take effect."
 } else {
-    Write-Host "$dest is already on your PATH."
+    Write-Host "$Dest is already on the $scope PATH."
 }
 
 # Optional: install the example config if the user has none yet.
