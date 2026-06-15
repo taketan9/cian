@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "PTY-backed shell pane for cian (portable-pty + alacritty_terminal)"
+description = "PTY-backed shell pane for cian (portable-pty + vt100)"
 
 [dependencies]
+portable-pty = { workspace = true }
+vt100        = { workspace = true }
+anyhow       = { workspace = true }

@@ -9,6 +9,7 @@ use anyhow::Result;
 use cian_core::ops::{self, Conflict, OpReport};
 use cian_core::Pane;
 use cian_lua::Config;
+use cian_pty::PtySession;
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
     KeyModifiers, KeyboardEnhancementFlags, MouseButton, MouseEvent, MouseEventKind,
@@ -25,6 +26,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::{Frame, Terminal};
 use serde::{Deserialize, Serialize};
+use tui_term::widget::PseudoTerminal;
 
 /// Resolved colour palette. Defaults match the original built-in theme; a
 /// `~/.config/cian/init.lua` calling `cian.set_theme{...}` overrides any field.
@@ -250,25 +252,350 @@ impl PaneTabs {
     }
 }
 
-pub struct ShellTabs {
-    pub count: usize,
-    pub active: usize,
+/// How the panes inside one shell tab are arranged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SplitDir {
+    /// Panes side by side (vertical dividers).
+    LeftRight,
+    /// Panes stacked (horizontal dividers).
+    TopBottom,
 }
-impl ShellTabs {
-    fn new() -> Self { Self { count: 1, active: 0 } }
-    fn next_tab(&mut self) {
-        if self.count > 0 { self.active = (self.active + 1) % self.count; }
+
+/// A node in a shell tab's split tree: a leaf PTY pane, or a binary split of
+/// two child nodes (referenced by slab index).
+enum Node {
+    Leaf(PtySession),
+    Split { dir: SplitDir, first: usize, second: usize },
+}
+
+/// One shell tab: a binary tree of PTY panes supporting nested splits. Nodes
+/// live in a slab indexed by `usize`; `None` slots are free for reuse.
+struct ShellTab {
+    nodes: Vec<Option<Node>>,
+    root: usize,
+    /// Index of the active leaf node.
+    active: usize,
+}
+
+impl ShellTab {
+    fn new(session: PtySession) -> Self {
+        Self { nodes: vec![Some(Node::Leaf(session))], root: 0, active: 0 }
     }
-    fn prev_tab(&mut self) {
-        if self.count > 0 { self.active = (self.active + self.count - 1) % self.count; }
-    }
-    fn select(&mut self, idx: usize) { if idx < self.count { self.active = idx; } }
-    fn add(&mut self) { self.count += 1; self.active = self.count - 1; }
-    fn close_active(&mut self) {
-        if self.count > 1 {
-            self.count -= 1;
-            if self.active >= self.count { self.active = self.count - 1; }
+
+    fn alloc(&mut self, node: Node) -> usize {
+        if let Some(i) = self.nodes.iter().position(|n| n.is_none()) {
+            self.nodes[i] = Some(node);
+            i
+        } else {
+            self.nodes.push(Some(node));
+            self.nodes.len() - 1
         }
+    }
+
+    fn active_pane(&self) -> Option<&PtySession> {
+        match self.nodes.get(self.active).and_then(|n| n.as_ref()) {
+            Some(Node::Leaf(s)) => Some(s),
+            _ => None,
+        }
+    }
+    fn active_pane_mut(&mut self) -> Option<&mut PtySession> {
+        match self.nodes.get_mut(self.active).and_then(|n| n.as_mut()) {
+            Some(Node::Leaf(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn collect_leaves(&self, i: usize, out: &mut Vec<usize>) {
+        match self.nodes.get(i).and_then(|n| n.as_ref()) {
+            Some(Node::Leaf(_)) => out.push(i),
+            Some(Node::Split { first, second, .. }) => {
+                self.collect_leaves(*first, out);
+                self.collect_leaves(*second, out);
+            }
+            None => {}
+        }
+    }
+    fn leaves(&self) -> Vec<usize> {
+        let mut v = Vec::new();
+        if self.nodes.get(self.root).map(|n| n.is_some()).unwrap_or(false) {
+            self.collect_leaves(self.root, &mut v);
+        }
+        v
+    }
+
+    fn first_leaf(&self, i: usize) -> usize {
+        match self.nodes.get(i).and_then(|n| n.as_ref()) {
+            Some(Node::Split { first, .. }) => self.first_leaf(*first),
+            _ => i,
+        }
+    }
+
+    fn parent_of(&self, child: usize) -> Option<(usize, bool)> {
+        for (i, n) in self.nodes.iter().enumerate() {
+            if let Some(Node::Split { first, second, .. }) = n {
+                if *first == child {
+                    return Some((i, true));
+                }
+                if *second == child {
+                    return Some((i, false));
+                }
+            }
+        }
+        None
+    }
+
+    /// Split the active leaf into (old, new) along `dir`; new becomes active.
+    fn split(&mut self, dir: SplitDir, new_session: PtySession) {
+        let old = self.active;
+        if !matches!(self.nodes.get(old).and_then(|n| n.as_ref()), Some(Node::Leaf(_))) {
+            return;
+        }
+        let new_leaf = self.alloc(Node::Leaf(new_session));
+        let split_idx = self.alloc(Node::Split { dir, first: old, second: new_leaf });
+        if old == self.root {
+            self.root = split_idx;
+        } else if let Some((p, is_first)) = self.parent_of(old) {
+            if let Some(Node::Split { first, second, .. }) = self.nodes[p].as_mut() {
+                if is_first {
+                    *first = split_idx;
+                } else {
+                    *second = split_idx;
+                }
+            }
+        }
+        self.active = new_leaf;
+    }
+
+    fn focus_next(&mut self, forward: bool) {
+        let leaves = self.leaves();
+        if leaves.is_empty() {
+            return;
+        }
+        let pos = leaves.iter().position(|&l| l == self.active).unwrap_or(0);
+        let n = leaves.len();
+        let np = if forward { (pos + 1) % n } else { (pos + n - 1) % n };
+        self.active = leaves[np];
+    }
+
+    /// Close the active leaf; its sibling takes the parent's place. Returns true
+    /// if the tab is now empty.
+    fn close_active(&mut self) -> bool {
+        let leaf = self.active;
+        if !matches!(self.nodes.get(leaf).and_then(|n| n.as_ref()), Some(Node::Leaf(_))) {
+            return self.leaves().is_empty();
+        }
+        if leaf == self.root {
+            self.nodes[leaf] = None;
+            return true;
+        }
+        let (p, leaf_is_first) = match self.parent_of(leaf) {
+            Some(x) => x,
+            None => {
+                self.nodes[leaf] = None;
+                return self.leaves().is_empty();
+            }
+        };
+        let sib = match self.nodes[p].as_ref() {
+            Some(Node::Split { first, second, .. }) => {
+                if leaf_is_first { *second } else { *first }
+            }
+            _ => return false,
+        };
+        if p == self.root {
+            self.root = sib;
+        } else if let Some((gp, p_is_first)) = self.parent_of(p) {
+            if let Some(Node::Split { first, second, .. }) = self.nodes[gp].as_mut() {
+                if p_is_first {
+                    *first = sib;
+                } else {
+                    *second = sib;
+                }
+            }
+        }
+        self.nodes[leaf] = None;
+        self.nodes[p] = None;
+        self.active = self.first_leaf(sib);
+        false
+    }
+
+    fn for_each_leaf_mut(&mut self, f: &mut dyn FnMut(&mut PtySession)) {
+        for n in self.nodes.iter_mut() {
+            if let Some(Node::Leaf(s)) = n {
+                f(s);
+            }
+        }
+    }
+}
+
+/// The bottom shell panel: a set of tabs, each holding one or more split panes.
+///
+/// The first tab is spawned lazily on first focus.
+pub struct ShellPane {
+    tabs: Vec<ShellTab>,
+    active: usize,
+    /// Toggle (Shift+F12): show only the active split pane, filling the panel.
+    zoom_pane: bool,
+    /// Inner size of the whole shell panel, refreshed each frame; used as the
+    /// initial size for newly-spawned panes before the next layout pass.
+    rows: u16,
+    cols: u16,
+    shell_cmd: String,
+    error: Option<String>,
+}
+
+impl ShellPane {
+    fn new() -> Self {
+        Self {
+            tabs: Vec::new(),
+            active: 0,
+            zoom_pane: false,
+            rows: 24,
+            cols: 80,
+            shell_cmd: cian_pty::default_shell(),
+            error: None,
+        }
+    }
+
+    fn toggle_pane_zoom(&mut self) {
+        self.zoom_pane = !self.zoom_pane;
+    }
+
+    fn count(&self) -> usize {
+        self.tabs.len()
+    }
+
+    fn active_tab(&self) -> Option<&ShellTab> {
+        self.tabs.get(self.active)
+    }
+
+    fn active_session(&self) -> Option<&PtySession> {
+        self.active_tab().and_then(|t| t.active_pane())
+    }
+
+    fn active_session_mut(&mut self) -> Option<&mut PtySession> {
+        self.tabs.get_mut(self.active).and_then(|t| t.active_pane_mut())
+    }
+
+    fn spawn_session_in(&self, cwd: &Path) -> std::result::Result<PtySession, String> {
+        PtySession::new(cwd, &self.shell_cmd, self.rows.max(1), self.cols.max(1))
+            .map_err(|e| e.to_string())
+    }
+
+    /// Spawn the first tab if none exists yet (lazy start on first focus).
+    fn ensure(&mut self, cwd: &Path) {
+        if self.tabs.is_empty() {
+            match self.spawn_session_in(cwd) {
+                Ok(s) => {
+                    self.tabs.push(ShellTab::new(s));
+                    self.active = 0;
+                    self.error = None;
+                }
+                Err(e) => self.error = Some(e),
+            }
+        }
+    }
+
+    /// Open an additional shell tab.
+    fn new_tab(&mut self, cwd: &Path) {
+        match self.spawn_session_in(cwd) {
+            Ok(s) => {
+                self.tabs.push(ShellTab::new(s));
+                self.active = self.tabs.len() - 1;
+                self.error = None;
+            }
+            Err(e) => self.error = Some(e),
+        }
+        self.zoom_pane = false;
+    }
+
+    /// Split the active tab's active pane in `dir`, spawning a new pane.
+    fn split_active(&mut self, cwd: &Path, dir: SplitDir) {
+        let session = match self.spawn_session_in(cwd) {
+            Ok(s) => s,
+            Err(e) => {
+                self.error = Some(e);
+                return;
+            }
+        };
+        if let Some(tab) = self.tabs.get_mut(self.active) {
+            tab.split(dir, session);
+            self.error = None;
+        }
+        // A split must be visible, so leave single-pane zoom.
+        self.zoom_pane = false;
+    }
+
+    fn next_pane(&mut self) {
+        if let Some(t) = self.tabs.get_mut(self.active) {
+            t.focus_next(true);
+        }
+        self.zoom_pane = false;
+    }
+
+    fn prev_pane(&mut self) {
+        if let Some(t) = self.tabs.get_mut(self.active) {
+            t.focus_next(false);
+        }
+        self.zoom_pane = false;
+    }
+
+    /// Close the active pane. If its tab becomes empty the tab is removed.
+    /// Returns true if no tabs remain (caller should leave the shell).
+    fn close_active_pane(&mut self) -> bool {
+        if let Some(tab) = self.tabs.get_mut(self.active) {
+            if tab.close_active() {
+                self.tabs.remove(self.active);
+                if self.active >= self.tabs.len() && self.active > 0 {
+                    self.active -= 1;
+                }
+            }
+        }
+        self.zoom_pane = false;
+        self.tabs.is_empty()
+    }
+
+    /// Switch to shell tab `i` (no-op if out of range).
+    fn select(&mut self, i: usize) {
+        if i < self.tabs.len() {
+            self.active = i;
+            self.zoom_pane = false;
+        }
+    }
+
+    /// Close the whole active tab. Returns true if no tabs remain.
+    fn close_active(&mut self) -> bool {
+        if self.active < self.tabs.len() {
+            self.tabs.remove(self.active);
+            if self.active >= self.tabs.len() && self.active > 0 {
+                self.active -= 1;
+            }
+        }
+        self.zoom_pane = false;
+        self.tabs.is_empty()
+    }
+
+    /// Clear and report whether any pane in the active tab produced new output.
+    fn take_active_tab_dirty(&mut self) -> bool {
+        let mut dirty = false;
+        if let Some(t) = self.tabs.get_mut(self.active) {
+            t.for_each_leaf_mut(&mut |p| {
+                if p.take_dirty() {
+                    dirty = true;
+                }
+            });
+        }
+        dirty
+    }
+
+    /// `(alternate_screen, application_cursor)` for the active pane.
+    fn active_modes(&self) -> (bool, bool) {
+        if let Some(s) = self.active_session() {
+            if let Ok(p) = s.parser().lock() {
+                let scr = p.screen();
+                return (scr.alternate_screen(), scr.application_cursor());
+            }
+        }
+        (false, false)
     }
 }
 
@@ -289,6 +616,16 @@ enum Popup {
     History { entries: Vec<PathBuf>, cursor: usize },
     Shortcuts { entries: Vec<Shortcut>, cursor: usize },
     ConfirmQuit,
+    ConfirmClose { target: CloseTarget },
+}
+
+/// What a close-confirmation popup will close when accepted.
+#[derive(Debug, Clone, Copy)]
+enum CloseTarget {
+    /// The active split pane in the shell.
+    ShellPane,
+    /// The active tab of a file pane.
+    FileTab(FocusedPane),
 }
 
 #[derive(Debug, Clone)]
@@ -319,8 +656,11 @@ pub struct ShortcutStore {
 
 impl ShortcutStore {
     fn default_path() -> PathBuf {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        PathBuf::from(home).join(".config").join("cian").join("shortcuts.toml")
+        home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".config")
+            .join("cian")
+            .join("shortcuts.toml")
     }
 
     pub fn load_or_default() -> Self {
@@ -354,7 +694,7 @@ struct LayoutRects {
 pub struct App {
     pub left: PaneTabs,
     pub right: PaneTabs,
-    pub shell: ShellTabs,
+    pub shell: ShellPane,
     pub focused: FocusedPane,
     pub mode: Mode,
     pub mask: String,
@@ -370,6 +710,10 @@ pub struct App {
     last_search_query: Option<String>,
     pub shortcuts: ShortcutStore,
     pending_g: bool,
+    /// When true, only the focused surface is drawn, filling the window.
+    pub zoomed: bool,
+    /// When CIAN_DEBUG_KEYS is set, show each shell keypress in the status bar.
+    debug_keys: bool,
     config: Config,
     /// User keymap overrides: plain character keys (no Ctrl) the user bound via
     /// `cian.set_keymap`. Only contains entries the user set; everything else
@@ -396,7 +740,7 @@ impl App {
         Ok(Self {
             left: PaneTabs::single(Pane::new(left)?),
             right: PaneTabs::single(Pane::new(right)?),
-            shell: ShellTabs::new(),
+            shell: ShellPane::new(),
             focused: FocusedPane::Left,
             mode: Mode::Normal,
             mask,
@@ -412,9 +756,21 @@ impl App {
             last_search_query: None,
             shortcuts: ShortcutStore::load_or_default(),
             pending_g: false,
+            zoomed: false,
+            debug_keys: std::env::var("CIAN_DEBUG_KEYS").is_ok(),
             config,
             keymap,
         })
+    }
+
+    /// The directory a newly-spawned shell should start in: the cwd of the
+    /// file pane we were last on.
+    fn shell_cwd(&self) -> PathBuf {
+        let tabs = match self.last_file_pane {
+            FocusedPane::Right => &self.right,
+            _ => &self.left,
+        };
+        tabs.active_ref().cwd.clone()
     }
 
     fn active_file_tabs(&self) -> Option<&PaneTabs> {
@@ -448,6 +804,14 @@ impl App {
     fn focus(&mut self, target: FocusedPane) {
         if matches!(self.focused, FocusedPane::Left | FocusedPane::Right) {
             self.last_file_pane = self.focused;
+        }
+        if target == FocusedPane::Shell {
+            // Lazily start a shell in the directory we're coming from.
+            let cwd = self
+                .active_pane()
+                .map(|p| p.cwd.clone())
+                .unwrap_or_else(|| self.left.active_ref().cwd.clone());
+            self.shell.ensure(&cwd);
         }
         self.focused = target;
         self.mode = match target {
@@ -798,6 +1162,25 @@ impl App {
         self.popup = Popup::ConfirmQuit;
     }
 
+    /// Perform a confirmed close (shell split pane or file tab).
+    fn execute_close(&mut self, target: CloseTarget) {
+        match target {
+            CloseTarget::ShellPane => {
+                if self.shell.close_active_pane() {
+                    self.focus(self.last_file_pane);
+                }
+            }
+            CloseTarget::FileTab(pane) => {
+                let tabs = match pane {
+                    FocusedPane::Left => &mut self.left,
+                    FocusedPane::Right => &mut self.right,
+                    FocusedPane::Shell => return,
+                };
+                tabs.close_active();
+            }
+        }
+    }
+
     fn jump_to_next_match(&mut self, forward: bool) {
         let Some(query) = self.last_search_query.clone() else {
             self.message = Some("no previous search".into());
@@ -964,6 +1347,22 @@ impl App {
         if !matches!(self.popup, Popup::None) {
             return self.handle_popup_key(key);
         }
+        // F12 toggles full-window zoom of the focused surface; Shift+F12 zooms
+        // only the active split pane within the shell. While a full-screen app
+        // runs in the shell, both are passed through to it.
+        if key.code == KeyCode::F(12) {
+            let shell_fullscreen =
+                self.focused == FocusedPane::Shell && self.shell.active_modes().0;
+            if key.modifiers.contains(KeyModifiers::SHIFT) {
+                if self.focused == FocusedPane::Shell && !shell_fullscreen {
+                    self.shell.toggle_pane_zoom();
+                    return Ok(());
+                }
+            } else if !shell_fullscreen {
+                self.zoomed = !self.zoomed;
+                return Ok(());
+            }
+        }
         if self.mode == Mode::Command {
             return self.handle_command_key(key);
         }
@@ -1075,6 +1474,18 @@ impl App {
             }
             return Ok(());
         }
+        if let Popup::ConfirmClose { target } = &self.popup {
+            let target = *target;
+            match key.code {
+                KeyCode::Char('y') | KeyCode::Enter => {
+                    self.popup = Popup::None;
+                    self.execute_close(target);
+                }
+                KeyCode::Char('n') | KeyCode::Esc => { self.popup = Popup::None; }
+                _ => {}
+            }
+            return Ok(());
+        }
         match key.code {
             KeyCode::Esc | KeyCode::Char('n') => { self.popup = Popup::None; Ok(()) }
             KeyCode::Char('y') => match &self.popup {
@@ -1108,26 +1519,82 @@ impl App {
     }
 
     fn handle_shell_key(&mut self, key: KeyEvent) -> Result<()> {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        match (ctrl, key.code) {
-            // Pane navigation: Shift+H/J/K/L (universally works) and Ctrl variants (kitty-keyboard).
-            (false, KeyCode::Char('H')) | (true, KeyCode::Char('h')) => self.focus_direction('h'),
-            (false, KeyCode::Char('K')) | (true, KeyCode::Char('k')) => self.focus_direction('k'),
-            (false, KeyCode::Char('L')) | (true, KeyCode::Char('l')) => self.focus_direction('l'),
-            (false, KeyCode::Tab) => self.shell.next_tab(),
-            (_, KeyCode::BackTab) => self.shell.prev_tab(),
-            (true, KeyCode::Char(c)) if c.is_ascii_digit() => {
-                if let Some(d) = c.to_digit(10) { if d >= 1 { self.shell.select(d as usize - 1); } }
+        let (alt_screen, app_cursor) = self.shell.active_modes();
+        if self.debug_keys {
+            self.message = Some(format!(
+                "key={:?} mods={:?} alt_screen={}",
+                key.code, key.modifiers, alt_screen
+            ));
+        }
+        // Esc returns to the file pane — unless a full-screen app (alternate
+        // screen) is running, in which case Esc belongs to that app (e.g. vim).
+        if key.code == KeyCode::Esc && !alt_screen {
+            self.focus(self.last_file_pane);
+            return Ok(());
+        }
+        // Tab and split controls via F-keys — reserved only at a normal prompt.
+        // The Ctrl modifier is swallowed before reaching the app on some setups
+        // (IME/OS), so F-keys (independent escape sequences) are used instead.
+        // Shift+F drives splits. While a full-screen app runs (alternate screen)
+        // they pass through, like F12.
+        if !alt_screen {
+            let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+            match key.code {
+                // Pane navigation (parallels file-pane tab nav): Shift+F1/F2.
+                KeyCode::F(1) if shift => {
+                    self.shell.next_pane();
+                    return Ok(());
+                }
+                KeyCode::F(2) if shift => {
+                    self.shell.prev_pane();
+                    return Ok(());
+                }
+                // Splits within the active tab: Shift+F8 left/right, F9 top/bottom.
+                KeyCode::F(8) if shift => {
+                    let cwd = self.shell_cwd();
+                    self.shell.split_active(&cwd, SplitDir::LeftRight);
+                    return Ok(());
+                }
+                KeyCode::F(9) if shift => {
+                    let cwd = self.shell_cwd();
+                    self.shell.split_active(&cwd, SplitDir::TopBottom);
+                    return Ok(());
+                }
+                // Close the active split pane, with confirmation.
+                KeyCode::F(10) if shift => {
+                    self.popup = Popup::ConfirmClose { target: CloseTarget::ShellPane };
+                    return Ok(());
+                }
+                // Tab controls: plain F-keys.
+                KeyCode::F(n @ 1..=8) if !shift => {
+                    self.shell.select((n - 1) as usize);
+                    return Ok(());
+                }
+                KeyCode::F(9) if !shift => {
+                    let cwd = self.shell_cwd();
+                    self.shell.new_tab(&cwd);
+                    return Ok(());
+                }
+                KeyCode::F(10) if !shift => {
+                    if self.shell.close_active() {
+                        self.focus(self.last_file_pane);
+                    }
+                    return Ok(());
+                }
+                _ => {}
             }
-            (false, KeyCode::Char('t')) => self.shell.add(),
-            (false, KeyCode::Char('w')) => self.shell.close_active(),
-            (_, KeyCode::Esc) => self.focus(self.last_file_pane),
-            _ => {}
+        }
+        // Everything else is forwarded to the shell.
+        if let Some(bytes) = encode_key(key, app_cursor) {
+            if let Some(s) = self.shell.active_session_mut() {
+                s.write_input(&bytes);
+            }
         }
         Ok(())
     }
 
-    fn handle_visual_key(&mut self, key: KeyEvent) -> Result<()> {
+    fn handle_visual_key(&mut self, mut key: KeyEvent) -> Result<()> {
+        normalize_jp_key(&mut key);
         match key.code {
             KeyCode::Esc => self.visual_cancel_and_clear_all(),
             KeyCode::Enter | KeyCode::Char('v') => self.visual_commit(),
@@ -1142,7 +1609,10 @@ impl App {
         Ok(())
     }
 
-    fn handle_normal_key(&mut self, key: KeyEvent) -> Result<()> {
+    fn handle_normal_key(&mut self, mut key: KeyEvent) -> Result<()> {
+        // Full-width input (全角英数) → ASCII so commands work without leaving
+        // the Japanese IME. Kana can be bound per-key via init.lua.
+        normalize_jp_key(&mut key);
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let shift = key.modifiers.contains(KeyModifiers::SHIFT);
 
@@ -1205,6 +1675,17 @@ impl App {
             }
             (false, false, KeyCode::Char('w')) => {
                 if let Some(t) = self.active_file_tabs_mut() { t.close_active(); }
+            }
+            // Consistent F-key tab controls (parallel the shell's pane controls):
+            // Shift+F1/F2 = next/prev tab, Shift+F10 = close tab (with confirm).
+            (false, true, KeyCode::F(1)) => {
+                if let Some(t) = self.active_file_tabs_mut() { t.next_tab(); }
+            }
+            (false, true, KeyCode::F(2)) => {
+                if let Some(t) = self.active_file_tabs_mut() { t.prev_tab(); }
+            }
+            (false, true, KeyCode::F(10)) => {
+                self.popup = Popup::ConfirmClose { target: CloseTarget::FileTab(self.focused) };
             }
             // search, history, shortcuts
             (false, false, KeyCode::Char('f')) => self.start_search(),
@@ -1367,6 +1848,107 @@ impl App {
     }
 }
 
+/// Map a full-width character to its ASCII equivalent, if it has one.
+///
+/// Covers the full-width ASCII block (U+FF01–U+FF5E → U+0021–U+007E) and the
+/// ideographic space, so commands work while a Japanese IME is in full-width
+/// alphanumeric (全角英数) mode without switching back to ASCII input.
+fn jp_to_ascii(c: char) -> Option<char> {
+    let u = c as u32;
+    if (0xFF01..=0xFF5E).contains(&u) {
+        char::from_u32(u - 0xFEE0)
+    } else if c == '\u{3000}' {
+        Some(' ')
+    } else {
+        None
+    }
+}
+
+/// Normalise a key in place: full-width characters become their ASCII command
+/// key, with SHIFT synthesised for upper-case letters so the existing
+/// shift-gated bindings (A, V, P, O, …) still match.
+fn normalize_jp_key(key: &mut KeyEvent) {
+    if let KeyCode::Char(c) = key.code {
+        if let Some(a) = jp_to_ascii(c) {
+            key.code = KeyCode::Char(a);
+            if a.is_ascii_uppercase() {
+                key.modifiers.insert(KeyModifiers::SHIFT);
+            }
+        }
+    }
+}
+
+/// Translate a key event into the byte sequence a terminal would send to the
+/// shell. `app_cursor` selects between normal (`ESC [`) and application
+/// (`ESC O`) cursor-key encodings, mirroring the active DECCKM mode.
+fn encode_key(key: KeyEvent, app_cursor: bool) -> Option<Vec<u8>> {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let alt = key.modifiers.contains(KeyModifiers::ALT);
+    let cursor = |c: u8| -> Vec<u8> {
+        let intro = if app_cursor { b"\x1bO" } else { b"\x1b[" };
+        let mut v = intro.to_vec();
+        v.push(c);
+        v
+    };
+
+    let mut out: Vec<u8> = Vec::new();
+    match key.code {
+        KeyCode::Char(c) => {
+            if ctrl {
+                let ctl = match c {
+                    ' ' | '@' => Some(0u8),
+                    'a'..='z' => Some(c as u8 - b'a' + 1),
+                    'A'..='Z' => Some(c as u8 - b'A' + 1),
+                    '[' => Some(27),
+                    '\\' => Some(28),
+                    ']' => Some(29),
+                    '^' => Some(30),
+                    '_' => Some(31),
+                    '?' => Some(127),
+                    _ => None,
+                };
+                if alt {
+                    out.push(0x1b);
+                }
+                match ctl {
+                    Some(b) => out.push(b),
+                    None => {
+                        let mut buf = [0u8; 4];
+                        out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+                    }
+                }
+            } else {
+                if alt {
+                    out.push(0x1b);
+                }
+                let mut buf = [0u8; 4];
+                out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+            }
+        }
+        KeyCode::Enter => out.push(b'\r'),
+        KeyCode::Tab => out.push(b'\t'),
+        KeyCode::BackTab => out.extend_from_slice(b"\x1b[Z"),
+        KeyCode::Backspace => out.push(0x7f),
+        KeyCode::Esc => out.push(0x1b),
+        KeyCode::Up => out = cursor(b'A'),
+        KeyCode::Down => out = cursor(b'B'),
+        KeyCode::Right => out = cursor(b'C'),
+        KeyCode::Left => out = cursor(b'D'),
+        KeyCode::Home => out = cursor(b'H'),
+        KeyCode::End => out = cursor(b'F'),
+        KeyCode::PageUp => out.extend_from_slice(b"\x1b[5~"),
+        KeyCode::PageDown => out.extend_from_slice(b"\x1b[6~"),
+        KeyCode::Delete => out.extend_from_slice(b"\x1b[3~"),
+        KeyCode::Insert => out.extend_from_slice(b"\x1b[2~"),
+        _ => return None,
+    }
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
+
 fn os_open(path: &Path) -> Result<()> {
     #[cfg(target_os = "macos")]
     let mut cmd = Command::new("open");
@@ -1405,16 +1987,23 @@ fn os_open_string(target: &str) -> Result<()> {
     Ok(())
 }
 
+/// The user's home directory: `$HOME`, or `$USERPROFILE` on Windows.
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
 fn expand_tilde(p: &Path) -> PathBuf {
     if let Some(s) = p.to_str() {
         if let Some(rest) = s.strip_prefix("~/") {
-            if let Ok(home) = std::env::var("HOME") {
-                return PathBuf::from(home).join(rest);
+            if let Some(home) = home_dir() {
+                return home.join(rest);
             }
         }
         if s == "~" {
-            if let Ok(home) = std::env::var("HOME") {
-                return PathBuf::from(home);
+            if let Some(home) = home_dir() {
+                return home;
             }
         }
     }
@@ -1568,29 +2157,60 @@ pub fn run(left: PathBuf, right: PathBuf) -> Result<()> {
 }
 
 fn run_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+    let mut needs_redraw = true;
     loop {
-        terminal.draw(|f| draw(f, app))?;
-        if event::poll(Duration::from_millis(250))? {
+        if needs_redraw {
+            terminal.draw(|f| draw(f, app))?;
+            needs_redraw = false;
+        }
+        // Short timeout so live shell output is picked up promptly; we only
+        // actually repaint when something changed (input, resize, or new
+        // shell output), so the loop stays cheap when idle.
+        if event::poll(Duration::from_millis(33))? {
             match event::read()? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => app.handle_key(key)?,
-                Event::Mouse(m) => app.handle_mouse(m),
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    app.handle_key(key)?;
+                    needs_redraw = true;
+                }
+                Event::Mouse(m) => {
+                    app.handle_mouse(m);
+                    needs_redraw = true;
+                }
+                Event::Resize(_, _) => needs_redraw = true,
                 _ => {}
             }
         }
-        if app.should_quit { return Ok(()); }
+        // Repaint when any pane in the active shell tab produced new output.
+        if app.shell.take_active_tab_dirty() {
+            needs_redraw = true;
+        }
+        // If the focused pane's shell has exited (e.g. the user typed `exit`),
+        // close that pane; if its tab (and the whole panel) empties, return to
+        // the files so we never strand the user typing into a dead shell.
+        if app.focused == FocusedPane::Shell {
+            let exited = app
+                .shell
+                .active_session_mut()
+                .map(|s| !s.is_alive())
+                .unwrap_or(false);
+            if exited {
+                let empty = app.shell.close_active_pane();
+                if empty {
+                    let back = app.last_file_pane;
+                    app.focus(back);
+                }
+                app.message = Some("shell exited".into());
+                needs_redraw = true;
+            }
+        }
+        if app.should_quit {
+            return Ok(());
+        }
     }
 }
 
-fn draw(f: &mut Frame, app: &mut App) {
-    let area = f.area();
-    let bottom_lines = if app.mode == Mode::Command { 2 } else { 1 };
-    let vertical = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(bottom_lines)])
-        .split(area);
-    let main_area = vertical[0];
-    let bottom_area = vertical[1];
-
+/// Normal three-surface layout: left/right file panes on top, shell below.
+fn draw_split(f: &mut Frame, main_area: Rect, app: &mut App) {
     let main_split = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
@@ -1614,7 +2234,49 @@ fn draw(f: &mut Frame, app: &mut App) {
 
     draw_file_pane(f, panes_split[0], &app.left, app.focused == FocusedPane::Left, visual_for_left, app.mode);
     draw_file_pane(f, panes_split[1], &app.right, app.focused == FocusedPane::Right, visual_for_right, app.mode);
-    draw_shell_placeholder(f, shell_area, &app.shell, app.focused == FocusedPane::Shell);
+    // draw_shell sizes each pane's PTY to its computed sub-rect.
+    draw_shell(f, shell_area, &mut app.shell, app.focused == FocusedPane::Shell);
+}
+
+/// Zoomed layout: only the focused surface, filling the available area.
+fn draw_zoomed(f: &mut Frame, area: Rect, app: &mut App) {
+    let mut rects = LayoutRects::default();
+    match app.focused {
+        FocusedPane::Left => {
+            rects.left = area;
+            app.layout_rects = rects;
+            let va = app.visual_anchor;
+            draw_file_pane(f, area, &app.left, true, va, app.mode);
+        }
+        FocusedPane::Right => {
+            rects.right = area;
+            app.layout_rects = rects;
+            let va = app.visual_anchor;
+            draw_file_pane(f, area, &app.right, true, va, app.mode);
+        }
+        FocusedPane::Shell => {
+            rects.shell = area;
+            app.layout_rects = rects;
+            draw_shell(f, area, &mut app.shell, true);
+        }
+    }
+}
+
+fn draw(f: &mut Frame, app: &mut App) {
+    let area = f.area();
+    let bottom_lines = if app.mode == Mode::Command { 2 } else { 1 };
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(bottom_lines)])
+        .split(area);
+    let main_area = vertical[0];
+    let bottom_area = vertical[1];
+
+    if app.zoomed {
+        draw_zoomed(f, main_area, app);
+    } else {
+        draw_split(f, main_area, app);
+    }
 
     if app.mode == Mode::Command {
         let cmd_area = Rect::new(bottom_area.x, bottom_area.y, bottom_area.width, 1);
@@ -1791,10 +2453,10 @@ fn icon_for(entry: &cian_core::Entry) -> &'static str {
     }
 }
 
-fn shell_tabs_title<'a>(tabs: &'a ShellTabs, focused: bool) -> Line<'a> {
+fn shell_tabs_title<'a>(tabs: &'a ShellPane, focused: bool) -> Line<'a> {
     let mut spans: Vec<Span<'a>> = Vec::new();
     spans.push(Span::raw(" "));
-    for i in 0..tabs.count {
+    for i in 0..tabs.count().max(1) {
         let label = format!(" shell {} ", i + 1);
         let style = if i == tabs.active {
             if focused {
@@ -1803,11 +2465,12 @@ fn shell_tabs_title<'a>(tabs: &'a ShellTabs, focused: bool) -> Line<'a> {
                 Style::default().fg(Color::White).bg(Color::DarkGray)
             }
         } else {
-            Style::default().fg(Color::DarkGray)
+            // Readable medium grey for inactive tabs (DarkGray was too dim).
+            Style::default().fg(Color::Gray)
         };
         spans.push(Span::styled(label, style));
-        if i + 1 < tabs.count {
-            spans.push(Span::styled("│", Style::default().fg(Color::DarkGray)));
+        if i + 1 < tabs.count() {
+            spans.push(Span::styled("│", Style::default().fg(Color::Gray)));
         }
     }
     spans.push(Span::raw(" "));
@@ -1870,7 +2533,7 @@ fn draw_file_pane(
     f.render_stateful_widget(list, area, &mut state);
 }
 
-fn draw_shell_placeholder(f: &mut Frame, area: Rect, tabs: &ShellTabs, focused: bool) {
+fn draw_shell(f: &mut Frame, area: Rect, shell: &mut ShellPane, focused: bool) {
     let border_style = if focused {
         Style::default().fg(theme().accent).add_modifier(Modifier::BOLD)
     } else {
@@ -1879,14 +2542,129 @@ fn draw_shell_placeholder(f: &mut Frame, area: Rect, tabs: &ShellTabs, focused: 
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(border_style)
-        .title(shell_tabs_title(tabs, focused));
-    let body = if focused {
-        "(shell focus) — real PTY arrives in sprint 4. Esc / Ctrl-k to return."
-    } else {
-        "shell pane — Ctrl-j to focus, :shell command, click to focus, real PTY coming in sprint 4."
+        .title(shell_tabs_title(shell, focused));
+    let inner = area.inner(Margin { vertical: 1, horizontal: 1 });
+    f.render_widget(block, area);
+
+    // Remember the inner size for sizing newly-spawned panes.
+    shell.rows = inner.height.max(1);
+    shell.cols = inner.width.max(1);
+
+    let active = shell.active;
+    if shell.tabs.get(active).is_none() {
+        let body = if let Some(err) = &shell.error {
+            format!("shell failed to start: {}", err)
+        } else {
+            "shell pane — focus here (Shift+J / click / :shell) to start a shell. \
+             Esc returns to the files."
+                .to_string()
+        };
+        f.render_widget(Paragraph::new(body).wrap(Wrap { trim: false }), inner);
+        return;
+    }
+
+    // Shift+F12: show only the active leaf, filling the panel.
+    if shell.zoom_pane {
+        let leaf = shell.tabs[active].active;
+        if let Some(tab) = shell.tabs.get_mut(active) {
+            if let Some(Node::Leaf(s)) = tab.nodes.get_mut(leaf).and_then(|n| n.as_mut()) {
+                s.resize(inner.height.max(1), inner.width.max(1));
+            }
+        }
+        if let Some(Node::Leaf(s)) = shell.tabs[active].nodes.get(leaf).and_then(|n| n.as_ref()) {
+            if let Ok(parser) = s.parser().lock() {
+                f.render_widget(PseudoTerminal::new(parser.screen()), inner);
+            }
+        }
+        return;
+    }
+
+    let root = shell.tabs[active].root;
+    if let Some(tab) = shell.tabs.get_mut(active) {
+        resize_node(tab, root, inner, false);
+    }
+    let tab = &shell.tabs[active];
+    render_node(f, tab, root, inner, tab.active, focused, false);
+}
+
+/// Recursively size each leaf's PTY to its rect. `bordered` is true for leaves
+/// inside a split (which draw a 1-cell border), false for a lone root leaf.
+fn resize_node(tab: &mut ShellTab, i: usize, area: Rect, bordered: bool) {
+    let split = match tab.nodes.get(i).and_then(|n| n.as_ref()) {
+        Some(Node::Split { dir, first, second }) => Some((*dir, *first, *second)),
+        Some(Node::Leaf(_)) => None,
+        None => return,
     };
-    let p = Paragraph::new(body).block(block);
-    f.render_widget(p, area);
+    match split {
+        None => {
+            let (h, w) = if bordered {
+                (area.height.saturating_sub(2).max(1), area.width.saturating_sub(2).max(1))
+            } else {
+                (area.height.max(1), area.width.max(1))
+            };
+            if let Some(Node::Leaf(s)) = tab.nodes[i].as_mut() {
+                s.resize(h, w);
+            }
+        }
+        Some((dir, first, second)) => {
+            let rects = split_rects(dir, area);
+            resize_node(tab, first, rects.0, true);
+            resize_node(tab, second, rects.1, true);
+        }
+    }
+}
+
+/// Recursively render the split tree. Leaves inside a split get a border (the
+/// active one highlighted); a lone root leaf fills its area without one.
+fn render_node(
+    f: &mut Frame,
+    tab: &ShellTab,
+    i: usize,
+    area: Rect,
+    active_leaf: usize,
+    focused: bool,
+    bordered: bool,
+) {
+    match tab.nodes.get(i).and_then(|n| n.as_ref()) {
+        Some(Node::Leaf(session)) => {
+            let target = if bordered {
+                let is_active = focused && i == active_leaf;
+                let bs = if is_active {
+                    Style::default().fg(theme().accent).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                };
+                let blk = Block::default().borders(Borders::ALL).border_style(bs);
+                let pinner = area.inner(Margin { vertical: 1, horizontal: 1 });
+                f.render_widget(blk, area);
+                pinner
+            } else {
+                area
+            };
+            if let Ok(parser) = session.parser().lock() {
+                f.render_widget(PseudoTerminal::new(parser.screen()), target);
+            }
+        }
+        Some(Node::Split { dir, first, second }) => {
+            let rects = split_rects(*dir, area);
+            render_node(f, tab, *first, rects.0, active_leaf, focused, true);
+            render_node(f, tab, *second, rects.1, active_leaf, focused, true);
+        }
+        None => {}
+    }
+}
+
+/// Split a rect 50/50 along the given direction.
+fn split_rects(dir: SplitDir, area: Rect) -> (Rect, Rect) {
+    let direction = match dir {
+        SplitDir::LeftRight => Direction::Horizontal,
+        SplitDir::TopBottom => Direction::Vertical,
+    };
+    let rects = Layout::default()
+        .direction(direction)
+        .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)])
+        .split(area);
+    (rects[0], rects[1])
 }
 
 fn draw_command_line(f: &mut Frame, area: Rect, buf: &str) {
@@ -1945,6 +2723,11 @@ fn draw_status(f: &mut Frame, area: Rect, app: &App) {
         dim_sep.clone(),
         chip(format!("mask {}", app.mask), Color::Rgb(180, 180, 220)),
     ];
+
+    if app.zoomed {
+        spans.push(dim_sep.clone());
+        spans.push(chip("[zoom]".to_string(), theme().accent));
+    }
 
     if let Some(msg) = app.message.as_ref() {
         if !msg.is_empty() {
@@ -2027,6 +2810,17 @@ fn draw_popup(f: &mut Frame, area: Rect, popup: &Popup) {
             (
                 " quit cian? ".to_string(),
                 vec!["Are you sure you want to quit?".into()],
+                " y / Enter = yes   n / Esc = no ".to_string(),
+            )
+        }
+        Popup::ConfirmClose { target } => {
+            let what = match target {
+                CloseTarget::ShellPane => "this shell pane",
+                CloseTarget::FileTab(_) => "this tab",
+            };
+            (
+                " close? ".to_string(),
+                vec![format!("Close {}?", what)],
                 " y / Enter = yes   n / Esc = no ".to_string(),
             )
         }

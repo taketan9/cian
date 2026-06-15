@@ -9,9 +9,11 @@ description = "Terminal UI for cian: ratatui rendering, input, layout, popups"
 [dependencies]
 cian-core = { workspace = true }
 cian-lua  = { workspace = true }
+cian-pty  = { workspace = true }
 ratatui   = { workspace = true }
 crossterm = { workspace = true }
 anyhow    = { workspace = true }
 arboard   = { workspace = true }
 toml      = { workspace = true }
 serde     = { workspace = true }
+tui-term  = { workspace = true }

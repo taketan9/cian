@@ -8,7 +8,9 @@ Cross-platform: macOS / Windows / Linux.
 
 ## Status
 
-Pre-MVP. Project scaffolding only.
+Early development. Working: two-pane navigation, marks/visual selection, file
+operations (copy/move/delete/rename/create), history, shortcuts, search,
+clipboard integration, Lua configuration, and an embedded PTY shell panel.
 
 ## Architecture
 
@@ -44,9 +46,62 @@ whatever could not be applied, so a broken config never blocks startup.
 See [`examples/init.lua`](examples/init.lua) for a fully-commented template and
 the complete list of bindable actions.
 
+## Shell panel
+
+The bottom panel is a real PTY running your `$SHELL`, started on first focus.
+Focus it with `Shift+J` (from a file pane), a mouse click, or `:shell`. While
+the shell is focused, keys go straight to it; press **Esc** to return to the
+files. Esc is passed through to full-screen programs (vim, less, htop, …) so
+they keep working — it only leaves the shell at a normal prompt.
+
+Shell tabs are driven by function keys (Ctrl-based shortcuts are unreliable
+because some setups swallow the Ctrl modifier before it reaches the app):
+
+| Key | Action |
+|---|---|
+| `F1`–`F8` | switch to shell tab 1–8 |
+| `F9` | new shell tab |
+| `F10` | close shell tab |
+| `Shift+F1` / `Shift+F2` | focus next / previous split pane |
+| `Shift+F8` | split the active pane left/right |
+| `Shift+F9` | split the active pane top/bottom |
+| `Shift+F10` | close the active split pane (asks first) |
+| `F12` | zoom the focused surface to fill the window (toggle) |
+| `Shift+F12` | zoom just the active split pane (toggle) |
+
+Splits nest: splitting always divides the active pane, so you can build
+arbitrary layouts (e.g. one pane on the left, two stacked on the right). These
+keys are only active at a normal prompt; full-screen apps (vim, htop, …)
+receive the function keys unchanged.
+
+The file panes use the parallel controls: `Shift+F1` / `Shift+F2` switch to the
+next / previous tab, and `Shift+F10` closes the active tab (asking first).
+
 ## Build
 
 ```sh
 cargo build --release
 ./target/release/cian
 ```
+
+## Install on Windows (offline)
+
+cian compiles to a single self-contained `cian.exe` — no runtime, no DLLs, no
+network access needed at runtime. To get a Windows x64 build without a Windows
+dev machine, use the bundled GitHub Actions workflow, which builds on a real
+Windows runner and packages a ready-to-carry zip:
+
+1. Trigger a build — either push a tag (`git tag v0.1.0 && git push --tags`) or
+   open the repo's **Actions** tab → **release** → **Run workflow**.
+2. Download `cian-windows-x64.zip` from that run's artifacts (tagged builds are
+   also attached to a GitHub Release).
+3. Carry the zip into the offline machine and unzip it. Then either just run
+   `cian.exe`, or run `install.ps1` to put `cian` on your PATH:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\install.ps1
+   ```
+
+   Open a new terminal and type `cian`. See `packaging/windows/README.txt` in
+   the zip for details. Use a Nerd Font terminal (Windows Terminal / WezTerm)
+   for the file-type icons.

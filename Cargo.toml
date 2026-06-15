@@ -29,6 +29,12 @@ arboard   = "3"
 fs_extra  = "1.3"
 toml      = "0.8"
 serde     = { version = "1", features = ["derive"] }
+# Embedded shell pane. tui-term 0.2.x targets ratatui 0.29 / vt100 0.15 /
+# portable-pty 0.8 (the 0.3.x line jumps to the ratatui 0.30 split crates).
+# vt100 must stay 0.15 so its Screen type matches the one tui-term renders.
+portable-pty = "0.8"
+vt100        = "0.15"
+tui-term     = { version = "0.2", features = ["vt100"] }
 
 [profile.release]
 opt-level = 3

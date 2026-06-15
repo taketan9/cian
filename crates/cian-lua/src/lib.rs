@@ -92,6 +92,13 @@ impl Config {
     }
 }
 
+/// The user's home directory: `$HOME`, or `$USERPROFILE` on Windows.
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
 /// Resolve the config file path: `$CIAN_CONFIG_DIR/init.lua` if set, otherwise
 /// `~/.config/cian/init.lua`.
 pub fn config_path() -> Option<PathBuf> {
@@ -100,8 +107,8 @@ pub fn config_path() -> Option<PathBuf> {
             return Some(PathBuf::from(dir).join("init.lua"));
         }
     }
-    let home = std::env::var("HOME").ok()?;
-    Some(PathBuf::from(home).join(".config").join("cian").join("init.lua"))
+    let home = home_dir()?;
+    Some(home.join(".config").join("cian").join("init.lua"))
 }
 
 /// Load the configuration. Never panics and never returns an error: anything

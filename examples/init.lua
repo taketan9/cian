@@ -42,6 +42,12 @@ cian.set_option("mask", "*.*")              -- default file mask shown in the st
 -- cian.set_keymap("x", "delete")   -- add `x` as an alias for delete
 -- cian.set_keymap("e", "rename")   -- add `e` as an alias for rename
 
+-- 日本語入力(IME)のまま使う:
+--   ・全角英数モード(ｑ ｄ ｊ ｋ …)は設定不要で全コマンドがそのまま動きます。
+--   ・ひらがなを直接コマンドに割り当てたい場合は、かなを1文字キーとして指定:
+-- cian.set_keymap("あ", "new_file")   -- 「あ」で新規ファイル
+-- cian.set_keymap("ふ", "search")     -- 「ふ」で検索 など、覚えやすい字で自由に
+
 ----------------------------------------------------------------------
 -- Extension-dispatch execution — decide how files open by extension.
 -- The handler receives the absolute path as a string. Use cian.spawn{...}
