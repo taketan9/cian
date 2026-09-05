@@ -21,6 +21,20 @@ const AI_SIMPLE: Color = Color::Rgb(0, 190, 205);
 /// The carmine a remote pane wears, so a listing on a server never looks like
 /// a listing on this disk.
 const CRMAINE: Color = Color::Rgb(214, 45, 70);
+/// cian's own cyan, and it never moves.
+///
+/// The bright stop of the icon's gradient (`packaging/icon.py` G1) — the two
+/// colours he said he liked the look of. The frame round the pane holding the
+/// keys wears this in the ordinary mode, in every one of the eighteen
+/// palettes.
+///
+/// 2026-09-06:「どんなテーマでも同じ枠色にしてほしい。シアンっぽい色に
+/// なっていたはずだ」。It was `theme().accent`, so the frame was a different
+/// colour in each palette — and the one thing the frame says (**this side has
+/// the keys**) is the same sentence in all of them. The four mode colours
+/// beside it in `focus_badge_color` were already fixed for that exact reason;
+/// this was the odd one out.
+const CIAN: Color = Color::Rgb(22, 203, 225);
 
 /// True when this popup belongs to the AI - simple family, and so wears
 /// [`AI_SIMPLE`] rather than the theme accent.
@@ -3258,7 +3272,7 @@ pub(crate) fn message_color(msg: &str) -> Color {
 
 fn focus_badge_color(mode: Mode) -> Color {
     match mode {
-        Mode::Normal => theme().accent,
+        Mode::Normal => CIAN,
         Mode::Visual => Color::Rgb(255, 140, 0),
         Mode::Search => Color::Rgb(80, 200, 120),
         Mode::Command => Color::Rgb(200, 100, 200),

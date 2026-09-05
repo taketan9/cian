@@ -64,6 +64,18 @@
   /* A pane showing somebody else's server. cian-tui's CRMAINE, and the one
      confusion worth spending a colour on. */
   --m-remote:  rgb(214, 45, 70);
+  /* **cian's own cyan, and it never moves.** The colour of the icon's bright
+     stop (`packaging/icon.py` G1) — the two colours he said he liked the look
+     of. The frame round the surface holding the keys wears this in the
+     ordinary mode, and wears it in every palette.
+     2026-09-06: 「どんなテーマでも同じ枠色にしてほしい。シアンっぽい色に
+     なっていたはずだ。今はテーマにあわせて色が変わっているが固定がいい」。
+     It used to be `--accent`, which is the palette's, so the frame was a
+     different colour in each of the eighteen — and the one thing the frame
+     says (**this side has the keys**) is the same sentence in all of them.
+     The four mode colours beside it were already fixed for exactly that
+     reason; this was the odd one out. */
+  --cian:      rgb(22, 203, 225);
   /* What kind of news a message carries — cian-tui's `message_color`, again
      value for value. A failure must never wear a success's clothes. */
   --msg-good:  rgb(110, 200, 130);
@@ -319,9 +331,10 @@ html, body {
    where cian-tui puts it (`focus_badge_color`, render.rs:2134). It was only
    on the prompt row at the very bottom of the screen, which is the one place
    the eye is not while you narrow a listing. Same four colours, same
-   meanings; `--mode-accent` falls back to the ordinary accent, so a pane in
-   no particular mode looks exactly as it did. */
-#work { --mode-accent: var(--accent); }
+   meanings; with no mode in particular the frame is cian's own cyan, which
+   is fixed — see `--cian` above for why it stopped being the palette's
+   accent on 2026-09-06. */
+#work { --mode-accent: var(--cian); }
 #work[data-mode="search"]  { --mode-accent: var(--m-search); }
 #work[data-mode="cmd"]     { --mode-accent: var(--m-command); }
 #work[data-mode="visual"]  { --mode-accent: var(--m-visual); }
