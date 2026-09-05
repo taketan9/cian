@@ -60,7 +60,6 @@
   --m-visual:  rgb(255, 140, 0);
   --m-search:  rgb(80, 200, 120);
   --m-command: rgb(200, 100, 200);
-  --m-shell:   rgb(200, 160, 60);
   /* A pane showing somebody else's server. cian-tui's CRMAINE, and the one
      confusion worth spending a colour on. */
   --m-remote:  rgb(214, 45, 70);
@@ -338,7 +337,11 @@ html, body {
 #work[data-mode="search"]  { --mode-accent: var(--m-search); }
 #work[data-mode="cmd"]     { --mode-accent: var(--m-command); }
 #work[data-mode="visual"]  { --mode-accent: var(--m-visual); }
-#work[data-mode="shell"]   { --mode-accent: var(--m-shell); }
+/* **シェルは金をやめた**（2026-09-06 の依頼 154）。「アクティブなパネルは
+   シアン」で、シェルパネルも面の1つ ── どちらに鍵があるかを言う色が面ごとに
+   違うと、覚えることが1つ増えるだけになる。シェル用の上書きを1行まるごと
+   落として、既定（`--cian`）に落ちるようにした。緑（検索）と紫（コマンド）は**何を
+   しているか**を言う色なので、そちらは残す。 */
 /* And the pane that is not current steps back rather than merely being a
    shade darker — the eye should land on the live one without being asked. */
 .pane:not(.active) .rows,
@@ -769,9 +772,9 @@ html, body {
    than as two things. ("上辺が2つ線が入ったように見える".) At the bottom it
    is the shape a tab has always had, and it matches the editor's file tabs,
    which are the same idea one panel over. */
-/* `--mode-accent`、枠と同じ ── シェルにキーがあるとき枠は金（`--m-shell`）
-   なのに、タブの印だけアクセント色のままだった。3倍で撮って初めて見えた
-   類のずれで、同じことを言っている二つが違う色で言っていた。 */
+/* `--mode-accent`、枠と同じ ── タブの印だけアクセント色のままだった時期が
+   あり、3倍で撮って初めて見えた類のずれだった。同じことを言っている二つは
+   同じ色で言う。 */
 #shell.on .stabs span.on { color: var(--mode-accent); box-shadow: inset 0 -2px 0 var(--mode-accent); }
 .stabs span:hover:not(.on) { color: var(--text); background: var(--pane-off); }
 #s-title { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

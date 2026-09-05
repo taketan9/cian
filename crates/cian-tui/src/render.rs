@@ -3277,7 +3277,13 @@ fn focus_badge_color(mode: Mode) -> Color {
         Mode::Search => Color::Rgb(80, 200, 120),
         Mode::Command => Color::Rgb(200, 100, 200),
         Mode::Filter => Color::Rgb(80, 200, 120),
-        Mode::Shell => Color::Rgb(200, 160, 60),
+        // **The shell is a surface too.** It used to be gold; 2026-09-06:
+        // 「シェルパネルに焦点があたったときは、金じゃなくシアンにして
+        // ほしい。アクティブパネルはシアンにしたい」。The frame answers
+        // "which surface has the keys", and an answer that changes colour
+        // depending on *which* surface is one more thing to learn. Green and
+        // purple stay: those say what you are *doing*, not where you are.
+        Mode::Shell => CIAN,
     }
 }
 
