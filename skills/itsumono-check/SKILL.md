@@ -11,10 +11,10 @@ description: リリース前の定例点検。TUI と GUI の両方が動くか�
 ## ① 動くか（TUI / GUI の両方）
 
 ```bash
-cargo test --workspace                                  # 680本ほど・1分
+cargo test --workspace                                  # 690本ほど・1分
 cargo clippy --workspace --all-targets -- -D warnings   # CI と同じ物差し
-cargo run --bin cian-tui                                # **実際に起動して触る**
-cargo run --bin cian                                    # ウィンドウ版も
+python3 scripts/tui-drive.py                            # 端末版を**本物の pty で**動かす
+node gui/drive.js                                       # 窓版を動かす（例外 0 件が基準）
 ```
 
 - **`cargo test` だけで済ませない。** CI は `-D warnings` で回る。テストが
@@ -28,6 +28,33 @@ cargo run --bin cian                                    # ウィンドウ版も
   ウィンドウ固有（フォント・DPI・マウス）を触ったら両方起動する
 - **Windows は手元で見られない。** CI のマトリクスを信じ、実機確認は
   月曜にまとめる
+
+### 端末版も実機で動く（2026-09-06 から）
+
+長いこと「端末版は手元で触れない」ことにしていた。**嘘だった。**
+`script(1)` で止まるのは、cian が端末へ問い合わせる（DA1・DSR・セル寸法・
+kitty graphics）のに素の pty が答えないから。**答えれば動く。**
+
+```bash
+python3 -m venv /tmp/cian-tui-env && /tmp/cian-tui-env/bin/pip install pyte
+/tmp/cian-tui-env/bin/python scripts/tui-drive.py
+/tmp/cian-tui-env/bin/python scripts/tui-drive.py -- j j Space   # 好きな手
+```
+
+見るのは**この道具にしか答えられないこと**だけ ── 実際のバイト列、実際の桁、
+実際のマウス。中身の判断は `cargo test` が持っている。
+
+| | |
+| --- | --- |
+| ① 起動 | 問い合わせに答えて、待ちに入らないか |
+| ② 枠 | 四隅が描かれているか（**幅を変えて**） |
+| ③ 当たり | 日本語のタブ名で、叩いた桁が当たるか |
+| ④ 一巡 | 動かなかったキー ── 下端の1行ではなく**画面全部**を比べる |
+
+**日本語でしか出ないものが、ここで4つ出た**（ポップアップのボタンが切れる・
+シェルのタブが隣に飛ぶ・右上の角が消える・案内文が色を持たない）。英語は
+字数と桁数が同じなので、字で測った箱がたまたま合っていた ── `cargo test` も
+目視も通っていた。**桁の話は、桁のある場所でしか出ない。**
 
 ## ② 冗長・死にロジック
 
