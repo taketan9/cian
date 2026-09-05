@@ -617,17 +617,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cian-ffi"
-version = "2.1.0"
-dependencies = [
- "amber-core",
- "anyhow",
- "chrono",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
 name = "cian-gui"
 version = "2.1.0"
 dependencies = [

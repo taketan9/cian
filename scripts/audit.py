@@ -421,12 +421,11 @@ def _ui_text() -> str:
         for m in re.finditer(rf'tr\(\s*(?:{q})\s*,\s*({q})', src):
             out.append(m.group(1)[1:-1])
 
-    # 電話 ── コメントを落としてから文字列を拾う
-    ios = os.path.join(ROOT, 'ios', 'Cian')
-    if os.path.isdir(ios):
-        for p in sorted(glob.glob(os.path.join(ios, '*.swift'))):
-            src = re.sub(r'^\s*//[^\n]*', '', _read(p), flags=re.M)
-            out += [m.group(1) for m in re.finditer(r'"((?:[^"\\\n]|\\.)*)"', src)]
+    # 電話（Swift）はここで読んでいた。**2026-09-05 に amber へ出た** ──
+    # `~/workspace/amber`。読む先を `if os.path.isdir(...)` で守っていたので、
+    # 出したあとも黙って通っていた。`keycover.py` が窓版を `tr()` に通した回に
+    # 72 → 2 種に落ちたまま百分率を出し続けたのと同じ形。**無いなら無いと
+    # 書く**ほうが、黙って飛ばすより強い。amber 側で同じ検査を持つのは別の日に。
 
     return '\n'.join(x for x in out if re.search(r'[ぁ-んァ-ヶ一-龯]', x))
 
