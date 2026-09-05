@@ -167,16 +167,29 @@ fn draw_split(f: &mut Frame, main_area: Rect, app: &mut App, ov: AnimOverride) {
     // hang it from and should not grow one — a row given to chrome is a row
     // taken from the files — so it sits in the frame itself, at the right-hand
     // end where nothing else is drawn.
+    //
+    // **One column short of the end, because something *is* drawn there.**
+    // The corner `╮` lives in the last column, and the switcher is
+    // right-aligned: its label ends in a space, so that space landed on the
+    // corner and rubbed it out at every terminal width — the right pane read
+    // as a box with its top-right open. `a_wide_character_never_eats_the_border`
+    // says the frame is the thing that has to be right, and skips the border
+    // *rows* while saying it; this was the one place inside that gap.
     app.grid_buttons.clear();
     let th = theme();
-    draw_view_switcher(f, Rect::new(main_area.x, main_area.y, main_area.width, 1), app, &th);
+    draw_view_switcher(
+        f,
+        Rect::new(main_area.x, main_area.y, main_area.width.saturating_sub(1), 1),
+        app,
+        &th,
+    );
     let log_border = recording_pulse(app.started.elapsed());
     if app.preview_on && app.focused != FocusedPane::Shell {
         crate::prof::timed(crate::prof::Phase::Shell, || draw_preview_panel(f, shell_area, app));
     } else {
         // draw_shell sizes each pane's PTY to its computed sub-rect.
         crate::prof::timed(crate::prof::Phase::Shell, || {
-            draw_shell(f, shell_area, &mut app.shell, app.focused == FocusedPane::Shell, &mut dividers, &mut leaves, ov, &mut tab_rects, log_border)
+            draw_shell(f, shell_area, &mut app.shell, app.lang, app.focused == FocusedPane::Shell, &mut dividers, &mut leaves, ov, &mut tab_rects, log_border)
         });
     }
     app.dividers = dividers;
@@ -218,7 +231,7 @@ fn draw_zoom_overlay(f: &mut Frame, rect: Rect, app: &mut App, ov: AnimOverride)
         }
         FocusedPane::Shell => {
             let log_border = recording_pulse(app.started.elapsed());
-            draw_shell(f, rect, &mut app.shell, true, &mut sink, &mut Vec::new(), ov, &mut Vec::new(), log_border);
+            draw_shell(f, rect, &mut app.shell, app.lang, true, &mut sink, &mut Vec::new(), ov, &mut Vec::new(), log_border);
         }
     }
 }
@@ -296,7 +309,7 @@ fn draw_zoomed(f: &mut Frame, area: Rect, app: &mut App, ov: AnimOverride) {
             rects.shell = area;
             app.layout_rects = rects;
             let log_border = recording_pulse(app.started.elapsed());
-            draw_shell(f, area, &mut app.shell, true, &mut dividers, &mut leaves, ov, &mut tab_rects, log_border);
+            draw_shell(f, area, &mut app.shell, app.lang, true, &mut dividers, &mut leaves, ov, &mut tab_rects, log_border);
         }
     }
     app.dividers = dividers;
@@ -2100,7 +2113,13 @@ fn shell_tabs_title<'a>(
             // drawn, clickable, and invisible.
             Style::default().fg(muted_on(surface()))
         };
-        let w = label.chars().count() as u16;
+        // **桁で測る、字で測らない。** `offsets` はこの帯のクリックの当たり
+        // 判定になる（`tab_rects`）。`:shellname` に日本語を付けると1文字が
+        // 2桁で描かれるので、字数で測った箱は描かれた帯より短くなり、**その
+        // タブ自身の右半分が隣のタブの当たり判定になる** ── 実測では 3..10 桁に
+        // 「日本語」が描かれているのに、8・9・10 桁を叩くと隣のタブへ飛んだ。
+        // ファイルのペインの帯（`tabs_title`）は既に `width_of` で測っている。
+        let w = width(&label) as u16;
         offsets.push((i, col, w));
         col += w;
         spans.push(Span::styled(label, style));
@@ -2796,7 +2815,7 @@ fn draw_shell_scrollback(
         &mut ScrollbarState::new(total).position(total.saturating_sub(at + view / 2)),
     );
     let badge = format!(" ↑ {at} ");
-    let bw = badge.chars().count() as u16;
+    let bw = width(&badge) as u16;
     if bw < inner.width {
         f.render_widget(
             Paragraph::new(badge).style(
@@ -2822,6 +2841,7 @@ fn draw_shell(
     f: &mut Frame,
     area: Rect,
     shell: &mut ShellPane,
+    lang: Lang,
     focused: bool,
     dividers: &mut Vec<Divider>,
     leaves: &mut Vec<(usize, usize, Rect, Rect)>,
@@ -2829,7 +2849,7 @@ fn draw_shell(
     tab_rects: &mut Vec<(FocusedPane, usize, Rect)>,
     log_border: Color,
 ) {
-    draw_shell_inner(f, area, shell, focused, dividers, leaves, ov, tab_rects, log_border);
+    draw_shell_inner(f, area, shell, lang, focused, dividers, leaves, ov, tab_rects, log_border);
 }
 
 /// Repaint every still-uncolored cell in `area` with `bg`.
@@ -2871,6 +2891,7 @@ fn draw_shell_inner(
     f: &mut Frame,
     area: Rect,
     shell: &mut ShellPane,
+    lang: Lang,
     focused: bool,
     dividers: &mut Vec<Divider>,
     leaves: &mut Vec<(usize, usize, Rect, Rect)>,
@@ -2925,11 +2946,33 @@ fn draw_shell_inner(
         } else if shell.is_starting() {
             "starting shell…".to_string()
         } else {
-            "shell pane — focus here (Shift+J / click / :shell) to start a shell. \
-             Esc returns to the files."
-                .to_string()
+            // **日本語で言う。** ここは既定の画面（2026-09-06 にプレビューを
+            // 既定で切にしたので、起動して最初に目に入る枠がこれになった）。
+            // 周りが全部日本語で、この一行だけ英語だった。**`tr()` の外に
+            // あったので、句点の検査（`nothing_cian_says_ends_in_a_full_stop`）
+            // にも掛かっていなかった** ── 包んだ瞬間に英語のほうも鳴った。
+            tr(
+                lang,
+                "shell pane — focus here (Shift+J / click / :shell) to start a shell. \
+                 Esc returns to the files",
+                "シェルパネル ── ここに焦点を移すと（Shift+J ／ クリック ／ :shell）\
+                 シェルが起動します。Esc でファイルへ戻ります",
+            )
+            .to_string()
         };
         f.render_widget(Paragraph::new(body).wrap(Wrap { trim: false }), inner);
+        // **Through the same tint as everything else in this panel.** This
+        // early return skipped it, so the placeholder kept `Reset` for its
+        // foreground — the terminal's own colour, which on a light cian theme
+        // in a dark terminal profile is light on light. The other placeholder
+        // below states its colour (`theme().dim`); this one never did.
+        //
+        // Found on 2026-09-06 by `every_popup_reads_on_the_theme_it_is_drawn_on`,
+        // the day the preview stopped covering this panel by default — until
+        // then the panel was almost never the thing on screen.
+        if let Some(bg) = theme().base_bg {
+            tint_shell_base(f, inner, bg, theme().file.plain);
+        }
         return;
     }
 
@@ -2988,7 +3031,7 @@ fn draw_shell_inner(
         let (pos, total) = shell.active_pane_position();
         if total > 1 {
             let badge = format!(" ▣ pane {}/{}  ({} hidden) ", pos, total, total - 1);
-            let bw = badge.chars().count() as u16;
+            let bw = width(&badge) as u16;
             if bw < inner.width {
                 let at = Rect::new(inner.x + inner.width - bw, inner.y, bw, 1);
                 f.render_widget(
@@ -6129,7 +6172,11 @@ fn draw_simple_dialog(
         let mut x = btn_area.x;
         for (label, kind) in &buttons {
             let text = format!("[ {} ]", label);
-            let w = text.chars().count() as u16;
+            // **桁で測る。** `[ コピー ]` は9字だが13桁で、字数で作った箱に
+            // 入れると ratatui が9桁で切って `[ コピ` になる ── 実測でそう出た。
+            // 当たり判定も同じ箱なので、押せる幅も足りていなかった。英語では
+            // 字数と桁数が同じなので、日本語でしか出ない。
+            let w = crate::util::width(&text) as u16;
             if x + w > btn_area.x + btn_area.width {
                 break;
             }

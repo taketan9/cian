@@ -3162,7 +3162,15 @@ impl App {
             gfx_failed: false,
             show_ws: true,
             show_ruler: true,
-            preview_on: config.options.preview.unwrap_or(true),
+            // **Off unless asked for, in both front ends.** The window has
+            // said so from the start ("reading every file the cursor passes
+            // over is a lot of disk for a feature you want on the ten seconds
+            // you are looking for something"), and this said the opposite —
+            // so the same init.lua, with nothing written in it, gave two
+            // different windows. 2026-09-06, his call: match the window.
+            // `:preview` and the T menu turn it on, and `cian.set_option
+            // ("preview", true)` makes that the default again.
+            preview_on: config.options.preview.unwrap_or(false),
             preview: None,
             preview_gfx: None,
             full_clear: false,

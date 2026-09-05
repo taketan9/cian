@@ -3965,6 +3965,30 @@
             }
         }
 
+        // **The four corners too.** The loop above walks `r.y + 1 ..` — it
+        // skips the border *rows* on purpose (a title lives on the top one),
+        // and that gap is where the view switcher was rubbing out the right
+        // pane's `╮`: right-aligned to the pane's last column, its label's
+        // trailing space landed on the corner at every terminal width. The box
+        // read as open at the top right and nothing said so.
+        for (name, r) in
+            [("left", app.layout_rects.left), ("right", app.layout_rects.right)]
+        {
+            for (which, x, y) in [
+                ("top-left", r.x, r.y),
+                ("top-right", r.x + r.width - 1, r.y),
+                ("bottom-left", r.x, r.y + r.height - 1),
+                ("bottom-right", r.x + r.width - 1, r.y + r.height - 1),
+            ] {
+                let sym = buf[(x, y)].symbol();
+                assert!(
+                    matches!(sym, "╭" | "╮" | "╰" | "╯" | "┌" | "┐" | "└" | "┘"
+                                | "╔" | "╗" | "╚" | "╝"),
+                    "{name} pane's {which} corner is {sym:?}",
+                );
+            }
+        }
+
         // …and the shell panel, drawn by the terminal widget rather than by
         // cian, with wide characters running exactly to its edge and past it.
         let dir = tempfile::tempdir().unwrap();
@@ -4328,6 +4352,7 @@
             pane.cursor = pane.entries.iter().position(|e| e.name == name).unwrap();
         };
 
+        app.preview_on = true;   // 既定は切（2026-09-06）。この検査はプレビューそのものを見る
         // A small text file is read at once, as it always was.
         go(&mut app, "small.txt");
         let out = render(&mut app, 100, 30).join("\n");
@@ -5968,7 +5993,10 @@
         std::fs::write(d.path().join("b-short.txt"), "SHORTFILE only line\n").unwrap();
         let p = d.path().to_path_buf();
         let mut app = App::new(p.clone(), p, en_config()).unwrap();
-        assert!(app.preview_on, "the preview is on by default");
+        // 既定は切（2026-09-06 に窓版へ揃えた）。この検査が見たいのは
+        // 「出したときに何が出るか」なので、ここで入れる。
+        assert!(!app.preview_on, "the preview is off by default");
+        app.preview_on = true;
         // Past the startup splash, which would otherwise cover the panel.
         app.startup_at = std::time::Instant::now() - std::time::Duration::from_secs(5);
 
@@ -12264,7 +12292,8 @@
             let pane = app.active_pane_mut().unwrap();
             pane.cursor = pane.entries.iter().position(|e| e.name == "hello.txt").unwrap();
         }
-        assert!(app.preview_on, "preview is on out of the box");
+        assert!(!app.preview_on, "preview is off out of the box");
+        app.preview_on = true;
         let out = render(&mut app, 110, 36).join("\n");
         assert!(out.contains("⌥ preview"), "panel is labelled: {out}");
         assert!(out.contains("preview-me"), "shows the cursor file's text");
@@ -12306,6 +12335,7 @@
         std::fs::write(d.path().join("after.txt"), "plain text after the picture\n").unwrap();
         let p = d.path().to_path_buf();
         let mut app = App::new(p.clone(), p, en_config()).unwrap();
+        app.preview_on = true;   // 既定は切（2026-09-06）
 
         let go = |app: &mut App, name: &str| {
             let pane = app.active_pane_mut().unwrap();
@@ -12454,6 +12484,59 @@
         let _ = render(&mut app, 100, 40);
         app.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 1, 1));
         assert!(matches!(app.popup, Popup::None));
+    }
+
+    // ---- 画面の幅は桁で測る ----
+    //
+    // **どちらも日本語でしか出ない。** 英語なら字数と桁数が同じなので、
+    // `chars().count()` で作った箱はぴったり合う。実際に見つかったのは
+    // 2026-09-06、端末版を本物の pty で動かしたとき。
+
+    /// ポップアップのボタンは**描かれた桁数**の箱に入る。
+    ///
+    /// `[ コピー ]` は7字だが10桁。字数で作った箱に入れると ratatui が7桁で
+    /// 切って `[ コピ` になる ── 実機の画面でそう出た。押せる幅も同じ箱なので、
+    /// 見えているボタンの右半分が押せていなかった。
+    #[test]
+    fn a_popup_button_is_as_wide_as_it_is_drawn() {
+        let (_d, mut app) = app_with(&["a.txt"]);
+        app.lang = Lang::Ja;
+        app.open_popup(Popup::Notice { lines: vec!["ためし".into()] });
+        let _ = render_buf(&mut app, 100, 30);
+        // **箱そのものを見る、描かれた字ではなく。** 画面を文字列にすると
+        // 全角の2セル目が空白で戻るので、`contains("[ コピー ]")` は正しく
+        // 描けていても外れる。押せる範囲は箱で決まるので、箱を測る。
+        let widths: Vec<u16> = app.popup_zones.iter().map(|z| z.rect.width).collect();
+        // `[ コピー ]` は7字・10桁（`[`+空白+全角3つ+空白+`]`）。`[ 閉じる ]` も同じ。
+        assert_eq!(widths, vec![10, 10], "字数(7)ではなく桁数(10)で測ること");
+    }
+
+    /// シェルのタブ帯のクリック範囲も**桁**。
+    ///
+    /// 実測（120桁の pty）: 「日本語」のタブは 3..10 桁に描かれるのに、字数で
+    /// 測った当たり判定は 1..6 桁しかなく、**8・9・10 桁を叩くと隣のタブへ
+    /// 飛んだ**。ファイルのペインの帯は既に `width_of` で測っていて、ここだけ
+    /// 取り残されていた。
+    #[test]
+    fn a_japanese_shell_tab_is_clickable_where_it_is_drawn() {
+        let (_d, mut app) = app_with(&["a.txt"]);
+        let dir = tempfile::tempdir().unwrap();
+        let sh = cian_pty::default_shell();
+        let session = cian_pty::PtySession::new(dir.path(), &sh, 24, 80).unwrap();
+        app.shell.tabs.push(ShellTab::new(session));
+        app.shell.active = 0;
+        app.shell.rename_active("日本語".to_string());
+        app.preview_on = false;
+        app.focus(FocusedPane::Shell);
+        let _ = render_buf(&mut app, 100, 30);
+        let (_, _, rect) = app
+            .tab_rects
+            .iter()
+            .find(|(p, i, _)| *p == FocusedPane::Shell && *i == 0)
+            .copied()
+            .expect("シェルのタブ0の当たり判定が無い");
+        // " 日本語 " ── 5字・8桁。
+        assert_eq!(rect.width, 8, "字数(5)ではなく桁数(8)で測ること");
     }
 
     // ---- keyboard pane resize ----

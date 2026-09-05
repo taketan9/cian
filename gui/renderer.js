@@ -8076,6 +8076,52 @@ function cmdPaneTheme() {
 ///
 /// In the gutter rather than as a list, because the question is always about a
 /// *particular* line: "when did this become like this". A separate window with
+
+/// 表示の桁で切って詰める。**字数ではなく桁数。**
+///
+/// `padEnd` は UTF-16 の単位で数えるので、全角の名前は詰まりが足りない ──
+/// `:blame` の欄は1行ごとに幅が決まるので、日本語のコミッタ名の行だけ
+/// コードが右へずれて、欄がぎざぎざになる。全角の判定は Unicode の
+/// East Asian Width（W と F）で、絵文字もそこに入る。
+///
+/// 端末版が `unicode-width` でやっていることの、この窓で要る分だけ。
+function cellWidth(s) {
+    let n = 0;
+    for (const ch of s) {
+        const c = ch.codePointAt(0);
+        n += (c >= 0x1100 && (
+            c <= 0x115f
+            || c === 0x2329 || c === 0x232a
+            || (c >= 0x2e80 && c <= 0xa4cf && c !== 0x303f)
+            || (c >= 0xac00 && c <= 0xd7a3)
+            || (c >= 0xf900 && c <= 0xfaff)
+            || (c >= 0xfe30 && c <= 0xfe6f)
+            || (c >= 0xff00 && c <= 0xff60)
+            || (c >= 0xffe0 && c <= 0xffe6)
+            || (c >= 0x1f300 && c <= 0x1f64f)
+            || (c >= 0x1f900 && c <= 0x1f9ff)
+            || (c >= 0x20000 && c <= 0x3fffd)
+        )) ? 2 : 1;
+    }
+    return n;
+}
+
+/// `cellWidth` で `cells` 桁ちょうどにする。
+///
+/// **切るのも桁で。** 全角の途中で切ると1桁足りない箱になるので、入らない
+/// ときは1桁ぶんの空白で埋めて幅を合わせる。
+function padCells(s, cells) {
+    let out = '';
+    let w = 0;
+    for (const ch of s) {
+        const cw = cellWidth(ch);
+        if (w + cw > cells) break;
+        out += ch;
+        w += cw;
+    }
+    return out + ' '.repeat(cells - w);
+}
+
 /// the same line numbers is the same information at arm's length.
 let blameOn = false;
 let blameMarks = [];
@@ -8097,7 +8143,7 @@ async function cmdBlame() {
         options: {
             isWholeLine: true,
             before: {
-                content: `${b.date} ${b.author}`.slice(0, 22).padEnd(22),
+                content: padCells(`${b.date} ${b.author}`, 22),
                 inlineClassName: 'blame',
             },
         },
