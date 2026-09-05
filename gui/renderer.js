@@ -389,50 +389,6 @@ function rowHeight(rows) {
     return css > 0 ? css : 26;
 }
 
-/// What the notes in the showing folder say about themselves.
-///
-/// Keyed by path, so drawing a row is a lookup rather than a search, and
-/// refreshed when the folder changes rather than on every paint — reading two
-/// hundred files to move a cursor would make the cursor the slow thing.
-///
-/// The judgement — what a title is, what an excerpt leaves out — is
-/// `cian_core::note`'s, not this file's. That module is the only part of cian
-/// mode that could ever reach an iPhone, and a second opinion written here
-/// would be the one that did not travel.
-const notes = { root: '', by: new Map(), asking: '', shelves: [] };
-
-/// Read the notes for whichever folder the pane is showing.
-///
-/// Called from `draw`, which is called on every keystroke — so the two guards
-/// are the whole design: the folder already read is skipped, and so is the
-/// one being read right now. Without the second, moving into a folder fired a
-/// request per repaint while the first was still in flight. `draw` at the end
-/// is not a loop: by then `notes.root` is this folder and the call returns.
-async function loadNotes(which) {
-    const pane = state[which];
-    if (!pane || viewMode !== 'cian' || pane.remote || pane.archive) return;
-    if (notes.root === pane.cwd || notes.asking === pane.cwd) return;
-    notes.asking = pane.cwd;
-    const r = await ask('notes', { path: pane.cwd });
-    notes.asking = '';
-    if (!r) return;
-    notes.root = r.root;
-    notes.by = new Map(r.notes.map((n) => [n.path, n]));
-    // The shelves, including the empty ones — they live in the folder's own
-    // `.cian/settings.json` because a shelf with nothing on it cannot be
-    // named by the notes.
-    notes.shelves = r.stars || [];
-    notes.books = r.books || [];
-    drawRail();
-    // **入ったら「すべてのノート」。** 行き先を選ぶ前の真ん中がディレクトリ
-    // 一覧のままだと、三列に見えて中身はファイラのままになる。
-    if (viewMode === 'cian' && !pane.flat) pickRail(rail.kind, rail.what).catch(() => {});
-    // While we are here: the routines this folder owes, and the timers for
-    // what it is going to want.
-    armRings(pane.cwd).catch(() => {});
-    draw(which);
-}
-
 function draw(which) {
     const pane = state[which];
     const root = el[which];
@@ -531,29 +487,7 @@ function draw(which) {
         });
         nav.append(b);
     }
-    // How many notes are here, beside the name. The phone says it under its
-    // wordmark; this is the same sentence in the space this window has.
-    //
-    // **Inside `path`, not beside it.** The crumb is one right-to-left run so
-    // that a long path is clipped at the head; a sibling after it lands
-    // outside that box and is clipped away entirely.
-    if (viewMode === 'cian' && notes.root === pane.cwd) {
-        const n = document.createElement('span');
-        n.id = 'note-count';
-        n.textContent = tr(`${notes.by.size} notes`, `${notes.by.size} のノート`);
-        path.append(n);
-    }
-    // ── cian モードは別の頭を持つ ──
-    //
-    // 2026-09-05:「iPhone の見た目に合わせて、cian っていうロゴを左に。
-    // [左] やパスの表示も不要」。ファイラの頭（どちら側か・どこにいるか・
-    // 履歴の矢印）は、ファイルを操るための道具で、ノートを読むための
-    // ものではない。ノートの側は**名前と、何本あるか**だけでいい。
-    if (viewMode === 'cian' && (notes.root === pane.cwd || pane.flat)) {
-        crumb.replaceChildren(cianHead(pane));
-    } else {
-        crumb.replaceChildren(nav, path);
-    }
+    crumb.replaceChildren(nav, path);
 
     const rows = root.querySelector('.rows');
     // Rebuilt whole. A listing is a few hundred rows and Chromium does not
@@ -562,11 +496,6 @@ function draw(which) {
     rows.classList.toggle('icons', viewMode === 'icons');
     rows.classList.toggle('details', viewMode === 'details');
     rows.classList.toggle('classic', viewMode === 'classic');
-    rows.classList.toggle('cian', viewMode === 'cian');
-    // Entering a folder is a different set of notes. Asked for here rather
-    // than at each of the places that change directory — Enter, the address
-    // bar, the sidebar, `:cd`, a bookmark — because they all end up drawing.
-    if (viewMode === 'cian' && which === state.focus) loadNotes(which).catch(() => {});
     // The columns that fit, decided by the pane's real width — the terminal
     // build's progressive drop (render.rs: the date needs ~52 columns, the
     // size ~34), translated through the half-width cell of the current size.
@@ -676,41 +605,7 @@ function draw(which) {
         const name = document.createElement('span');
         name.className = 'name';
         name.textContent = row.parent ? '..' : row.name;
-        if (viewMode === 'cian') {
-            // A note is a title and a line about it, not a filename and a
-            // size. What the row *says* is `cian_core::note`'s answer, read
-            // once for the folder and kept in `notes` — the pane still holds
-            // the files, so Enter, marks and everything else are unchanged.
-            const n = notes.by.get(row.path);
-            // A favourite says so here too. **The same word and the same
-            // mark as the phone** — `star` is written on the note, so both
-            // ends read it, and a note that is starred on one and plain on
-            // the other would be two answers to one question.
-            name.textContent = n ? n.title : (row.parent ? '..' : row.name);
-            // A favourite says so, in the one warm colour this view has —
-            // 「留めてある」 is not 「触れる」, so it is not the accent.
-            if (n && n.star != null) {
-                const star = document.createElement('span');
-                star.className = 'star';
-                star.textContent = '\u2605 ';
-                name.prepend(star);
-            }
-            // Everything else in the folder still shows — this is a pane in a
-            // file manager, and a listing that hides the picture a note links
-            // to would be lying about what is there. It shows quietly: the
-            // eye runs down the titles, and the attachments stay reachable.
-            if (!n) div.classList.add('plain');
-            const sub = document.createElement('span');
-            sub.className = 'sub';
-            sub.textContent = n ? n.excerpt : '';
-            const tg = document.createElement('span');
-            tg.className = 'tags';
-            tg.textContent = n && n.tags.length ? n.tags.map((t) => `#${t}`).join(' ') : '';
-            const w = document.createElement('span');
-            w.className = 'when';
-            w.textContent = when(row);
-            div.append(name, tg, w, sub);
-        } else if (viewMode === 'icons') {
+        if (viewMode === 'icons') {
             const g = document.createElement('span');
             g.className = 'glyph';
             g.textContent = glyphFor(row);
@@ -1142,7 +1037,6 @@ function jumpTo(at) {
     draw(state.focus);
     if (visual.on) paintVisual();
     if (preview.on) showPreview();
-    if (viewMode === 'cian') followNote();
 }
 
 async function clearMarksAndFilter() {
@@ -1182,7 +1076,6 @@ function move(delta) {
     draw(state.focus);
     if (visual.on) paintVisual();
     if (preview.on) showPreview();
-    if (viewMode === 'cian') followNote();
 }
 
 async function enter() {
@@ -1729,18 +1622,15 @@ function clearPalette() {
 /// 三度ほどいて三度とも詳細ビューを壊しかけた。**入口を閉じるのは安全で、
 /// 分解は別の日にできる。**
 // モードの順番はここ一つ。`モード ▸` も T トグルの巡回も `表示 ▸` も
-// この順に従う（クラシック → 詳細一覧 → amber）。**`'cian'` は amber の
-// 内部の名前**で、画面には `amber` としか出ない ── 中の名前まで変えると
-// `body[data-cian]`・`.rows.cian`・`#cianrail`・drive.js の台本まで一度に
-// 動くので、それはプロジェクトを分けるときにまとめてやる。
-const VIEWS = ['classic', 'details', 'cian'];
+// この順に従う（クラシック → 詳細一覧）。**amber モードは 2026-09-06 に
+// 出た** ── ノートのアプリは `~/workspace/amber` で、cian は2画面ファイラ。
+const VIEWS = ['classic', 'details'];
 function viewName(mode) {
     // 「モード」と呼ぶと決めたので、名前にも付ける ── メニューが
     // 「モード ▸ クラシック」なら、それは「クラシックモード」のこと。
     return {
         classic: tr("classic mode", 'クラシックモード'),
         details: tr("details mode", '詳細一覧モード'),
-        cian: tr("amber mode", 'amber モード'),
         // 引退済み。`VIEWS` に無いので選べないが、名前は残す ── `:view icons`
         // と打った人に「そんなモードは無い」ではなく、詳細一覧へ案内するため。
         icons: tr("icons mode", 'アイコンモード'),
@@ -1749,18 +1639,11 @@ function viewName(mode) {
 /// The two that take the whole window. Both are the Explorer arrangement,
 /// where the listing is the thing you are looking at; classic keeps the two
 /// panes, which is what cian is for.
-const ONE_PANE = ['details', 'icons', 'cian'];
+const ONE_PANE = ['details', 'icons'];
 let viewMode = 'classic';
-/// Whether the shell panel was open when cian mode took its pixels.
-let shellWasOpen = false;
-/// Where the pane was standing before cian mode took it to the notes.
-let wasAt = '';
-/// Whether the note on screen was opened by walking past it.
-let autoOpened = false;
 
 function setView(mode, remember = true) {
-    if (!VIEWS.includes(mode)) { say(`${mode}? — :view classic | details | amber`, true); return; }
-    const was = viewMode;
+    if (!VIEWS.includes(mode)) { say(`${mode}? — :view classic | details`, true); return; }
     viewMode = mode;
     // Icons take the whole window; the other two keep the two panes. A wall
     // of tiles split down the middle is two narrow columns of icons, which is
@@ -1771,266 +1654,12 @@ function setView(mode, remember = true) {
     // notion of focus.
     draw('left');
     draw('right');
-    // The notes for whichever folder is showing. Asked for on the way *into*
-    // the view rather than on every paint: it reads the head of every
-    // Markdown file underneath, which is not a thing to do to move a cursor.
-    if (mode === 'cian') {
-        notes.root = '';
-        // **cian モードはノートの場所そのもの。** どこか別のディレクトリで
-        // cian の一覧を出しても、それはノートの無い notes app でしかない。
-        // 決まっていなければ既定を作る（`~/Documents/cian`）── 電話と同じで、
-        // 置き場所を1つも持っていない状態から始めさせない。
-        //
-        // **ペインができてから。** 起動時に憶えていたモードを当てる経路では
-        // `state.left` はまだ無く、そこへ `goToPath` を呼ぶと描画ごと落ちて
-        // **窓が一枚も開かない**（それで一度、窓が開かなくなった）。
-        if (state[state.focus] && state[state.focus].cwd) {
-            // **どこに居たかを憶えておく。** ノートの場所へ飛ぶのは正しいが、
-            // 戻ったときに帰ってこないと、モードを一巡しただけで居場所を
-            // 失う ── シェルパネルと同じ話。
-            wasAt = state[state.focus].cwd;
-            goToNotes(null).catch(() => {});
-        } else {
-            setTimeout(() => {
-                if (viewMode === 'cian') goToNotes(null).catch(() => {});
-            }, 0);
-        }
-        // Newest first, on the way in. A notes list is read from the top and
-        // what you want at the top is what you were last writing — the name
-        // of a note is how you find one you remember, not how you find the
-        // one you had open yesterday. Stated rather than toggled, so entering
-        // the view twice does not give you oldest-first the second time.
-        applySort('date', true).then(() => loadNotes(state.focus)).catch(() => {});
-        // The shell goes. A notes window is not a terminal with notes in it,
-        // and the panel is the pixels the note wants. **Remembered, so
-        // leaving puts it back** — a mode that quietly closes something and
-        // does not reopen it is a mode you stop entering.
-        shellWasOpen = term.on;
-        if (term.on) closeShell();
-    } else if (was === 'cian') {
-        // **歩いて開いただけのノートは、モードと一緒に閉じる。** cian モードの
-        // 右半分はそのモードのもので、そこに出ていたのは「カーソルが通った
-        // から」開いたノート ── 出たあとも残っていると、エディタが窓を覆った
-        // まま次のキーを全部飲む（実際そうなり、drive.js の「動かなかった
-        // キー」が 47 から 140 に跳ねた）。
-        if (viewer.on && autoOpened) closeView(false).catch(() => {});
-        if (wasAt) {
-            const back = wasAt;
-            wasAt = '';
-            goToPath(back).catch(() => {});
-        }
-        if (shellWasOpen && !term.on) {
-            shellWasOpen = false;
-            openShell({ focus: false });
-        }
-    }
-    // The two halves, or the one surface. Set on `#work` so the CSS decides
-    // where `#view` sits — the editor itself is the same box either way.
-    document.body.dataset.cian = mode === 'cian' ? 'on' : 'off';
-    drawRail();
-    const pad = document.getElementById('cianpad');
-    if (pad) {
-        pad.textContent = tr('choose a note on the left', '左でノートを選ぶと、ここに出ます');
-    }
-    if (mode === 'cian') followNote();
     if (remember) ask('remember', { key: 'gui_view', value: mode });
 }
 
 /// The lower-cased extension, or ''. Four functions asked this question with
 /// the same regex on four lines — the audit's "same line four times" — and
 /// four copies of one rule is how one of them starts answering differently.
-/// 真ん中の列の頭 ── **いま何を見ているか**。
-///
-/// ロゴと名前は左の列が言っているので、ここで繰り返さない。ここが答える
-/// のは「絞っている最中かどうか」で、それは左の反転だけでは足りない ──
-/// 目は真ん中を見ているので。
-function cianHead(pane) {
-    const box = document.createElement('span');
-    box.className = 'cianhead';
-
-    const name = document.createElement('span');
-    name.className = 'ciantitle';
-    name.textContent = pane.flat || tr("All notes", 'すべてのノート');
-
-    const sub = document.createElement('span');
-    sub.className = 'ciansub';
-    const n = (pane.entries || []).filter((e) => !e.parent && !e.is_dir).length;
-    sub.textContent = tr(`${n} notes`, `${n} 本`);
-
-    const words = document.createElement('span');
-    words.className = 'cianwords';
-    words.append(name, sub);
-    box.append(words);
-    return box;
-}
-
-/// 左の列 ── 行き先の一覧。
-///
-/// **歩く場所ではない。** ファイラの一覧はディレクトリを一階層ずつ見せる
-/// もので、それはファイルを操るための形。ノートを読む人が知りたいのは
-/// 「どこに何があるか」で、フォルダもタグも★も**同じ種類の答え**
-/// （＝この条件のノートを見せて）── だからひとつの列に並ぶ。
-///
-/// 中身は毎回 `notes` から組み立てる。**索引は持たない** ── ノートは
-/// ただのファイルで、フォルダと front matter がそのまま索引だから。
-const rail = { kind: 'all', what: '' };
-
-function drawRail() {
-    const el2 = document.getElementById('cianrail');
-    if (!el2) return;
-    el2.hidden = viewMode !== 'cian';
-    if (el2.hidden) return;
-
-    const all = [...notes.by.values()];
-    const frag = document.createDocumentFragment();
-
-    const brand = document.createElement('div');
-    brand.className = 'brand';
-    brand.append(cianMark(), Object.assign(document.createElement('span'), {
-        className: 'bname', textContent: 'amber',
-    }));
-    frag.append(brand);
-
-    const head = (text) => {
-        const h = document.createElement('div');
-        h.className = 'rhead';
-        h.textContent = text;
-        frag.append(h);
-    };
-    const item = (label, n, kind, what, opts = {}) => {
-        const d = document.createElement('div');
-        d.className = 'ritem' + (rail.kind === kind && rail.what === what ? ' on' : '');
-        if (opts.depth) d.dataset.depth = String(opts.depth);
-        if (opts.star) {
-            const st = document.createElement('span');
-            st.className = 'st';
-            st.textContent = '\u2605';
-            d.append(st);
-        }
-        if (opts.colour !== undefined) {
-            const sq = document.createElement('span');
-            sq.className = 'sq';
-            if (opts.colour) sq.style.background = opts.colour;
-            d.append(sq);
-        }
-        const name = document.createElement('span');
-        name.className = 'name';
-        name.textContent = label;
-        const count = document.createElement('span');
-        count.className = 'n';
-        count.textContent = String(n);
-        d.append(name, count);
-        d.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            pickRail(kind, what);
-        });
-        frag.append(d);
-        return d;
-    };
-
-    item(tr("All notes", 'すべてのノート'), all.length, 'all', '');
-    item(tr("Favourites", 'お気に入り'), all.filter((n) => n.star != null).length, 'star', '', { star: true });
-
-    // フォルダ ── `allBooks` は engine の歩いた結果で、空のフォルダも入る。
-    const books = notes.books || [];
-    if (books.length) {
-        head(tr("Folders", 'フォルダ'));
-        for (const b of books) {
-            const under = all.filter((n) => n.book === b || n.book.startsWith(`${b}/`)).length;
-            const depth = b.split('/').length - 1;
-            item(b.split('/').pop(), under, 'book', b, {
-                depth, colour: (notes.colors || {})[b] || '',
-            });
-        }
-    }
-
-    // タグ ── 多い順。ノートが実際に持っているものだけ。
-    const count = new Map();
-    for (const n of all) for (const t of n.tags) count.set(t, (count.get(t) || 0) + 1);
-    if (count.size) {
-        head(tr("Tags", 'タグ'));
-        for (const [t, n] of [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {
-            item(`#${t}`, n, 'tag', t);
-        }
-    }
-
-    const make = document.createElement('div');
-    make.className = 'newnote';
-    make.textContent = tr("+ New note", '＋ 新しいノート');
-    make.addEventListener('mousedown', (e) => { e.preventDefault(); cmdNewNote(); });
-    frag.append(make);
-
-    el2.replaceChildren(frag);
-}
-
-/// アイコンと同じ2つの括弧。左の列と、一覧の頭と、ドックの中で同じもの。
-let markSeq = 0;
-function cianMark() {
-    // 案 S4「生成りの葉」。多羅葉に字を書いたのが「葉書」の語源。
-    // **数字は packaging/amber.svg と packaging/amber.py と同じ** ── どれか
-    // 一つだけ直すと、窓とアプリアイコンで別の葉になる。
-    // ロゴなので配色は色替えに追従させない（前の印は --accent を拾っていた）。
-    const id = 'am' + (++markSeq);
-    const box = document.createElement('div');
-    box.innerHTML = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="${id}g" gradientUnits="userSpaceOnUse" x1="15" y1="0" x2="85" y2="100">
-      <stop offset="0" stop-color="#ffd97f"/><stop offset="1" stop-color="#f2a62c"/>
-    </linearGradient>
-    <clipPath id="${id}c"><rect width="100" height="100" rx="26"/></clipPath>
-  </defs>
-  <rect width="100" height="100" rx="26" fill="url(#${id}g)"/>
-  <g clip-path="url(#${id}c)">
-    <path d="M12 66 C6 74 0 84 -4 96" fill="none" stroke="#fff4de" stroke-width="7" stroke-linecap="round"/>
-    <path d="M10 62 C6 38 26 18 50 15 C74 12 90 24 97 35 C88 50 66 68 44 77 C26 84 12 78 10 62 Z" fill="#fff4de"/>
-    <g fill="none" stroke="url(#${id}g)" stroke-width="8" stroke-linecap="round">
-      <path d="M24 46 C42 36 60 30 78 27"/>
-      <path d="M24 66 C40 57 54 51 66 47"/>
-    </g>
-  </g>
-</svg>`;
-    const mark = box.firstElementChild;
-    mark.setAttribute('class', 'mk');
-    return mark;
-}
-
-/// 行き先をひとつ選ぶ。
-///
-/// **真ん中の列を作り直す。** ペインを `panelize` で「このノートたち」に
-/// 差し替えるので、マークも Enter も F3 もドラッグも、そのまま使える ──
-/// ノートの一覧を自前で描き直すと、それが全部作り直しになる。
-async function pickRail(kind, what) {
-    rail.kind = kind;
-    rail.what = what;
-    const which = state.focus;
-    const all = [...notes.by.values()];
-    const pick = {
-        all: () => all,
-        star: () => all.filter((n) => n.star != null),
-        book: () => all.filter((n) => n.book === what || n.book.startsWith(`${what}/`)),
-        tag: () => all.filter((n) => n.tags.includes(what)),
-    }[kind] || (() => all);
-    const rows = pick();
-    const label = {
-        all: tr("All notes", 'すべてのノート'),
-        star: tr("Favourites", 'お気に入り'),
-        book: what,
-        tag: `#${what}`,
-    }[kind] || '';
-    drawRail();
-    if (!rows.length) {
-        // 空でも `panelize` は「読み込むものがありません」で断る。行き先を
-        // 選んだのに何も起きないのが一番分からないので、こちらで言う。
-        say(tr(`${label} — no notes`, `${label} ── ノートがありません`));
-        return;
-    }
-    const r = await ask('panelize', { pane: which, paths: rows.map((n) => n.path), label });
-    if (r) {
-        state[which] = r;
-        draw(which);
-    }
-}
-
 function extOf(row) {
     return (row.name.match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase();
 }
@@ -2335,11 +1964,7 @@ let palette = null;
 /// instead. Ordered by how often each is reached for, so a narrow window
 /// drops from the end.
 function hintsNow() {
-    // **cian モードでは、ノートが右に開いていてもキーは一覧にある。**
-    // `viewer.on` だけで見ると、右にノートが出た瞬間からずっとエディタの
-    // キー表が出続ける ── 一覧を歩いているのに「Ctrl+S 保存 / i 編集」と
-    // 書いてある帯になっていた。
-    if (viewer.on && !(viewMode === 'cian' && !viewerHasKeys())) {
+    if (viewer.on) {
         // `STYLES[0]` is notepad and `STYLES[1]` is vim; this asked for 1 and
         // returned the notepad row. It had never been on screen to disagree
         // with — `drawHints()` was not called when a file opened — so an
@@ -2394,26 +2019,6 @@ function hintsNow() {
     if (pane && pane.remote) {
         return [['Esc', tr('disconnect', '切断')], ['Space', tr('mark', 'マーク')], ['c', tr('transfer', '転送')], ['r', tr('rename', 'リネーム')],
             ['d', tr('delete', '削除')], ['Enter', tr('open', '開く')], ['?', tr('help', 'ヘルプ')]];
-    }
-    // ── cian モードのキーは、ノートのキーだけ ──
-    //
-    // **平坦一覧の帯より先に。** 行き先を選ぶと真ん中は `pane.flat` に
-    // なるので、後ろに置くと「b/Esc 戻る」の帯が出てしまう ── 戻る先が
-    // 無いところで。
-    //
-    // 2026-09-05:「cian モードのキーのヘルプは、cian モードに特化した内容に
-    // 絞って欲しい」。ブランチも差分も grep も、ノートを書いている人が
-    // 押すものではない ── 並んでいるだけで「これは何のアプリだったか」を
-    // 一行ぶん薄くする。
-    if (viewMode === 'cian') {
-        // `n` は書かない ── そこは既に「次の一致へ」で、帯に嘘を書くと
-        // 帯そのものが信用されなくなる。新しいノートは `:newnote` と
-        // メニューから。
-        return [['Enter', tr('open', '開く')],
-            ['/', tr('narrow (AND / OR)', '絞込（空白=AND, OR=OR）')],
-            [',', tr('sort', '並替')], ['F3', tr('read / write', '読む・書く')],
-            ['Ctrl+E', tr('preview', 'プレビュー')],
-            ['M', tr('menu', 'メニュー')], ['T', tr('mode', 'モード')], ['?', tr('help', 'ヘルプ')]];
     }
     if (pane && pane.flat) {
         return [['b/Esc', tr('out', '戻る')], ['Space', tr('mark', 'マーク')], ['/', tr('narrow', '絞込')],
@@ -2737,40 +2342,6 @@ function officeTarget(row) {
     return sharepoint.some((root) => row.path && row.path.startsWith(root));
 }
 
-/// The rows under 「ノート ▸」 — the same list wherever it is opened from.
-///
-/// One place, because cian mode puts them at the top of its own menu and the
-/// other modes keep them in a group: two copies would be two menus that
-/// agree until one of them is edited.
-function notesRows() {
-    return [
-
-            { label: tr("Choose the folder\u2026", '保存場所を選ぶ…'), value: '', run: () => { closeMenu(); cmdNotesRoot(); } },
-            // 開いてきた場所 ── 選んだところ**と** init.lua が挙げているところ。
-            // 「保存場所へ」の行を消したので、場所を渡り歩く道はここ1本になる。
-            ...(notePlaces.length || noteRoots.length
-                ? [group(tr('Where it has been \u25b8', '開いてきた場所 ▸'), () => [
-                    ...new Set([...notePlaces, ...noteRoots.map((r) => r.path)]),
-                ].map((at) => ({
-                    label: at.split(/[\\/]/).pop() + (at === chosenRoot ? '  \u25cf' : ''),
-                    value: at,
-                    run: async () => {
-                        closeMenu();
-                        chosenRoot = at;
-                        await ask('remember', { key: 'gui_notes', value: at });
-                        notes.root = '';
-                        await goToNotes({ name: at.split(/[\\/]/).pop() || 'cian', path: at });
-                    },
-                })))]
-                : []),
-            { label: tr("Move the notes here\u2026", 'いまのノートをここへ移す…'), value: '', run: () => { closeMenu(); cmdNotesMove(); } },
-            { label: tr("Restore from a backup (.zip)\u2026", 'バックアップ（zip）から戻す…'), value: '', run: () => { closeMenu(); cmdNotesRestore(); } },
-            { label: tr("Import .md files\u2026", '.md を取り込む…（反対のペインから）'), value: '', run: () => { closeMenu(); cmdNotesImport(); } },
-            { label: tr("Backup\u2026", 'バックアップ…'), value: ':backup', run: () => { closeMenu(); cmdBackup(); } },
-            { label: tr("New note", '新しいノート'), value: ':newnote', run: () => { closeMenu(); cmdNewNote(); } },
-    ];
-}
-
 function contextRows() {
     const pane = state[state.focus];
     const row = pane && pane.entries[pane.cursor];
@@ -2778,56 +2349,18 @@ function contextRows() {
     const inShell = term.on && term.focused;
     const v = [];
 
-    // ── cian モードは、ノートのことだけを上に ──
-    //
-    // 2026-09-05:「cian モードの右クリックは cian の内容に特化してよい。
-    // ノートに記載している内容をトップレイヤに」。ノートを読んでいる人に
-    // 出す最初の一画面が「zip に追加」や「ブランチ」で埋まっているのは、
-    // ファイラのメニューを流用しているだけで、答えになっていない。
-    if (!inShell && viewMode === 'cian') {
-        const note = row && !row.parent && !row.is_dir ? notes.by.get(row.path) : null;
-        if (note) {
-            v.push({ label: note.star != null ? tr("Change the shelf", '棚を変える') : tr("Add to favourites", 'お気に入りに登録する'), value: ':star', run: cmdStar });
-            v.push({ label: tr("Tags", 'タグ'), value: ':tag', run: cmdTag });
-            v.push({ label: tr("Read it", '読む'), value: 'F3', run: () => lookInside() });
-        }
-        v.push({ label: tr("New note", '新しいノート'), value: ':newnote', run: cmdNewNote });
-        v.push(group(tr('Notes \u25b8', 'ノート ▸'), notesRows));
-        v.push(group(tr('Mode \u25b8', 'モード ▸'), () => VIEWS.map((m) => ({
-            label: viewName(m) + (m === viewMode ? '  \u25cf' : ''),
-            value: `:view ${m}`,
-            run: () => { closeMenu(); setView(m); say(tr(`mode: ${viewName(m)}`, `モード: ${viewName(m)}`)); },
-        }))));
-        // The ordinary file rows are still reachable, one level down — a
-        // note is a file, and sometimes what you want is to copy its path or
-        // reveal it in Finder. Down there because that is not what you came
-        // here to do.
-        if (has) {
-            v.push({ label: tr("Copy path text", 'パスをコピー'), value: 'p', run: copyPaths });
-            v.push({ label: tr("Rename", 'リネーム'), value: 'r', run: rename });
-            v.push({ label: tr("Delete", '削除'), value: 'd', run: () => operate('delete') });
-        }
-        return v;
-    }
-
     // ── first, because it is the switch reached for most ──
     //
     // 2026-09-05: 「クラシックやアイコン・cian モードへの遷移はトグル・
     // メニューの最上位に移動してほしい」. It changes what the window *is* —
-    // a file manager, a wall of tiles, or a notes app — and everything below
-    // is a thing to do inside whichever one you are in.
+    // a file manager or a wall of tiles — and everything below is a thing to
+    // do inside whichever one you are in.
     if (!inShell) {
         v.push(group(tr('Mode ▸', 'モード ▸'), () => VIEWS.map((m) => ({
             label: viewName(m) + (m === viewMode ? '  \u25cf' : ''),
-            // **打つ綴りであって、中の名前ではない。** `cian` は amber の
-            // 内部の名前なので、右端に出すと「そんなモードは無い」と読める。
-            value: `:view ${m === 'cian' ? 'amber' : m}`,
+            value: `:view ${m}`,
             run: () => { closeMenu(); setView(m); say(tr(`listing: ${viewName(m)}`, `一覧: ${viewName(m)}`)); },
         }))));
-        // Where the notes live, and the two ways things come in and go out.
-        // Under the switch that leads to them, because that is the order they
-        // are needed in: choose the view, then say where its notes are.
-        v.push(group(tr('Notes ▸', 'ノート ▸'), notesRows));
     }
 
     // ── launchers ──
@@ -3029,21 +2562,13 @@ function contextRows() {
         // cian-tui's ViewMenu, dotfiles, then the switches. Its glyphs too —
         // they are what the corner switcher shows.
         //
-        // **並びは一つに揃えた**（2026-09-05）: クラシック → 詳細一覧 → amber。
-        // 最上位の `モード ▸` は `VIEWS` を並べ、ここは同じ順を写す。以前は
-        // ここだけ「詳細一覧 → cian → …ノートの用事… → クラシック」で、
-        // クラシックがノートの行の下に取り残されていた。端末版の
-        // `menu.rs` も同じ順に直してある ── 順番が二つあるのは順番が無いのと
-        // 同じで、どちらが「正しい並び」か言えなくなる。
+        // **並びは一つに揃えた**（2026-09-05）: クラシック → 詳細一覧。
+        // 最上位の `モード ▸` は `VIEWS` を並べ、ここは同じ順を写す。端末版の
+        // `menu.rs` も同じ順 ── 順番が二つあるのは順番が無いのと同じで、
+        // どちらが「正しい並び」か言えなくなる。
         v.push(group(tr("View \u25b8", '表示 ▸'), () => [
             { label: tr("\u25a5 Classic", '▥ クラシック'), value: ':view classic', run: () => { setView('classic'); say(tr('listing: classic', '一覧: クラシック')); } },
             { label: tr("\u25a4 Details", '▤ 詳細一覧'), value: ':view details', run: () => { setView('details'); say(tr('listing: details', '一覧: 詳細一覧')); } },
-            { label: tr("\u25c6 amber (notes)", '◆ amber（ノート）'), value: ':view amber', run: () => { setView('cian'); say(tr('listing: amber', '一覧: amber')); } },
-            // 「◆ ノートの保存場所へ…」はここにあった。台帳 142 が「不要」と
-            // 書いたのに、`ノート ▸` から消したときこちらの写しが残っていた。
-            // 場所を渡り歩く道は `ノート ▸` の「開いてきた場所」1本。
-            { label: tr("\u25c6 New note", '◆ 新しいノート'), value: ':newnote', run: cmdNewNote },
-            { label: tr("\u25c6 Tags\u2026", '◆ タグで絞る…'), value: ':tag', run: cmdTag },
             { label: tr("Show / hide dotfiles", 'ドットファイルの表示切替'), value: ':hidden', run: toggleHidden },
             { label: tr("Theme (this pane)", 'テーマ（このペイン）'), value: '', run: cmdPaneTheme },
             { label: tr("Switches\u2026", '各種スイッチ…'), value: 'T', run: () => openMenu(TOGGLES) },
@@ -3779,10 +3304,11 @@ document.addEventListener('keydown', (e) => {
     // `stopPropagation` stops the event reaching further *nodes*, and every
     // one of these handlers is on `document`, so the listing's keys ran on
     // the same keystroke regardless. It did not show while a prompt only ever
-    // closed itself — but a `:` command that opens a list (`:notes`, `:ssh`)
+    // closed itself — but a `:` command that opens a list (`:ssh`, `:recent`)
     // opens it *during* this handler, and the listing's Enter then picked the
-    // first row of the list that had just appeared. You typed `:notes`, were
-    // shown nothing, and landed in whichever folder happened to be first.
+    // first row of the list that had just appeared. You typed the command,
+    // were shown nothing, and landed on whichever row happened to be first.
+    // (Found on `:notes`, back when amber mode was in this window.)
     // While a prompt is up it owns the keyboard; this is that sentence.
     e.stopImmediatePropagation();
     const k = e.key;
@@ -4050,13 +3576,7 @@ document.addEventListener('keydown', (e) => {
     // Not while a file is open. The editor no longer stops every key on its
     // way past — it cannot, or its own bindings never fire — so the listing's
     // keys have to decline for themselves.
-    //
-    // **Except in cian mode**, where the note is beside the list rather than
-    // over it, and the keys belong to whichever half has them. The editor
-    // takes them when it is focused; until then `j` walks the list, which is
-    // the whole point of a list beside a note. Without this the second `j`
-    // was typed into the note that the first one opened.
-    if (viewer.on && !(viewMode === 'cian' && !viewerHasKeys())) return;
+    if (viewer.on) return;
     // **And not before there is a listing to steer.**
     //
     // Twenty-seven branches below read a field off a pane — `.remote`,
@@ -4654,23 +4174,8 @@ const viewer = {
 /// ペイン, マーク, 並替, F3 閲覧 — none of which do anything while the editor
 /// has the keyboard. cian-tui swaps its bar for the panel's; this is the one
 /// door that makes the window do the same, rather than eight remembered calls.
-/// Whether the keys are in the editor rather than the list.
-///
-/// Asked of the document rather than remembered: Monaco takes and gives up
-/// focus on its own (a click, a `:` prompt closing), and a flag set beside it
-/// would be a second opinion that goes stale the first time it is not
-/// updated.
-function viewerHasKeys() {
-    return !!(el.view && !el.view.hidden && el.view.contains(document.activeElement));
-}
-
 function setViewerOn(on) {
     viewer.on = on;
-    // In cian mode the right half is either a note or the line saying to
-    // pick one. **One door for both**, here, because the last time this
-    // window had two ways to decide whether something was on screen it spent
-    // three rounds insisting a sheet was open behind the editor.
-    document.body.classList.toggle('reading', on);
     // A diagram parked in the editor belongs to the file that was open. Left
     // behind, the next file inherits somebody else's picture at whatever line
     // number it happened to be on.
@@ -4997,82 +4502,6 @@ async function openAsPicture(which) {
     return true;
 }
 
-/// Put a pasted picture beside the note, and a link to it in the text.
-///
-/// A note that can only hold words is half a note — the thing worth keeping
-/// is often the picture of the screen that went wrong, and the route for it
-/// today is: save the screenshot, find it, copy it in. The clipboard already
-/// hands Chromium the image as a file, so this is the one paste the editor
-/// does not let through: the bytes go beside the note in `attachments/` and
-/// what lands in the text is the Markdown link to them.
-///
-/// Markdown only, and deliberately. `![](…)` means something in a note and
-/// nothing in a `.rs` file, and writing a png next to a source file because
-/// a screenshot happened to be on the clipboard is not a favour. The refusal
-/// says so rather than doing nothing, because a paste that silently drops
-/// what you pasted reads as a bug.
-///
-/// The listener is on the container and in the capture phase: Monaco's own
-/// paste handling lives on a textarea inside it, and by the time that runs
-/// the image has already been turned into no text at all.
-async function onEditorPaste(ev) {
-    if (!viewer.on || !viewer.ed || viewer.readOnly) return;
-    if (!el.vBody.contains(ev.target)) return;
-    const items = Array.from(ev.clipboardData ? ev.clipboardData.items : []);
-    const it = items.find((i) => i.kind === 'file' && i.type.startsWith('image/'));
-    if (!it) return;                 // Words are Monaco's business, not ours.
-    ev.preventDefault();
-    ev.stopPropagation();
-    if (!viewer.path) {
-        say(tr('save the note first — a picture needs a folder to live in',
-               '先に保存を。画像はノートの隣に置くので保存場所が要ります'), true);
-        return;
-    }
-    if (!/\.(md|markdown|mdx)$/i.test(viewer.path)) {
-        say(tr('a picture can be pasted into a Markdown note',
-               '画像を貼れるのは Markdown のノートです'), true);
-        return;
-    }
-    const file = it.getAsFile();
-    // Both of the failures below used to be a bare `return`, and a paste that
-    // silently does nothing is indistinguishable from a paste that was never
-    // wired up — which is exactly how this looked the first time it was run.
-    if (!file) {
-        say(tr('the clipboard would not give up the picture',
-               'クリップボードから画像を取り出せませんでした'), true);
-        return;
-    }
-    const b64 = await new Promise((done) => {
-        const fr = new FileReader();
-        fr.onload = () => done(String(fr.result || '').replace(/^data:[^,]*,/, ''));
-        fr.onerror = () => done('');
-        fr.readAsDataURL(file);
-    });
-    if (!b64) { say(tr('could not read the pasted picture', '貼られた画像を読めませんでした'), true); return; }
-    const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '');
-    const r = await ask('noteimage', { note: viewer.path, b64, ext });
-    if (!r || !r.link) {
-        say(tr('the picture could not be saved beside the note',
-               '画像をノートの隣に置けませんでした'), true);
-        return;
-    }
-    const ed = viewer.ed;
-    const sel = ed.getSelection();
-    ed.executeEdits('cian-paste-image', [{ range: sel, text: `![](${r.link})`, forceMoveMarkers: true }]);
-    ed.focus();
-    say(tr(`pasted ${r.link}`, `貼りました ${r.link}`));
-}
-
-// On the document, in the capture phase — deliberately, and not on the
-// editor's own container. Monaco puts a capture listener on that container
-// first and ends it with `stopImmediatePropagation`, so a second listener on
-// the same node is never called: the paste arrived, was cancelled, and my
-// handler sat there looking wired up. Capture on an ancestor runs before any
-// of that. Once, at load, rather than inside `makeEditor` — the editor is
-// disposed and remade, and the container outlives it, so registering there
-// stacked up a handler per open and would have pasted the picture twice.
-document.addEventListener('paste', onEditorPaste, true);
-
 /// Make the editor once, or reuse it.
 ///
 /// Extracted because two things open it now — a file, and the list of names
@@ -5334,16 +4763,7 @@ async function openInEditor(which) {
 /// Split out because two things reach here now — a file in the listing,
 /// and a member extracted from an archive — and the second was going to
 /// need a copy of all of it.
-/// `quiet` opens the file without taking the keys.
-///
-/// **For cian mode's right half.** Walking the list opens a note on every
-/// step, and an editor that grabs the cursor each time is a list you cannot
-/// walk — the second `j` would be typed into the note. Enter still opens it
-/// properly, and that is the moment you meant to start writing.
-async function showFile(f, quiet = false) {
-    // 自分から開いたものは、モードを出ても残る。
-    if (!quiet) autoOpened = false;
-
+async function showFile(f) {
     let monaco;
     try {
         monaco = await loadMonaco();
@@ -5391,7 +4811,7 @@ async function showFile(f, quiet = false) {
     el.vName.textContent = f.name;
     el.vAbout.textContent = viewer.about;
     viewer.ed.setPosition({ lineNumber: 1, column: 1 });
-    if (!quiet) viewer.ed.focus();
+    viewer.ed.focus();
     drawViewFoot();
 }
 
@@ -6074,16 +5494,11 @@ function buildCommands() {
     // lives on two commands reaches only the first — the fuzzy finder its own
     // about-text promised could never open. `:view finder` still works as an
     // argument (cmdView maps it to details).
-    { name: 'view', alias: ['classic', 'details', 'amber', 'cian'], about: tr("which mode the window is in \u2014 :view classic | details | amber (notes)", 'モード — :view classic | details | amber（ノート）'), arg: 'classic / details / amber', optional: true, run: cmdView },
+    { name: 'view', alias: ['classic', 'details'], about: tr("which mode the window is in \u2014 :view classic | details", 'モード — :view classic | details'), arg: 'classic / details', optional: true, run: cmdView },
     { name: 'shell', about: tr("open the shell panel (also Shift+J)", 'シェルパネルを開く（Shift+J でも）'), run: openShell },
     { name: 'remote', alias: ['sftp'], about: tr("open a server in this pane (SFTP)", 'このペインでサーバを開く（SFTP）'), run: cmdSftpPicker },
 
     { name: 'ssh', about: tr("ssh to a host, in the shell panel (also Shift+S)", 'ホストへ ssh（シェルパネルで。Shift+S でも）'), run: cmdSshPicker },
-    { name: 'notes', about: tr("go to a notes folder (init.lua’s cian.notes)", 'ノートの保存場所へ（init.lua の cian.notes）'), run: cmdNotes },
-    { name: 'newnote', about: tr("make a note here and open it", 'ここにノートを作って開く'), run: cmdNewNote },
-    { name: 'tag', about: tr("narrow the listing to one tag", 'タグで一覧を絞る'), run: cmdTag },
-    { name: 'star', about: tr("put this note on a favourite shelf (or take it off)", 'このノートをお気に入りの棚へ（外すのも）'), run: cmdStar },
-    { name: 'backup', about: tr("zip the notes into the other pane", 'ノートを zip にして反対のペインへ'), run: cmdBackup },
     { name: 'paste', about: tr("paste the held files here (also Ctrl+V / y)", '保持したファイルをここへ貼り付け（Ctrl+V / y でも）'), run: paste },
     { name: 'local', about: tr("close the server and come back to this disk", 'サーバを閉じてローカルへ戻る'), run: cmdDisconnect },
     { name: 'aicmd', about: tr("AI: a shell command from a description", 'AI: 説明からシェルコマンドを作る'), arg: tr('what you want', 'やりたいこと'), run: cmdAiCmd },
@@ -6846,479 +6261,6 @@ function toggleKeyEcho() {
 // `..` climbs, and `c` across to the other pane is an upload or a download
 // depending on which side you are standing on. That is the terminal build's
 // arrangement, and the reason it is worth having at all: nothing new to learn.
-
-/// Where notes live, from `init.lua`'s `cian.notes{}`.
-///
-/// Already expanded by the engine: `~` and a SharePoint URL both mean
-/// something only on the machine the files are on, and the window is not that
-/// machine — on a remote pane it is not even the same operating system.
-let noteRoots = [];
-
-/// `:notes` — go to where the notes are, in the cian view.
-///
-/// One place goes straight there; several ask which. Not a fixed "notes
-/// folder" setting, because the two kinds do not mix: the notes nobody else
-/// should see, and the folder a team writes in together.
-/// The place notes live when nobody has said otherwise.
-///
-/// **Made, not demanded.** 2026-09-05: 「Mac や Windows でも iPhone と同じく
-/// cian の初回起動フォルダを勝手に作るようにしてくれないかな？」. The phone
-/// starts with a folder of its own; a desktop that wants a line of Lua before
-/// it will hold a note is a desktop nobody takes a note in.
-let chosenRoot = '';
-
-/// Everywhere the notes have been, newest first.
-///
-/// **Because finding it is the hard part.** The phone learned this first:
-/// iCloud Drive, Google Drive and Dropbox are all several taps down inside a
-/// picker, and the answer is not a better picker — it is never having to use
-/// it twice. Found once, listed for ever.
-let notePlaces = [];
-
-function rememberPlace(at) {
-    if (!at) return;
-    notePlaces = [at, ...notePlaces.filter((x) => x !== at)].slice(0, 8);
-    ask('remember', { key: 'gui_notes_seen', value: notePlaces.join('\n') });
-}
-
-/// Everywhere notes can be: what init.lua declares, plus the one chosen here.
-function allNoteRoots() {
-    const v = noteRoots.slice();
-    if (chosenRoot && !v.some((r) => r.path === chosenRoot)) {
-        v.unshift({ name: chosenRoot.split(/[\\/]/).pop() || 'cian', path: chosenRoot });
-    }
-    return v;
-}
-
-async function cmdNotes() {
-    const roots = allNoteRoots();
-    if (!roots.length) {
-        // Nothing declared and nothing chosen: make the default and go.
-        const r = await ask('notesroot', { path: '' });
-        if (!r) return;
-        chosenRoot = r.path;
-        await ask('remember', { key: 'gui_notes', value: r.path });
-        rememberPlace(r.path);
-        say(r.made
-            ? tr(`notes live in ${r.path} — change it in the menu`, `ノートの保存場所を作りました: ${r.path}（メニューで変えられます）`)
-            : tr(`notes: ${r.path}`, `ノート: ${r.path}`));
-        await goToNotes({ name: 'cian', path: r.path });
-        return;
-    }
-    if (roots.length === 1) { await goToNotes(roots[0]); return; }
-    const noteRoots = roots;
-    show(tr("Notes", 'ノート'),
-        tr(`${noteRoots.length} places (init.lua’s cian.notes)`, `${noteRoots.length} 件（init.lua の cian.notes）`),
-        noteRoots.map((r, at) => ({ label: r.name, sub: r.path, at })), {
-            filter: true,
-            hint: tr('type to narrow', '打って絞り込み'),
-            foot: tr('type to narrow   Enter open   Esc close', '打って絞る   Enter 開く   Esc 閉じる'),
-            pick: async (row) => { closeReport(); await goToNotes(noteRoots[row.at]); },
-        });
-}
-
-/// Point cian at a different folder — a Google Drive one, a Dropbox one, the
-/// same one the phone is reading.
-///
-/// The desktop draws the chooser; nothing here types a path at anybody.
-async function cmdNotesRoot() {
-    if (!window.cian.pickDir) {
-        say(tr('this build cannot open a folder chooser', 'この版ではフォルダを選べません'), true);
-        return;
-    }
-    const at = await window.cian.pickDir(tr('Where the notes live', 'ノートの保存場所'));
-    if (!at) return;
-    const r = await ask('notesroot', { path: at });
-    if (!r) return;
-    chosenRoot = r.path;
-    await ask('remember', { key: 'gui_notes', value: r.path });
-    rememberPlace(r.path);
-    notes.root = '';
-    await goToNotes({ name: r.path.split(/[\\/]/).pop() || 'cian', path: r.path });
-    say(tr(`notes: ${r.path}`, `ノート: ${r.path}`));
-}
-
-/// Move every note from where they were to where they are now.
-///
-/// **The question the phone asks when you change folders**, asked here as a
-/// command instead: a window has two panes and no moment where it can be
-/// sure you did not mean to point at an empty folder on purpose.
-async function cmdNotesMove() {
-    const which = state.focus;
-    const pane = state[which];
-    if (!pane || !pane.cwd) return;
-    const from = notePlaces.find((at) => at !== pane.cwd);
-    if (!from) {
-        say(tr('nowhere to move from — this is the only notes folder there has been',
-               '移してくる元がありません（ここしか開いていません）'), true);
-        return;
-    }
-    const rows = notePlaces.filter((at) => at !== pane.cwd).map((at) => ({ label: at, at }));
-    show(tr("Move the notes here", 'いまのノートをここへ移す'),
-        tr(`into ${pane.cwd}`, `${pane.cwd} へ`),
-        rows, {
-            filter: true,
-            foot: tr('Enter move (copy, check, then remove)   Esc close', 'Enter 移す（写して、確かめて、消す）   Esc 閉じる'),
-            pick: async (row) => {
-                closeReport();
-                const yes = await confirm(
-                    tr('Move every note?', 'ノートを丸ごと移しますか'),
-                    tr(`from ${row.at} — nothing is left behind, and nothing is overwritten`,
-                       `${row.at} から。元の場所には残りません。同じ名前があるときは、何も動かしません`));
-                if (!yes) return;
-                const out = await ask('migrate', { from: row.at, to: pane.cwd });
-                if (!out) return;
-                notes.root = '';
-                const fresh = await ask('list', { pane: which, path: pane.cwd });
-                if (fresh) { state[which] = fresh; draw(which); }
-                say(tr(`${out.moved} file(s) moved`, `${out.moved} 件を移しました`));
-            },
-        });
-}
-
-/// A backup zip, put back into this folder.
-///
-/// **The zip is chosen, not pointed at.** It used to be "whatever the other
-/// pane's cursor is on", which asks somebody to navigate a second pane to a
-/// file they have not looked for yet — 2026-09-05:「現実的なオペレーション
-/// じゃない」. A restore starts with going and finding the backup.
-async function cmdNotesRestore() {
-    const which = state.focus;
-    const pane = state[which];
-    if (!pane || !pane.cwd) return;
-    if (!window.cian.pickFile) {
-        say(tr('this build cannot open a file chooser', 'この版ではファイルを選べません'), true);
-        return;
-    }
-    const zip = await window.cian.pickFile(tr('The backup to restore', '戻すバックアップ'), 'zip');
-    if (!zip) return;
-    const yes = await confirm(
-        tr('Restore from this backup?', 'このバックアップから戻しますか'),
-        tr(`${zip.split(/[\\/]/).pop()} — notes already here are left alone`,
-           `${zip.split(/[\\/]/).pop()} ── いまあるノートは上書きしません`));
-    if (!yes) return;
-    const out = await ask('restore', { zip, to: pane.cwd });
-    if (!out) return;
-    notes.root = '';
-    const fresh = await ask('list', { pane: which, path: pane.cwd });
-    if (fresh) { state[which] = fresh; draw(which); }
-    say(out.kept
-        ? tr(`${out.put} restored, ${out.kept} left alone`, `${out.put} 件を戻し、同じ名前の ${out.kept} 件はそのままにしました`)
-        : tr(`${out.put} restored`, `${out.put} 件を戻しました`));
-}
-
-/// Copy Markdown files in from somewhere else.
-///
-/// **Copied, not moved** — whatever exported them still has them, which is
-/// the answer somebody wants the first time they try this and are not yet
-/// sure cian is where the notes are going to live. The same words the phone
-/// uses, because it is the same act.
-async function cmdNotesImport() {
-    const which = state.focus;
-    const pane = state[which];
-    const other = state[which === 'left' ? 'right' : 'left'];
-    if (!pane || !pane.cwd) return;
-    if (!other || !other.cwd || other.remote || other.archive) {
-        say(tr('put the files in the other pane, then import', '取り込みたいものを反対のペインに出してから、もう一度'), true);
-        return;
-    }
-    const r = await ask('list', { pane: which === 'left' ? 'right' : 'left', path: other.cwd });
-    const mds = (r && r.entries || []).filter((e) => !e.is_dir && /\.(md|markdown|mdx)$/i.test(e.name));
-    if (!mds.length) {
-        say(tr(`no .md files in ${other.cwd}`, `${other.cwd} に .md がありません`), true);
-        return;
-    }
-    const out = await ask('bring', { from: mds.map((e) => e.path), to: pane.cwd });
-    if (!out) return;
-    notes.root = '';
-    const fresh = await ask('list', { pane: which, path: pane.cwd });
-    if (fresh) { state[which] = fresh; draw(which); }
-    say(tr(`${out.brought} note(s) brought in`, `${out.brought} 件を取り込みました`));
-}
-
-async function goToNotes(root) {
-    // `null` は「どこでもいいから、いまのノートの場所へ」── 覚えている場所、
-    // 無ければ既定を作る。cian モードに入るたびに通る道なので、ここが
-    // 「何も起きない」だと、モードだけ変わって場所が変わらない。
-    if (!root) {
-        const at = chosenRoot || (allNoteRoots()[0] && allNoteRoots()[0].path);
-        if (at) {
-            root = { name: at.split(/[\\/]/).pop() || 'cian', path: at };
-        } else {
-            const r = await ask('notesroot', { path: '' });
-            if (!r) return;
-            chosenRoot = r.path;
-            await ask('remember', { key: 'gui_notes', value: r.path });
-            rememberPlace(r.path);
-            say(tr(`notes live in ${r.path}`, `ノートの保存場所: ${r.path}`));
-            root = { name: 'cian', path: r.path };
-        }
-    }
-    await goToPath(root.path);
-    if (viewMode !== 'cian') setView('cian');
-    // Already in cian mode, so `setView` did not run and did not close it.
-    // A notes window is not a terminal with notes in it.
-    else if (term.on) closeShell();
-}
-
-/// `:tag` — the tags in this folder, and what each one narrows to.
-///
-/// Asks the engine rather than reading `notes`, so it works from any view:
-/// the same call is what hands the pane the line it filters on, and a tag
-/// picker that only worked once you were already looking at the notes would
-/// be a picker for people who had already found what they were after.
-async function cmdTag() {
-    const which = state.focus;
-    const pane = state[which];
-    if (!pane || !pane.cwd) return;
-    const r = await ask('notes', { path: pane.cwd });
-    if (!r) return;
-    const counts = new Map();
-    for (const n of r.notes) for (const t of n.tags) counts.set(t, (counts.get(t) || 0) + 1);
-    if (!counts.size) {
-        say(tr('no tags here — a note tags itself in its front matter',
-               'ここにタグはありません — ノートは前置きの tags に書きます'), true);
-        return;
-    }
-    // Commonest first: a tag on forty notes is a place you go, and one on two
-    // is a note you are looking for. Ties by name so the order is stable.
-    const rows = [...counts.entries()]
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .map(([t, c]) => ({ label: `#${t}`, sub: tr(`${c} notes`, `${c} 件`) }));
-    show(tr("Tags", 'タグ'),
-        tr(`${rows.length} tags in this folder`, `このディレクトリに ${rows.length} 種`),
-        rows, {
-            filter: true,
-            hint: tr('type to narrow', '打って絞り込み'),
-            foot: tr('type to narrow   Enter narrow the listing   Esc close', '打って絞る   Enter 一覧を絞る   Esc 閉じる'),
-            pick: async (row) => { closeReport(); await applyFilter(row.label); },
-        });
-}
-
-/// `:newnote` — a note, made and opened.
-///
-/// In the folder the pane is showing, which is the folder you are looking at
-/// — including a subfolder of a notes root, because notes come in stacks and
-/// a flat pile of four hundred is what people leave Inkdrop over.
-///
-/// The name and the front matter come from `cian_core::note`; the window does
-/// not decide what a note looks like.
-/// Put the note under the cursor on a favourite shelf, or take it off.
-///
-/// **The same `star` field the phone writes**, so a note starred here is
-/// starred there. The shelves offered are the ones that already exist plus
-/// one to type — a shelf is made by putting something on it, which is the
-/// only moment anybody wants one.
-async function cmdStar() {
-    const which = state.focus;
-    const pane = state[which];
-    const row = pane && pane.entries && pane.entries[pane.cursor];
-    if (!row || row.parent || row.dir) {
-        say(tr('put the cursor on a note', 'ノートの上でどうぞ'), true);
-        return;
-    }
-    const n = notes.by.get(row.path);
-    if (!n) {
-        say(tr('that is not a note', 'ノートではありません'), true);
-        return;
-    }
-    const shelves = [...new Set((notes.shelves || []).concat(
-        [...notes.by.values()].map((x) => x.star).filter((x) => x)))].sort();
-    const rows = [
-        { label: tr('the top', 'デフォルト'), value: '', path: row.path },
-        ...shelves.map((sh) => ({ label: sh, value: sh, path: row.path })),
-        { label: tr('a new shelf…', '新しい棚…'), value: NEW_SHELF, path: row.path },
-    ];
-    if (n.star != null) {
-        rows.push({ label: tr('take it off', 'お気に入りから外す'), value: null, path: row.path });
-    }
-    // `show` is answered per row, with a callback — it is not a prompt that
-    // returns a value, and treating it as one is how this first came out
-    // opening a picker that did nothing when you pressed Enter.
-    show(tr("Favourite", 'お気に入り'), n.title, rows, {
-        filter: true,
-        foot: tr('type to narrow   Enter choose   Esc close', '打って絞る   Enter 選ぶ   Esc 閉じる'),
-        pick: async (row) => {
-            closeReport();
-            let shelf = row.value;
-            if (shelf === NEW_SHELF) {
-                shelf = await askFor(tr("name of the shelf", '棚の名前'), '', {
-                    hint: tr('use a / for a shelf inside a shelf', '「棚/中の棚」で階層になります'),
-                });
-                if (shelf === null || !String(shelf).trim()) return;
-                shelf = String(shelf).trim();
-            }
-            const r = await ask('star', shelf === null
-                ? { path: row.path }
-                : { path: row.path, shelf });
-            if (!r) return;
-            // The folder has to be read again — `loadNotes` skips one it has
-            // already read, and the star it is being asked about is new.
-            notes.root = '';
-            const fresh = await ask('list', { pane: which, path: pane.cwd });
-            if (fresh) {
-                fresh.cursor = pane.cursor;
-                state[which] = fresh;
-                draw(which);
-            }
-            say(shelf === null
-                ? tr('taken off the favourites', 'お気に入りから外しました')
-                : tr(`starred${shelf ? ` on ${shelf}` : ''}`, `お気に入りに入れました${shelf ? ` — ${shelf}` : ''}`));
-        },
-    });
-}
-
-/// The row that means "type a name", told apart from a shelf actually called
-/// that by being a string nobody can type.
-const NEW_SHELF = '\u0000new';
-
-/// The reminders, kept by the window itself.
-///
-/// **Only while cian is open.** 2026-09-05: 「窓版はアプリ起動中だけでいいよ。
-/// 常駐させるし、起動していない時は通知なしでよい」. So there is no daemon and
-/// no login item — a timer per reminder, and they go when the window does.
-/// The phone is the one that rings when nothing is running.
-const rings = { timers: [], root: '' };
-
-function clearRings() {
-    for (const t of rings.timers) clearTimeout(t);
-    rings.timers = [];
-}
-
-/// Read the folder's reminders, carry out what the routines owe, and set the
-/// timers.
-///
-/// The catching-up happens here rather than on a clock: this is the moment
-/// cian is looking at the folder, and a routine that came due while the
-/// window was shut has to be made *some* time. `cian_core::note::carry_out`
-/// writes down that it did, so opening the folder twice does not make two.
-async function armRings(dir) {
-    if (!dir || rings.root === dir) return;
-    rings.root = dir;
-    clearRings();
-    const r = await ask('rings', { path: dir });
-    if (!r) return;
-    if (r.made && r.made.length) {
-        say(tr(`made ${r.made.length} note(s) the routines owed`,
-               `定型の分を ${r.made.length} 件作りました`));
-        notes.root = '';
-    }
-    const now = Date.now();
-    for (const ring of r.rings || []) {
-        // `2026-09-09 09:00` — parsed as local time, which is what it was
-        // written as. `new Date("… …")` is not portable; the parts are.
-        const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(ring.at || '');
-        if (!m) continue;
-        const when = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
-        const wait = when - now;
-        // A day at a time: `setTimeout` is milliseconds in a 32-bit number
-        // and anything past ~24.8 days fires *immediately*, which would be a
-        // window that shouts about next month's routine on startup.
-        if (wait <= 0 || wait > 20 * 24 * 3600 * 1000) continue;
-        rings.timers.push(setTimeout(() => {
-            try {
-                const n = new Notification(ring.title || 'amber', {
-                    body: tr('amber — a note wants you', 'amber — ノートが呼んでいます'),
-                });
-                // Pressing it opens the note, which is the only reason to
-                // put a name on a notification.
-                n.onclick = async () => {
-                    const f = await ask('viewpath', { path: ring.path });
-                    if (f) await showFile(f);
-                };
-            } catch (e) {
-                say(tr(`could not show a notification: ${e.message}`,
-                       `通知を出せませんでした: ${e.message}`), true);
-            }
-            // Whatever it was, ask again: a daily routine has another one
-            // tomorrow and this is the cheapest moment to find out.
-            rings.root = '';
-            armRings(dir).catch(() => {});
-        }, wait));
-    }
-}
-
-/// `:backup` — a zip of some or all of the notes, where you say.
-///
-/// **Four scopes, the same four the phone offers**: everything, one folder,
-/// one tag, this note. Every folder is offered, not only the one the cursor
-/// happens to be on — 「フォルダ単位で」 means picking the folder, not
-/// standing on it first.
-///
-/// Where it lands is a save dialog. The other pane was clever and wrong: a
-/// backup is a thing you put somewhere on purpose.
-async function cmdBackup() {
-    const which = state.focus;
-    const pane = state[which];
-    if (!pane || !pane.cwd) return;
-    const r = await ask('notes', { path: pane.cwd });
-    if (!r) return;
-    const row = pane.entries && pane.entries[pane.cursor];
-    const here = row && !row.is_dir && !row.parent ? r.notes.find((n) => n.path === row.path) : null;
-    const tags = [...new Set(r.notes.flatMap((n) => n.tags))].sort();
-    const books = [...new Set(r.notes.map((n) => n.book).filter(Boolean))].sort();
-    const rows = [
-        { label: tr('everything', 'すべて'), scope: 'all', what: '' },
-        ...(here ? [{ label: tr(`this note — ${here.title}`, `このノート — ${here.title}`), scope: 'note', what: here.path }] : []),
-        ...books.map((b) => ({ label: tr(`folder: ${b}`, `フォルダ: ${b}`), scope: 'book', what: b })),
-        ...tags.map((t) => ({ label: `#${t}`, scope: 'tag', what: t })),
-    ];
-    show(tr("Backup", 'バックアップ'),
-        tr('choose what goes in', '何を入れるか選びます'),
-        rows, {
-            filter: true,
-            foot: tr('type to narrow   Enter choose where it goes   Esc close', '打って絞る   Enter 置き場所を選ぶ   Esc 閉じる'),
-            pick: async (pick) => {
-                closeReport();
-                const stem = pick.scope === 'all' ? 'cian'
-                    : pick.scope === 'tag' ? `tag-${pick.what}`
-                    : pick.what.split(/[\\/]/).pop().replace(/\.md$/i, '');
-                const day = new Date().toISOString().slice(0, 10);
-                const at = window.cian.saveFile
-                    ? await window.cian.saveFile(tr('Where the backup goes', 'バックアップの置き場所'), `${stem}-${day}.zip`)
-                    : null;
-                if (!at) return;
-                const dir = at.replace(/[\\/][^\\/]*$/, '');
-                const out = await ask('backup', {
-                    path: r.root, scope: pick.scope, what: pick.what, into: dir,
-                });
-                if (!out) return;
-                say(tr(`${out.name} — ${out.files} file(s)`, `${out.name} — ${out.files} 件`));
-            },
-        });
-}
-
-async function cmdNewNote() {
-    const which = state.focus;
-    const pane = state[which];
-    if (!pane || !pane.cwd) return;
-    if (pane.remote || pane.archive) {
-        say(tr('notes are made in a local directory', 'ノートはローカルのディレクトリに作ります'), true);
-        return;
-    }
-    const title = await askFor(tr("title of the note", 'ノートのタイトル'), '', {
-        wide: true,
-        hint: tr('blank names it for today', '空にすると今日の日付がタイトルになります'),
-    });
-    if (title === null) return;
-    const r = await ask('newnote', { dir: pane.cwd, title });
-    if (!r) return;
-    // The listing again, then the cursor on the new note: a note you have to
-    // go and find is a note you did not just make.
-    const fresh = await ask('list', { pane: which, path: pane.cwd });
-    if (fresh) {
-        const at = fresh.entries.findIndex((e) => e.name === r.name);
-        if (at >= 0) fresh.cursor = at;
-        state[which] = fresh;
-        // Entering the folder is a different set of notes, and this one is
-        // brand new — `loadNotes` skips a folder it has already read.
-        notes.root = '';
-        draw(which);
-    }
-    const f = await ask('viewpath', { path: r.path });
-    if (f) await showFile(f);
-    say(tr(`made ${r.name}`, `作りました ${r.name}`));
-}
 
 /// `Shift+S` — the hosts init.lua declares, picked rather than typed.
 ///
@@ -8725,11 +7667,7 @@ async function cmdView(arg, invokedAs) {
     // 出すのに手間が掛かっていたので、そこにコストを掛けないと決めた。
     // **描画の分岐はまだ動く**（試すと正しく描ける）が、戻すのは彼の判断。
     // 打った人を「そんなモードは無い」で突き放さず、詳細一覧へ案内する。
-    //
-    // `amber` が正しい綴り。`cian` はモードの内部の名前で、打ち慣れた人と
-    // 古い台本のために受け続ける ── 名前を変えたからといって、指が憶えた
-    // 綴りが動かなくなる理由は無い。
-    const map = { grid: 'details', icons: 'details', finder: 'details', amber: 'cian' };
+    const map = { grid: 'details', icons: 'details', finder: 'details' };
     if (!mode || mode === 'view') {
         setView(VIEWS[(VIEWS.indexOf(viewMode) + 1) % VIEWS.length]);
     } else {
@@ -10446,40 +9384,6 @@ function previewNote(text) {
 }
 
 let previewSoon = null;
-/// In cian mode, the note under the cursor is shown in the right half.
-///
-/// **The whole note, in the editor** — not a glance like `showPreview`. That
-/// is the difference between a file manager looking at a file and a notes app
-/// reading a note: here the right half is where you read *and* write, and
-/// moving the cursor changes which note that is.
-///
-/// A beat behind the cursor, for the same reason as the preview: held down,
-/// `j` would otherwise open every note it passes.
-let followSoon = null;
-function followNote() {
-    if (viewMode !== 'cian') return;
-    clearTimeout(followSoon);
-    followSoon = setTimeout(async () => {
-        if (viewMode !== 'cian') return;
-        const pane = state[state.focus];
-        const row = pane && pane.entries && pane.entries[pane.cursor];
-        // **A note, not whatever is under the cursor.** cian view can be
-        // pointed at any folder, and a right half that opened `c.rs` because
-        // the cursor passed it is a file manager reading your source code at
-        // you. `notes.by` is the engine's answer to "is this a note".
-        if (!row || row.parent || row.is_dir || !notes.by.has(row.path)) return;
-        if (viewer.on && viewer.path === row.path) return;
-        // Not while there is something unsaved in the one already open: a
-        // cursor that walks past would take the words with it.
-        if (viewer.on && viewer.ed && viewer.dirty) return;
-        const f = await ask('viewpath', { path: row.path }).catch(() => null);
-        if (!f || viewMode !== 'cian') return;
-        await showFile(f, true);
-        // 歩いて開いた印。Enter や F3 で自分から開いたものとは違う。
-        autoOpened = true;
-    }, 180);
-}
-
 function showPreview() {
     if (!preview.on) return;
     // A beat behind the cursor. Held down, `j` would otherwise read every file
@@ -11293,8 +10197,6 @@ async function recall() {
         const px = Number(s.font);
         if (px >= FONT.min && px <= FONT.max) setFont(px, false);
     }
-    if (s.notes) chosenRoot = s.notes;
-    if (s.notes_seen) notePlaces = s.notes_seen.split('\n').filter(Boolean);
     if (s.view && VIEWS.includes(s.view)) setView(s.view, false);
     if (s.hints === '0') { hintsOn = false; drawHints(); }
     // Where the dividers were left. Applied without saving them straight back.
@@ -11352,7 +10254,6 @@ async function recall() {
     // Same reason, for the OS group: asked once, used synchronously.
     if (s.os) Object.assign(osCan, s.os);
     if (Array.isArray(s.sharepoint)) sharepoint = s.sharepoint;
-    if (Array.isArray(c.note_roots)) noteRoots = c.note_roots;
     // Lua's own complaints go in the same queue as mine — from where the
     // person stands they are one thing: "my config did not take".
     keymapErrors = [...(s.config_errors || []), ...keymapErrors];
@@ -11401,9 +10302,7 @@ recall().then(() => {
     // and a window where the shell only exists after Shift+J is a window
     // where the shell is not part of the program. Opened without focus: the
     // keys still belong to the listing until Shift+J asks for them.
-    // …except in cian mode, where the note wants those pixels. 2026-09-05:
-    // 「下のシェルパネルも閉じて欲しい」. Shift+J still opens one.
-    if (!term.on && viewMode !== 'cian') openShell({ focus: false });
+    if (!term.on) openShell({ focus: false });
 });
 
 /// Keep the PTY's size equal to the box it is drawn in.

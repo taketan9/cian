@@ -26,17 +26,6 @@ contextBridge.exposeInMainWorld('cian', {
             return null;
         }
     },
-    /// Ask the desktop where the notes should live. `null` if cancelled.
-    ///
-    /// The one place the window needs the operating system rather than the
-    /// engine: choosing a folder is a thing macOS and Windows draw, and it is
-    /// how somebody reaches their Google Drive or Dropbox without typing a
-    /// path they would have to go and look up.
-    pickDir: (title) => ipcRenderer.invoke('cian-pickdir', title),
-    /// One file, chosen by hand. `null` if cancelled.
-    pickFile: (title, ext) => ipcRenderer.invoke('cian-pickfile', title, ext),
-    /// Where to write something. `null` if cancelled.
-    saveFile: (title, name) => ipcRenderer.invoke('cian-savefile', title, name),
     /// Fill the screen, or stop filling it. Returns where it ended up.
     ///
     /// The window is the main process's to change, but the *key* has to be

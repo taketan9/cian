@@ -2864,8 +2864,6 @@ impl Session {
                 // wrong for somebody.
                 "font": cian_lua::state_get("gui_font"),
                 "view": cian_lua::state_get("gui_view"),
-                "notes": cian_lua::state_get("gui_notes"),
-                "notes_seen": cian_lua::state_get("gui_notes_seen"),
                 "hints": cian_lua::state_get("gui_hints"),
                 // Where the two dividers were left. GUI-only keys: the
                 // terminal build has `main_pct` and `panes_pct` too but does
@@ -2892,14 +2890,6 @@ impl Session {
                     "notify_min_secs": cfg.options.notify_min_secs,
                     "preview": cfg.options.preview,
                     "transfer_limit": cfg.options.transfer_limit,
-                    // Where notes live. Expanded here rather than in the
-                    // window: `~` and a SharePoint URL both mean something
-                    // only on the machine the engine is running on, and the
-                    // window is the one place that must not have to know.
-                    "note_roots": cfg.note_roots.iter().map(|r| serde_json::json!({
-                        "name": r.name,
-                        "path": shellexpand(&r.path),
-                    })).collect::<Vec<_>>(),
                     // What the context menu's launcher rows need to know
                     // before it draws them. cian-tui asks the same three
                     // questions in menu.rs (`if ai`, `if !snippets
@@ -2961,7 +2951,7 @@ impl Session {
                 // opens with, because they are one program.
                 if !matches!(key,
                     "gui_look" | "gui_editor" | "gui_font" | "gui_view" | "gui_hints"
-                    | "gui_main_pct" | "gui_panes_pct" | "gui_notes" | "gui_notes_seen"
+                    | "gui_main_pct" | "gui_panes_pct"
                     | "theme")
                 {
                     anyhow::bail!("覚えられない項目です: {key}");
@@ -4172,155 +4162,6 @@ impl Session {
                 self.open = Some((to, file, st));
                 Ok(serde_json::json!({ "saved": name }))
             }
-            // A folder read as notes: what each Markdown file says about
-            // itself, for the list cian mode draws.
-            //
-            // Only the head of each file is read — two hundred notes must not
-            // mean two hundred whole files to paint one screen — and the
-            // judgement of what a note's title, tags and excerpt *are* lives
-            // in `cian_core::note`, not here. That module is the only part of
-            // cian mode that could ever reach an iPhone, so nothing about a
-            // note is allowed to be decided in an engine an iPhone cannot run.
-            "notes" => {
-                let dir = std::path::PathBuf::from(shellexpand(&arg(req, "path")));
-                if let Some(why) = cian_core::sharepoint::refuse(&arg(req, "path")) {
-                    anyhow::bail!("{why}");
-                }
-                if !dir.is_dir() {
-                    anyhow::bail!(
-                        "{} を開けません{}",
-                        dir.display(),
-                        if arg(req, "path").starts_with("https://") {
-                            cian_core::sharepoint::hint()
-                        } else {
-                            ""
-                        }
-                    );
-                }
-                let limits = cian_core::survey::Limits {
-                    depth: 6,
-                    rows: 4000,
-                    hidden: false,
-                    ..Default::default()
-                };
-                let stop = std::sync::atomic::AtomicBool::new(false);
-                let (notes, found) = cian_core::note::list(&dir, limits, &stop);
-                let mut rows: Vec<serde_json::Value> = Vec::new();
-                // What the filter should match, for the notes that are in
-                // *this* folder — the walk goes six deep, but a pane lists one
-                // level, and a map keyed by filename cannot describe two files
-                // with the same name in different books.
-                let mut here: std::collections::HashMap<String, String> =
-                    std::collections::HashMap::new();
-                for f in &notes {
-                    let (rel, n) = (&f.rel, &f.note);
-                    rows.push(serde_json::json!({
-                        "path": n.path.display().to_string(),
-                        // The folder it sits in, relative to the root: a
-                        // notebook is a directory, so this is what the tree
-                        // down the side is drawn from.
-                        "book": rel.rsplit_once('/').map(|(d, _)| d).unwrap_or(""),
-                        "title": n.title,
-                        "excerpt": n.excerpt,
-                        "tags": n.tags,
-                        "updated": n.updated,
-                        "bytes": n.bytes,
-                        "star": n.star,
-                    }));
-                    if !rel.contains('/') {
-                        here.insert(rel.clone(), cian_core::note::haystack(n));
-                    }
-                }
-                // Handed to whichever pane is showing this folder, so `/`
-                // narrows by a title or a `#tag` and not only by a filename.
-                for which in ["left", "right"] {
-                    if let Ok(p) = self.pane_mut(which) {
-                        if p.cwd == dir {
-                            p.set_search_text(here.clone());
-                        }
-                    }
-                }
-                // The favourite shelves: the ones notes are standing on,
-                // plus the ones that were made and are still empty. Without
-                // the second half a shelf vanishes the moment its last note
-                // leaves it, which reads as cian losing the folder.
-                let mut shelves = cian_core::notebook::read(&dir).stars;
-                for f in notes.iter() {
-                    if let Some(sh) = f.note.star.clone() {
-                        let parts: Vec<&str> = sh.split('/').filter(|p| !p.is_empty()).collect();
-                        for n in 1..=parts.len() {
-                            shelves.push(parts[..n].join("/"));
-                        }
-                    }
-                }
-                shelves.sort();
-                shelves.dedup();
-                // 歩いて見つけたフォルダ全部 ── 空のものも含む。左の列は
-                // 「どこに何があるか」を出すので、いま中身が無いフォルダも
-                // 場所としては在る。
-                let mut books: Vec<String> = notes
-                    .iter()
-                    .filter(|f| !f.rel.split('/').any(|p| p == "attachments"))
-                    .filter_map(|f| f.rel.rsplit_once('/').map(|(d, _)| d.to_string()))
-                    .collect();
-                for b in books.clone() {
-                    let parts: Vec<&str> = b.split('/').collect();
-                    for n in 1..parts.len() {
-                        books.push(parts[..n].join("/"));
-                    }
-                }
-                books.sort();
-                books.dedup();
-                Ok(serde_json::json!({
-                    "root": dir.display().to_string(),
-                    "books": books,
-                    "stars": shelves,
-                    "notes": rows,
-                    "partial": found.partial().then(|| serde_json::json!({
-                        "whole_to": found.whole_to(),
-                        "stopped": found.stopped_at.is_some(),
-                        "unopened": found.unopened,
-                    })),
-                }))
-            }
-            // A pasted or dropped image, written beside the note that will
-            // point at it.
-            //
-            // **Beside it, not in a store.** The note is a plain file and its
-            // pictures have to travel with it — into a synced folder, into a
-            // zip, into somebody else's checkout. A relative link into
-            // `attachments/` survives all three; a database row does not.
-            // Make a note and hand back where it went, so the window can
-            // open it. The name and the front matter are `cian_core::note`'s
-            // — this is only the part that needs a disk.
-            "newnote" => {
-                let dir = std::path::PathBuf::from(shellexpand(&arg(req, "dir")));
-                if dir.as_os_str().is_empty() {
-                    anyhow::bail!("ノートの保存場所がありません");
-                }
-                // The making of it is `cian_core::note`'s, so a phone makes
-                // the same note this does.
-                let at = cian_core::note::create(
-                    &dir,
-                    &arg(req, "title"),
-                    &cian_core::note::today(),
-                    &cian_core::note::now_stamp(),
-                )?;
-                Ok(serde_json::json!({
-                    "path": at.to_string_lossy(),
-                    "name": at.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
-                }))
-            }
-            "noteimage" => {
-                let note = std::path::PathBuf::from(arg(req, "note"));
-                let bytes = b64_decode(&arg(req, "b64"))
-                    .ok_or_else(|| anyhow::anyhow!("画像を読めません"))?;
-                // Where it goes and what it is called are `cian_core::note`'s,
-                // so a screenshot pasted here and a photo attached on the
-                // phone land in one folder with one kind of name.
-                let link = cian_core::note::attach(&note, &bytes, &arg(req, "ext"))?;
-                Ok(serde_json::json!({ "link": link, "bytes": bytes.len() }))
-            }
             "stat" => {
                 let path = std::path::PathBuf::from(arg(req, "path"));
                 let meta = std::fs::metadata(&path).ok();
@@ -4943,240 +4784,12 @@ impl Session {
                     })).collect::<Vec<_>>(),
                 }))
             }
-            // The open file as HTML, for the preview.
-            //
-            // Rendered here because the reading is here — the same parse the
-            // terminal build draws, turned into a document instead of into
-            // styled lines. The window is handed markup it did not have to
-            // understand, which is also what keeps a README from running.
-            // Everything, moved to a new home. The same
-            // `notebook::migrate` the phone calls: copy, check, then remove,
-            // and nothing overwritten.
-            "migrate" => {
-                let from = std::path::PathBuf::from(arg(req, "from"));
-                let to = std::path::PathBuf::from(arg(req, "to"));
-                Ok(serde_json::json!({
-                    "moved": cian_core::notebook::migrate(&from, &to)?,
-                }))
-            }
 
-            // A backup, put back. Never over a note that is there.
-            "restore" => {
-                let zip = std::path::PathBuf::from(arg(req, "zip"));
-                let to = std::path::PathBuf::from(arg(req, "to"));
-                let (put, kept) = cian_core::notebook::restore(&zip, &to)?;
-                Ok(serde_json::json!({ "put": put, "kept": kept }))
-            }
-
-            // Markdown files copied in from somewhere else.
-            //
-            // **Copied, never moved, never overwriting.** Whatever exported
-            // them still has them — that is the answer somebody wants the
-            // first time they try this and are not yet sure cian is where the
-            // notes are going to live. A name already taken gets a number;
-            // the note that is there is not somebody's to replace. The same
-            // promise the phone makes, in the same words.
-            "bring" => {
-                let to = std::path::PathBuf::from(arg(req, "to"));
-                std::fs::create_dir_all(&to)?;
-                let mut brought = 0usize;
-                for p in req.params["from"].as_array().cloned().unwrap_or_default() {
-                    let Some(from) = p.as_str().map(std::path::PathBuf::from) else { continue };
-                    let Some(name) = from.file_name() else { continue };
-                    let mut at = to.join(name);
-                    let stem = at.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-                    let ext = at.extension().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-                    let mut n = 2;
-                    while at.exists() && n <= 99 {
-                        at = to.join(format!("{stem}-{n}.{ext}"));
-                        n += 1;
-                    }
-                    if at.exists() {
-                        continue;
-                    }
-                    std::fs::copy(&from, &at)?;
-                    brought += 1;
-                }
-                Ok(serde_json::json!({ "brought": brought }))
-            }
-
-            // Where the notes live, and make it if it is not there yet.
-            //
-            // **The phone does not ask either.** It starts with a folder of
-            // its own and offers to point somewhere else; a desktop that
-            // demands a line of Lua before it will hold a note is a desktop
-            // nobody takes a note in. `~/Documents/cian` because that is
-            // where a person looks for their documents, and because iCloud
-            // Drive syncs it on a Mac that has iCloud Drive on — which is the
-            // shortest road to the same folder the phone is reading.
-            "notesroot" => {
-                let want = arg(req, "path");
-                let at = if want.is_empty() {
-                    let home = cian_lua::home_dir()
-                        .ok_or_else(|| anyhow::anyhow!("ホームディレクトリが分かりません"))?;
-                    home.join("Documents").join("cian")
-                } else {
-                    std::path::PathBuf::from(want)
-                };
-                std::fs::create_dir_all(&at)?;
-                Ok(serde_json::json!({
-                    "path": at.display().to_string(),
-                    "made": std::fs::read_dir(&at).map(|d| d.count()).unwrap_or(0) == 0,
-                }))
-            }
-
-            // What every note in a folder wants to be reminded about, and
-            // when the window should set its timer for.
-            //
-            // **The window keeps its own clock.** The phone hands the times
-            // to iOS and forgets them; there is no such thing here, so the
-            // answer is a moment to wait until — worked out by
-            // `note::next_ring`, because "every Wednesday at nine" is a
-            // judgement and not arithmetic the front end should be doing.
-            //
-            // The routines that came due while cian was closed are carried
-            // out here too: a copy of the template for each day owed, and the
-            // note of it written down so tomorrow does not make it again.
-            "rings" => {
-                let dir = std::path::PathBuf::from(arg(req, "path"));
-                let limits = cian_core::survey::Limits {
-                    depth: 6, rows: 4000, hidden: false, ..Default::default()
-                };
-                let stop = std::sync::atomic::AtomicBool::new(false);
-                let (found, _) = cian_core::note::list(&dir, limits, &stop);
-                let now = cian_core::note::now_local();
-                let today = now.date();
-                let mut rings = Vec::new();
-                let mut made = Vec::new();
-                for f in &found {
-                    let Ok(text) = std::fs::read_to_string(&f.note.path) else { continue };
-                    let r = cian_core::note::remind(&text);
-                    if let Some(at) = r.once {
-                        if at > now {
-                            rings.push(serde_json::json!({
-                                "path": f.note.path.display().to_string(),
-                                "title": f.note.title,
-                                "at": at.format("%Y-%m-%d %H:%M").to_string(),
-                            }));
-                        }
-                    }
-                    let Some((every, h, m)) = r.every else { continue };
-                    // **Through `catch_up`, which writes down that it did.**
-                    // Making the copies without recording it made the window
-                    // say 「1 件作りました」 every time the folder was opened.
-                    if let Ok(fresh) = cian_core::note::catch_up(&f.note.path, today) {
-                        for at in fresh {
-                            made.push(at.display().to_string());
-                        }
-                    }
-                    if let Some(at) = cian_core::note::next_ring(every, h, m, now) {
-                        rings.push(serde_json::json!({
-                            "path": f.note.path.display().to_string(),
-                            "title": f.note.title,
-                            "at": at.format("%Y-%m-%d %H:%M").to_string(),
-                        }));
-                    }
-                }
-                Ok(serde_json::json!({ "rings": rings, "made": made }))
-            }
-
-            // A zip of some or all of the notes, put where the caller says.
-            //
-            // The same four scopes the phone offers, and the same one place
-            // that decides what goes in each — `into` is the window's answer
-            // to "where does it land", which on a two-pane file manager is
-            // the other pane.
-            "backup" => {
-                let root = std::path::PathBuf::from(arg(req, "path"));
-                let scope = arg(req, "scope");
-                let what = arg(req, "what");
-                let mut sources: Vec<std::path::PathBuf> = Vec::new();
-                let mut name = String::from("cian");
-                match scope.as_str() {
-                    "all" => sources.push(root.clone()),
-                    "book" => {
-                        sources.push(root.join(&what));
-                        name = what.replace('/', "-");
-                    }
-                    "note" => {
-                        sources.push(std::path::PathBuf::from(&what));
-                        name = std::path::Path::new(&what)
-                            .file_stem()
-                            .map(|s| s.to_string_lossy().into_owned())
-                            .unwrap_or_else(|| "note".into());
-                    }
-                    "tag" => {
-                        let limits = cian_core::survey::Limits {
-                            depth: 6, rows: 4000, hidden: false, ..Default::default()
-                        };
-                        let stop = std::sync::atomic::AtomicBool::new(false);
-                        let (found, _) = cian_core::note::list(&root, limits, &stop);
-                        for f in &found {
-                            if f.note.tags.iter().any(|t| t == &what) {
-                                sources.push(f.note.path.clone());
-                            }
-                        }
-                        if sources.is_empty() {
-                            anyhow::bail!("#{what} のノートがありません");
-                        }
-                        name = format!("tag-{what}");
-                    }
-                    other => anyhow::bail!("知らない範囲: {other}"),
-                }
-                for src in &sources {
-                    if !src.exists() {
-                        anyhow::bail!("{} がありません", src.display());
-                    }
-                }
-                let dir = std::path::PathBuf::from(arg(req, "into"));
-                std::fs::create_dir_all(&dir)?;
-                let at = dir.join(format!("{name}-{}.zip", cian_core::note::today()));
-                let _ = std::fs::remove_file(&at);
-                let cancel = std::sync::atomic::AtomicBool::new(false);
-                let mut nothing = |_: &cian_core::progress::Progress| {};
-                let mut ctl = cian_core::progress::Ctl {
-                    cancel: &cancel,
-                    on_progress: &mut nothing,
-                };
-                let report = cian_core::archive::create_zip(&sources, &at, None, &mut ctl);
-                if !report.errors.is_empty() {
-                    anyhow::bail!("{}", report.errors.join(" / "));
-                }
-                Ok(serde_json::json!({
-                    "path": at.display().to_string(),
-                    "name": at.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
-                    "files": report.ok,
-                }))
-            }
-
-            // Put a note on a favourite shelf, or take it off.
-            //
-            // The whole file, read and written here rather than through the
-            // editor: this is done from the listing, where nothing has the
-            // note open. `star` is a line in the note's own front matter, so
-            // it travels with the note and the phone reads the same word.
-            "star" => {
-                let at = std::path::PathBuf::from(arg(req, "path"));
-                let text = std::fs::read_to_string(&at)?;
-                let out = match req.params["shelf"].as_str() {
-                    // `star: true` rather than `star:` — a field with nothing
-                    // after it reads as yes to the next thing that looks.
-                    Some("") => cian_core::note::set_field(&text, "star", Some("true")),
-                    Some(sh) => cian_core::note::set_field(&text, "star", Some(sh)),
-                    None => cian_core::note::set_field(&text, "star", None),
-                };
-                // The one written before favourites had a name. Left behind,
-                // it would keep the note a favourite after it was taken off.
-                let out = cian_core::note::set_field(&out, "pinned", None);
-                std::fs::write(&at, out)?;
-                Ok(serde_json::json!({ "ok": true }))
-            }
-
-            // Tick or untick one task, by the line it is on — the same
-            // `note::set_check` the phone presses. Lines in, lines out: the
+            // Tick or untick one task in the open Markdown file, by the line
+            // it is on — `markdown::set_check`. Lines in, lines out: the
             // window puts them back into the editor and saves the ordinary
-            // way, so a checkbox goes through the same conflict check as
-            // typing does.
+            // way, so a checkbox pressed in the preview goes through the same
+            // conflict check as typing does.
             "check" => {
                 let lines: Vec<String> = match lines_of(req) {
                     Some(l) => l,
@@ -5187,11 +4800,17 @@ impl Session {
                 };
                 let line = req.params["line"].as_u64().unwrap_or(0) as usize;
                 let done = req.params["done"].as_bool().unwrap_or(false);
-                let out = cian_core::note::set_check(&lines.join("\n"), line, done);
+                let out = cian_core::markdown::set_check(&lines.join("\n"), line, done);
                 Ok(serde_json::json!({
                     "lines": out.lines().map(str::to_string).collect::<Vec<_>>(),
                 }))
             }
+            // The open file as HTML, for the preview.
+            //
+            // Rendered here because the reading is here — the same parse the
+            // terminal build draws, turned into a document instead of into
+            // styled lines. The window is handed markup it did not have to
+            // understand, which is also what keeps a README from running.
             "markdown" => {
                 let lines: Vec<String> = match lines_of(req) {
                     Some(l) => l,
@@ -5570,41 +5189,7 @@ fn mime_of(path: &std::path::Path) -> Option<&'static str> {
 /// Base64, written out rather than pulled in.
 ///
 /// One dependency avoided is one fewer crate in the offline bundle, and this
-/// is twenty lines that have not changed since 1987.
-/// The other direction, for a pasted image on its way to a file.
-///
-/// Written out rather than pulled in: the encoder above is twelve lines and
-/// this is fifteen, and a dependency that exists to avoid twenty-seven lines
-/// is a dependency the offline bundle has to carry.
-///
-/// Anything that is not base64 — whitespace, a `data:` prefix a caller forgot
-/// to strip — is skipped rather than refused, because the one thing worse than
-/// a picture that does not paste is a picture that does not paste *and* says
-/// the file is corrupt.
-fn b64_decode(text: &str) -> Option<Vec<u8>> {
-    let body = text.rsplit_once(',').map(|(_, b)| b).unwrap_or(text);
-    let mut out = Vec::with_capacity(body.len() / 4 * 3);
-    let mut acc: u32 = 0;
-    let mut have = 0u32;
-    for c in body.bytes() {
-        let v = match c {
-            b'A'..=b'Z' => c - b'A',
-            b'a'..=b'z' => c - b'a' + 26,
-            b'0'..=b'9' => c - b'0' + 52,
-            b'+' => 62,
-            b'/' => 63,
-            _ => continue,
-        } as u32;
-        acc = (acc << 6) | v;
-        have += 6;
-        if have >= 8 {
-            have -= 8;
-            out.push((acc >> have) as u8);
-        }
-    }
-    Some(out)
-}
-
+/// is a dozen lines that have not changed since 1987.
 fn b64(bytes: &[u8]) -> String {
     const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);

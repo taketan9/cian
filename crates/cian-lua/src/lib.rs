@@ -213,22 +213,6 @@ impl std::fmt::Debug for SshUser {
     }
 }
 
-/// One place notes live, declared with `cian.notes{...}`.
-///
-/// A list rather than a single setting because the two kinds do not mix: the
-/// notes nobody else should see, and the folder a team writes in together.
-/// Order is the order they were written in — Lua does not keep the order of
-/// string keys, so the picker would otherwise shuffle between runs.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NoteRoot {
-    /// Label shown in the picker.
-    pub name: String,
-    /// Where the notes are. Expanded (`~`, environment variables, and a
-    /// SharePoint URL turned into a UNC path) where it is used, not here —
-    /// this crate does not know what machine it is on.
-    pub path: String,
-}
-
 /// One SSH target: a host plus the users worth offering for it.
 #[derive(Debug, Clone)]
 pub struct SshHost {
@@ -366,7 +350,6 @@ struct Builder {
     sharepoint: Vec<(String, String)>,
     ext_open: HashMap<String, Function>,
     ssh_hosts: Vec<SshHost>,
-    note_roots: Vec<NoteRoot>,
     ai: Option<AiOptions>,
     /// Input-method switching, if `cian.ime{...}` was called.
     ime: Option<ImeOptions>,
@@ -396,8 +379,6 @@ pub struct Config {
     pub sharepoint: Vec<(String, String)>,
     /// SSH targets declared with `cian.ssh{...}`.
     pub ssh_hosts: Vec<SshHost>,
-    /// Where notes live, declared with `cian.notes{...}`.
-    pub note_roots: Vec<NoteRoot>,
     /// AI settings declared with `cian.ai{...}`, if any.
     pub ai: Option<AiOptions>,
     /// Input-method switching declared with `cian.ime{...}`, if any.
@@ -673,7 +654,7 @@ fn load_from(path: &Path) -> Config {
     // Pull the accumulated config out by cloning; the Lua handles stay valid
     // because we move `lua` into the returned Config below.
     #[allow(clippy::type_complexity)]
-    let (theme, options, keymaps, sharepoint, ext_open, ssh_hosts, note_roots, ai, ime, font, ai_context, snippets, builder_errors) = {
+    let (theme, options, keymaps, sharepoint, ext_open, ssh_hosts, ai, ime, font, ai_context, snippets, builder_errors) = {
         let b = builder.borrow();
         (
             b.theme.clone(),
@@ -682,7 +663,6 @@ fn load_from(path: &Path) -> Config {
             b.sharepoint.clone(),
             b.ext_open.clone(),
             b.ssh_hosts.clone(),
-            b.note_roots.clone(),
             b.ai.clone(),
             b.ime.clone(),
             b.font.clone(),
@@ -700,7 +680,6 @@ fn load_from(path: &Path) -> Config {
         sharepoint,
         ext_open,
         ssh_hosts,
-        note_roots,
         ai,
         ime,
         font,
@@ -1093,41 +1072,6 @@ fn install_api(lua: &Lua, builder: &Rc<RefCell<Builder>>) -> mlua::Result<()> {
     }
 
 
-    // cian.notes{ { name = "私", path = "~/notes" }, ... }  — where notes live.
-    {
-        let b = builder.clone();
-        cian.set(
-            "notes",
-            lua.create_function(move |_, t: Table| {
-                let mut bm = b.borrow_mut();
-                // A bare array. Every entry needs a path; the name is what the
-                // picker shows and falls back to the path, because a nameless
-                // row in a list of two is worse than a long one.
-                let entries: Vec<Table> = t.sequence_values::<Table>().flatten().collect();
-                if entries.is_empty() {
-                    bm.errors
-                        .push("cian.notes: expected a list of { name = …, path = … }".into());
-                    return Ok(());
-                }
-                for e in entries {
-                    let path: String = match e.get::<Option<String>>("path")? {
-                        Some(v) if !v.trim().is_empty() => v,
-                        _ => {
-                            bm.errors.push("cian.notes: an entry is missing `path`".into());
-                            continue;
-                        }
-                    };
-                    let name = e
-                        .get::<Option<String>>("name")?
-                        .filter(|n| !n.trim().is_empty())
-                        .unwrap_or_else(|| path.clone());
-                    bm.note_roots.push(NoteRoot { name, path });
-                }
-                Ok(())
-            })?,
-        )?;
-    }
-
     // cian.ime{ off = "...", on = "..." }  — switch the system input method
     // with cian's mode, so single-key commands work with Japanese input on.
     {
@@ -1406,43 +1350,6 @@ pub fn state_with(text: &str, key: &str, value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn notes_roots_keep_their_order_and_name_themselves() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("init.lua"),
-            // Three entries: named, unnamed, and one that is missing the only
-            // field that matters. Order is the point — a picker that shuffled
-            // between runs would put a different folder under the same key.
-            "cian.notes{\n\
-               { name = \"私\", path = \"~/notes\" },\n\
-               { path = \"/srv/team\" },\n\
-               { name = \"忘れ物\" },\n\
-             }\n",
-        )
-        .unwrap();
-
-        let cfg = load_from(&dir.path().join("init.lua"));
-        assert_eq!(cfg.note_roots.len(), 2, "the entry with no path is refused");
-        assert_eq!(cfg.note_roots[0].name, "私");
-        assert_eq!(cfg.note_roots[0].path, "~/notes");
-        assert_eq!(cfg.note_roots[1].name, "/srv/team", "no name: the path names it");
-        assert!(
-            cfg.errors.iter().any(|e| e.contains("missing `path`")),
-            "the refusal is reported rather than silent: {:?}",
-            cfg.errors
-        );
-    }
-
-    #[test]
-    fn notes_with_no_entries_says_so() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("init.lua"), "cian.notes{}\n").unwrap();
-        let cfg = load_from(&dir.path().join("init.lua"));
-        assert!(cfg.note_roots.is_empty());
-        assert!(cfg.errors.iter().any(|e| e.contains("cian.notes")), "{:?}", cfg.errors);
-    }
 
     #[test]
     fn ssh_and_keymap_can_live_in_their_own_files() {

@@ -1,9 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    # amber は先に書く ── 依存の向きが `amber ← cian` の一方向であること
-    # を、並びでも言っておく。
-    "crates/amber-core",
     "crates/cian-core",
     "crates/cian-tui",
     "crates/cian-pty",

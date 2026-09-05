@@ -27,41 +27,25 @@ pub mod highlight;
 pub mod image;
 pub mod inspect;
 pub mod log;
+pub mod markdown;
 pub mod mermaid;
 pub mod office;
 pub mod ops;
 pub mod os;
 pub mod outline;
 pub mod progress;
+pub mod query;
 pub mod rename;
 pub mod search;
 pub mod sharepoint;
 pub mod shellwhere;
+pub mod stamp;
 pub mod substitute;
+pub mod survey;
 pub mod textops;
 pub mod svn;
 pub mod theme;
-
-// ── ここから下は amber-core のもの ──
-//
-// **依存の向きは `amber ← cian` の一方向。** ノートについての判断は
-// `crates/amber-core` に移した ── ノートのアプリが git や svn や SharePoint を
-// 積む理由は無く、実際 iPhone は分ける前 18,128 行の cian-core を丸ごと
-// 積んでいた。cian はその上に乗る側なので、こちらが向こうを知る。
-//
-// 再輸出しているのは、`crate::note::…` と書いてある百数十か所を書き換えない
-// ため。**引っ越しと書き換えを同じコミットでやると、どちらが壊したのか
-// 言えなくなる。** 呼び名を `amber_core::note::…` に寄せるのは別の日に。
-pub use amber_core::{markdown, note, notebook, stamp, survey};
 pub mod viewer;
-
-/// Whether this build has a desktop under it.
-///
-/// False on a phone, where there is no trash to move a file to and
-/// `DeleteMode::Trash` refuses rather than deleting outright. Asked here
-/// rather than read as a feature by every caller: a feature is the *core's*
-/// fact, and a crate that tested its own would answer about itself.
-pub const DESKTOP: bool = cfg!(feature = "desktop");
 
 #[derive(Debug, Clone)]
 pub struct Entry {
@@ -345,17 +329,6 @@ pub struct Pane {
     pub entries: Vec<Entry>,
     /// Every entry in `cwd`, before filtering.
     pub all_entries: Vec<Entry>,
-    /// Extra text the filter can match, per entry name.
-    ///
-    /// A listing filters on the name, which is the right answer for files and
-    /// the wrong one for notes: a note's name is `2026-09-02.md` and what you
-    /// remember about it is its title, or the tag you put on it. Whoever knows
-    /// what an entry is *about* puts a line here (see `note::haystack`) and
-    /// the filter matches it as well as the name.
-    ///
-    /// Lowercased on the way in, because the needle is. Dropped on arrival
-    /// with the marks and the filter — it describes this folder and no other.
-    pub search_text: std::collections::HashMap<String, String>,
     /// Case-insensitive substring that narrows the listing. Empty shows all.
     pub filter: String,
     /// Show entries whose name starts with a dot. Defaults to true, which is
@@ -394,7 +367,6 @@ impl Pane {
         // is built by joining onto this one.
         let cwd = dunce::canonicalize(cwd.into()).context("invalid initial path")?;
         let mut pane = Self {
-            search_text: std::collections::HashMap::new(),
             cwd,
             view: PaneView::Dir,
             entries: Vec::new(),
@@ -435,7 +407,6 @@ impl Pane {
         self.view = PaneView::Dir;
         self.marks.clear();
         self.filter.clear();
-        self.search_text.clear();
         self.reload()
     }
 
@@ -628,18 +599,13 @@ impl Pane {
             .iter()
             .filter(|e| show_hidden || !e.name.starts_with('.'))
             .filter(|e| {
-                // **An OR of ANDs**, the same reading the phone's search box
-                // gets (`note::terms`): `仕事 週報` wants both, `仕事 OR 家`
-                // takes either. One decision about what a query means, in one
-                // place, so the two do not agree only until somebody types
-                // two words. A plain one-word filter goes down the same road
-                // and comes out where it always did.
-                needle.is_empty()
-                    || crate::note::hits(&e.name_lower, &needle)
-                    || self
-                        .search_text
-                        .get(&e.name)
-                        .is_some_and(|t| crate::note::hits(t, &needle))
+                // **An OR of ANDs** (`query::terms`): `仕事 週報` wants both,
+                // `仕事 OR 家` takes either. One decision about what a query
+                // means, in one place, so the terminal's `/` and the window's
+                // filter do not agree only until somebody types two words. A
+                // plain one-word filter goes down the same road and comes out
+                // where it always did.
+                needle.is_empty() || crate::query::hits(&e.name_lower, &needle)
             })
             .cloned()
             .collect();
@@ -674,18 +640,6 @@ impl Pane {
     pub fn set_show_hidden(&mut self, show: bool) {
         if self.show_hidden != show {
             self.show_hidden = show;
-            self.apply_filter();
-        }
-    }
-
-    /// State what the entries in this folder are about, for the filter.
-    ///
-    /// Re-applies the filter, because it may already be narrowing: without
-    /// that, the notes arrive a moment after the listing and the box you
-    /// typed into before they landed keeps answering with names only.
-    pub fn set_search_text(&mut self, text: std::collections::HashMap<String, String>) {
-        self.search_text = text;
-        if !self.filter.is_empty() {
             self.apply_filter();
         }
     }
@@ -1223,32 +1177,6 @@ mod tests {
 
         pane.set_filter("alp");
         assert_eq!(names(&pane), vec!["Alpha.rs"]);
-    }
-
-    #[test]
-    fn the_filter_matches_what_an_entry_is_about_as_well_as_its_name() {
-        let (_d, mut pane) = pane_with(&["page-0012.md", "b.md"]);
-        pane.search_text.insert("page-0012.md".into(), "段取り #仕事".into());
-
-        // Neither the title nor the tag is anywhere in the filename.
-        pane.set_filter("段取り");
-        assert_eq!(names(&pane), vec!["page-0012.md"]);
-        pane.set_filter("#仕事");
-        assert_eq!(names(&pane), vec!["page-0012.md"]);
-        // The name still matches, for everything that is not a note.
-        pane.set_filter("b.md");
-        assert_eq!(names(&pane), vec!["b.md"]);
-    }
-
-    #[test]
-    fn arriving_somewhere_forgets_what_the_last_folder_was_about() {
-        let (_d, mut pane) = pane_with(&["a.md"]);
-        pane.search_text.insert("a.md".into(), "前のディレクトリの話".into());
-        // Left behind, this would narrow the *next* folder by a word nobody
-        // there has ever written — the same reason the filter itself is
-        // dropped on arrival.
-        pane.reread().unwrap();
-        assert!(pane.search_text.is_empty());
     }
 
     #[test]

@@ -419,78 +419,9 @@ async function main() {
         // 配色を暗くしたら、**窓の縁も**暗くなること。タイトルバーは OS が
         // 描くので CSS では届かない ── 暗い配色に白い枠が乗っていた。
         ['read:\'frame の口: \' + (window.cian && typeof window.cian.frame === \'function\')', ''],
-        // cian モード ── ノートの一覧。題は front matter か見出しか名前、
-        // 二行目に本文の頭。**ファイル名とサイズではない。**
-        ['read:(async()=>{await window.cian.call("shellinput",{text:"printf -- \'---\\\\ntitle: 段取り\\\\ntags: [x]\\\\n---\\\\n# 段取り\\\\n本文です。\\\\n\' > "+state[state.focus].cwd+"/note.md\\n"});return "ノートを1本書いた";})()', ''],
-        ['read:(async()=>{await window.cian.call("shellinput",{text:"mkdir -p sub && printf \'# 中の題\\\\n\' > sub/inner.md"+String.fromCharCode(10)});return "子ディレクトリに1本";})()', ''],
-        ['wait:1500', ''], ['F5', '読み直し'], ['wait:600', ''],
-        ['read:(()=>{setView("cian");return "cian ビューへ";})()', ''], ['wait:1500', ''],
-        ['read:\'題: \' + [...document.querySelectorAll(".rows.cian .row .name")].map(e=>e.textContent).join(" / ")', ''],
-        // 新しい順に並んでいるか ── ノートは名前順では読まない。
-        ['read:"並び: "+[...document.querySelectorAll(".rows.cian .row .when")].map(e=>e.textContent).filter(Boolean).join(" ")', ''],
-        ['read:\'二行目: \' + [...document.querySelectorAll(".rows.cian .row .sub")].map(e=>e.textContent).filter(Boolean).join(" / ")', ''],
-        ['shot:cian-view@#work', 'cian ビュー'],
-        ['shot:cian-rows@.rows.cian', 'ノート行 ── 二行分の高さで揃っているか'],
-        // **フォルダは「入る」ものではなく「絞る」もの**（2026-09-05）。
-        // 左の列で選ぶと真ん中がそのフォルダのノートになる ── `land:sub` /
-        // `Enter` はもう当たらない（そこに `sub` の行が無いので）。台本を
-        // 新しい契約の形に書き直した：確かめていることは同じ、
-        // 「フォルダを選ぶと一覧がそのフォルダのノートになる」。
-        ['read:(async()=>{await pickRail("book","sub");return "sub を選んだ";})()', '子フォルダで絞る'],
-        ['wait:1500', ''],
-        ['read:\'子の題: \' + [...document.querySelectorAll(".rows.cian .row .name")].map(e=>e.textContent).join(" / ")', ''],
-        ['read:(async()=>{await pickRail("all","");return "すべてへ";})()', '全部に戻す'],
-        ['wait:1500', ''],
-        // 画像の貼り付け ── ノートに撮った画面をそのまま置く。
-        // 本物の `paste` を投げる（Monaco の textarea ではなく容れ物へ、
-        // capture で拾う実装なので）。**入った文字だけでは足りない**ので、
-        // 隣に本当にファイルが出来たかを `stat` で確かめる。
-        ['land:note.md', 'ノートへ'],
-        ['F3', 'エディタで開く'], ['wait:3000', ''],
-        ['read:(async()=>{const u=Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="),c=>c.charCodeAt(0));const dt=new DataTransfer();dt.items.add(new File([u],"x.png",{type:"image/png"}));const at=document.querySelector("#v-body textarea")||document.getElementById("v-body");at.dispatchEvent(new ClipboardEvent("paste",{clipboardData:dt,bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,2500));return "言 "+status.msg+" 行 "+viewer.ed.getValue().split(String.fromCharCode(10)).filter(l=>l.indexOf("![")>=0).join(" ");})()', ''],
-        ['read:(async()=>{const m=viewer.ed.getValue().match(/!\\[\\]\\(([^)]+)\\)/);if(!m)return "リンクが無い";const r=await window.cian.call("stat",{path:state[state.focus].cwd+"/"+m[1]});return "画像 "+m[1]+" 実在 "+r.exists+" "+r.len+"B";})()', ''],
-        ['u', '貼ったのを戻して閉じる'], ['wait:300', ''],
-        ['Esc', ''], ['Esc', ''], ['Esc', ''], ['wait:800', ''],
-        // 新しいノート ── 題を打つと、前置きつきの .md が出来てエディタに載る。
-        //
-        // **子ディレクトリの中でやる。**`from` はこの後の一連（コピー・マーク・
-        // 取り消し）の題材なので、そこに増やすと、増えたぶんだけ背景の走査が
-        // 伸びて後ろの手が競合する。一度それで7つの手が「効かない」に化けた。
-        ['land:sub', '子ディレクトリへ'], ['Enter', ''], ['wait:1500', ''],
-        [':', 'コマンド'], ['type:newnote', ''], ['Enter', ''], ['wait:900', ''],
-        ['type:plan', '題を打つ'], ['Enter', ''], ['wait:2500', ''],
-        ['read:(()=>{const v=viewer.ed?viewer.ed.getValue():"";return "新ノートの頭: "+v.split(String.fromCharCode(10)).slice(0,4).join(" / ");})()', ''],
-        ['read:(async()=>{const r=await window.cian.call("stat",{path:state[state.focus].cwd+"/plan.md"});return "plan.md 実在 "+r.exists+" "+r.len+"B";})()', ''],
-        ['Esc', ''], ['Esc', ''], ['Esc', ''], ['wait:800', ''],
-        ['land:..', '戻る'], ['Enter', ''], ['wait:1500', ''],
-        // タグで絞る ── **ファイル名にタグは無い。**note.md は `#x` を前置きに
-        // 持っているので、絞り込みが名前しか見ていなければ 0 件になる。
-        [':', 'コマンド'], ['type:tag', ''], ['Enter', ''], ['wait:1500', ''],
-        ['read:"タグの行: "+[...document.querySelectorAll("#report:not([hidden]) .hit")].map(e=>e.textContent.replace(/\\s+/g," ").trim()).join(" / ")', ''],
-        ['Enter', '1つ目のタグで絞る'], ['wait:1200', ''],
-        ['read:"絞った後: "+state[state.focus].entries.filter(e=>!e.parent).map(e=>e.name).join(" ")+" / 絞り "+state[state.focus].filter', ''],
-        ['read:(async()=>{await applyFilter("");return "絞りを解除";})()', ''], ['wait:800', ''],
-        // ノートの置き場所 ── 2件あるときは訊く。
-        ['read:"設定から届いた置き場所: "+noteRoots.map(r=>r.name+"→"+r.path.split("/").slice(-2).join("/")).join(" / ")', ''],
-        ['read:(async()=>{await cmdNotes();await new Promise(r=>setTimeout(r,600));return "件数 "+noteRoots.length+" / 開 "+report.on+" / 題 "+(report.about||"")+" / 今 "+state[state.focus].cwd.split("/").pop();})()', ''],
-        ['top:#report', '置き場所の一覧が最前面'],
-        ['Esc', 'いったん閉じる'], ['wait:400', ''],
-        // 人が打つ経路 ── `:notes` と Enter。
-        [':', 'コマンドライン'],
-        ['read:"開いた口: "+filter.mode+" / 値 "+el.fInput.value', ''],
-        ['type:notes', ''],
-        ['read:"打った後: "+filter.mode+" / 値 "+el.fInput.value', ''],
-        ['Enter', ''], ['wait:1200', ''],
-        ['read:"打って実行: 開 "+report.on+" / 題 "+(report.about||"")+" / 今 "+state[state.focus].cwd.split("/").pop()', ''],
-        ['Enter', '1つ目を選ぶ'], ['wait:2000', ''],
-        ['read:"選んだ先: "+state[state.focus].cwd.split("/").pop()+" / ビュー "+viewMode+" / 枠 "+report.on', ''],
-        // **元のディレクトリに戻す。**ここを置き去りにすると、この後の一連が
-        // 2件しかないディレクトリで走り、コピーもマークも対象を失う。
-        ['land:..', '戻る'], ['Enter', ''], ['wait:1500', ''],
-        ['read:\'置き場所の行: \' + [...document.querySelectorAll("#report:not([hidden]) .hit")].map(e=>e.textContent.replace(/\\s+/g," ").trim()).join(" / ")', ''],
-        ['Enter', '1つ目へ'], ['wait:2000', ''],
-        ['read:\'移動先: \' + state[state.focus].cwd.split("/").slice(-2).join("/") + " / ビュー " + viewMode', ''],
-        ['read:(()=>{setView("classic");return "戻す";})()', ''], ['wait:600', ''],
+        // init.lua が届いているか ── 「設定を直したのに効かない」はこの
+        // プロジェクトで一番よく出るバグなので、毎回1つは読み返す。
+        ['read:\'init.lua の notify_min_secs: \' + (notifyAfterMs / 1000)', ''],
         ['read:(()=>{setLook(1, false);return \'陰翳に\';})()', ''], ['wait:500', ''],
         ['read:\'陰翳の ground=\' + getComputedStyle(document.documentElement).getPropertyValue(\'--bg\').trim()', ''],
         ['read:(async()=>\'OS に伝えた: \' + await tellFrame())()', ''],
@@ -813,19 +744,16 @@ async function main() {
 
     // A real init.lua, because "the setting did not take" is this project's
     // most repeated bug and the only way to catch it is to write the file and
-    // read it back out of the running window. Seeding `noteRoots` from the
-    // console would have proved the picker and nothing about the config.
+    // read it back out of the running window. Seeding the value from the
+    // console would prove the reader and nothing about the config.
+    //
+    // **Something inert.** Whatever is written here is in force for the whole
+    // round, so it has to be a setting the rest of the script does not care
+    // about: `notify_min_secs` is a number the window keeps and never acts on
+    // during a run of this length.
     if (!process.env.CIAN_CONFIG_DIR) {
         fs.writeFileSync(path.join(conf, 'init.lua'),
-            // **1つだけ。** 2026-09-05 から cian モードは「入ったら必ず
-            // ノートの保存場所へ行く」ので、ここに2つ書くと、モードに
-            // 入った瞬間に1つ目（`from/sub`）へ飛ぶ ── この後の
-            // `land:sub` / `Enter` はもう `from` に居る前提で書かれていて、
-            // 以後の打鍵が全部ずれる（実際、動かなかったキーが 47 から
-            // 140 に跳ねた）。台本の前提ではなく**設定**を合わせる。
-            'cian.notes{\n'
-            + `  { name = "元", path = "${sand}/from" },\n`
-            + '}\n', 'utf8');
+            'cian.set_option("notify_min_secs", 7)\n', 'utf8');
     }
 
     const el = spawn(process.env.CIAN_ELECTRON

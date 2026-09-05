@@ -26,21 +26,6 @@ cian（窓版）— macOS
 
   あるいは、システム設定 → プライバシーとセキュリティ → 「このまま開く」。
 
-■ cian モード（ノート）
-
-  init.lua に置き場所を書きます。examples/init.lua に見本があります。
-
-    cian.notes{
-      { name = "ノート", path = os.getenv("HOME") .. "/Documents/cian" },
-    }
-
-  窓の中で `:notes` と打つと、その置き場所へ飛びます。
-  一覧はタイトルと二行目とタグになり、★ はお気に入りです。
-  ノートの上で F3、その中で Ctrl+E がプレビューです。
-
-  iPhone 版と同じフォルダを指せば、両方から同じノートを触れます
-  （iCloud Drive・Google Drive・Dropbox のどれでも構いません）。
-
 ■ エンジンだけ入れ替えたいとき
 
   cian-server（このフォルダの中）を置き換えてください。

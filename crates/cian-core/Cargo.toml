@@ -20,8 +20,6 @@ default = ["desktop"]
 desktop = ["dep:trash"]
 
 [dependencies]
-# ノートについての判断ぜんぶ。**向きは一方向** ── amber は cian を知らない。
-amber-core = { path = "../amber-core" }
 serde_json = { workspace = true }
 anyhow   = { workspace = true }
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }

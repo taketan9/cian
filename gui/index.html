@@ -587,90 +587,6 @@ html, body {
    A sheet raised over a surface is above that surface. There is no case where
    the editor should hide a list opened from inside it. */
 #view   { z-index: 10; }   /* a surface: it replaces the listing */
-
-/* ── cian mode: the list on the left, the note on the right ──
-   2026-09-05: 「左にノートの一覧 右にノートっていう Inkdrop の構成そのまま」.
-   In every other view the editor is a *surface* that replaces the listing,
-   which is right for a file manager: you went to look at one thing. Notes are
-   the other shape — the list is where you are, and the note is what you are
-   reading, and you go back and forth between them without leaving either.
-
-   So here `#view` is inset instead of covering, and the panes give up the
-   right half. Nothing about the editor changes; it is the same box in a
-   different place. */
-/* **On `body`, not on `#work`.** `#view` is written *after* `#work` closes —
-   it is a fixed overlay, so nesting never mattered until a selector needed
-   both. Put on `#work` this rule matched nothing at all, and the editor
-   covered the list exactly as before with no sign that anything was wrong. */
-/* `width`, and **`flex` left alone** — `#work` is a column, so `flex` there
-   is the *height*. Setting `flex: 0 0 auto` to make the list narrower made it
-   short instead: the rows stopped and the rest of the left side was empty. */
-/* ── 三列 ──
-   左＝行き先、真ん中＝ノート、右＝ノートの中身。いまの窓の骨格は
-   「2つのペイン＋シェル」なので、cian モードのときだけ左に1列足して、
-   ペインを真ん中の幅に押し込む。 */
-body[data-cian="on"] #panes {
-  width: var(--cian-list, 330px);
-  margin-left: var(--cian-rail, 186px);
-}
-body[data-cian="on"] #view { left: calc(var(--cian-rail, 186px) + var(--cian-list, 330px)); }
-body[data-cian="on"] #cianpad { left: calc(var(--cian-rail, 186px) + var(--cian-list, 330px)); }
-
-#cianrail {
-  position: fixed; left: 0; top: 0; width: var(--cian-rail, 186px);
-  bottom: calc(var(--status-h) + var(--hints-h));
-  background: var(--pane-off); border-right: 1px solid var(--line);
-  overflow-y: auto; z-index: 4; padding: 12px 0 16px;
-  font-size: .92em;
-}
-#cianrail .brand { display: flex; align-items: center; gap: 9px; padding: 2px 13px 14px; }
-#cianrail .mk { width: 26px; height: 26px; flex: none; }
-/* 印は自分で色を持つ（amber.svg と同じ琥珀）。CSS の fill で塗ると色替えに引かれる */
-#cianrail .bname { font-weight: 800; font-size: 1.35em; letter-spacing: -.02em; }
-#cianrail .rhead {
-  font-size: .72em; letter-spacing: .1em; color: var(--dim);
-  padding: 12px 13px 3px;
-}
-#cianrail .ritem {
-  display: flex; align-items: center; gap: 8px;
-  padding: 3px 13px; white-space: nowrap; cursor: pointer;
-}
-#cianrail .ritem:hover { background: var(--row-hover); }
-#cianrail .ritem.on { background: var(--sel-strong); }
-#cianrail .ritem .n { margin-left: auto; color: var(--dim); font-size: .82em; font-variant-numeric: tabular-nums; }
-#cianrail .ritem .sq { width: 9px; height: 9px; border-radius: 2px; flex: none; background: var(--dir); }
-#cianrail .ritem .st { color: var(--mark); }
-#cianrail .ritem .name { overflow: hidden; text-overflow: ellipsis; }
-/* 深さは字下げで。折り畳みは付けない ── ノートの置き場所は数階層で、
-   畳んだ先を思い出すより、全部見えている方が速い。 */
-#cianrail .ritem[data-depth="1"] { padding-left: 26px; }
-#cianrail .ritem[data-depth="2"] { padding-left: 38px; }
-#cianrail .ritem[data-depth="3"] { padding-left: 50px; }
-#cianrail .newnote {
-  margin: 14px 13px 0; padding: 5px 0; text-align: center;
-  border: 1px dashed var(--line); border-radius: 7px;
-  color: var(--accent); font-size: .86em; cursor: pointer;
-}
-#cianrail .newnote:hover { background: var(--row-hover); }
-body[data-cian="on"] #view { left: var(--cian-left, 38%); border-left: 1px solid var(--line); }
-body[data-cian="on"] #panes.one .pane.active { flex: 1 1 100%; }
-/* **No frame here.** The frame says which of two panes has the keys; in cian
-   mode there is one list and one note, and which has the keys is obvious from
-   where the cursor is. A box drawn round the list as well is a box round the
-   only thing there. 2026-09-05: 「cian モードは枠の強調表示は不要」. */
-body[data-cian="on"] #work[data-focus="files"] .pane.active::after { content: none; }
-/* The right half before a note is chosen. Without it the window looks like
-   a listing that has been squeezed for no reason — an empty half of a
-   two-half layout has to say that it is waiting, not that it is broken. */
-#cianpad {
-  position: fixed; top: 0; right: 0; left: var(--cian-left, 38%);
-  bottom: calc(var(--status-h) + var(--hints-h));
-  display: none; align-items: center; justify-content: center;
-  background: var(--pane); border-left: 1px solid var(--line);
-  color: var(--dim); font-size: .9em; z-index: 9;
-}
-body[data-cian="on"] #cianpad { display: flex; }
-body[data-cian="on"].reading #cianpad { display: none; }
 #report { z-index: 11; }   /* a sheet: it is raised over whatever is beneath */
 
 /* The shell's sixteen. Named rather than fixed, so each look chooses them —
@@ -964,88 +880,6 @@ body[data-cian="on"].reading #cianpad { display: none; }
    finder's width. Exactly the after-wins trap that is written up three
    times in ROADMAP; I walked into it while fixing a width. */
 #ask .sheet.wide { min-width: min(60rem, 84vw); }
-
-/* cian mode: a note is two lines, not a filename in a column.
-   The title carries the row; the excerpt sits under it in the dim colour, so
-   the eye reads down the titles and only drops into the second line when it
-   has stopped somewhere. Tags and the date go to the right, where the size
-   and date sit in the other views — one place for "the small facts". */
-.rows.cian .row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  grid-template-areas: "name tags when" "sub sub sub";
-  row-gap: 1px; padding: 2px 8px;
-  align-items: baseline; align-content: center;
-  /* Two of the ordinary cells, exactly — not `auto`. The list is virtualised
-     against a single measured row height, so a row that shrinks when a note
-     has no excerpt would slide every row below it out of place. Fixing the
-     height here keeps that assumption true whatever the note says. */
-  height: calc(var(--cell-h) * 2);
-}
-.rows.cian .row .name { grid-area: name; font-weight: 600; min-width: 0; }
-/* Not a note: a file that lives in the notes folder. Same row, quieter — the
-   weight is what separates them, not a colour that would read as disabled. */
-.rows.cian .row.plain:not(.cursor):not(.marked) .name {
-  font-weight: 400; color: var(--dim);
-}
-.rows.cian .row .tags { grid-area: tags; color: var(--accent); font-size: .85em; }
-/* ── the notes half, dressed as a notes app ──
-   2026-09-05: 「iPhone みたいにかっちょ良く」. The rest of this window is a
-   file manager and looks like one: dense rows, a column of dates, a frame
-   round the pane with the keys. A note is not a file you are managing, and
-   「メモとるかぁ」 is not a filing mood — so in this one view the rows get
-   air, the tags become chips, and the pane says what it is at the top. */
-body[data-cian="on"] .rows.cian .row { height: calc(var(--cell-h) * 2.6); padding: 6px 12px; }
-body[data-cian="on"] .rows.cian .row .name { font-size: 1.05em; letter-spacing: .01em; }
-/* Chips, not a run of words. `#仕事 #定型` reads as one string; two chips
-   read as two things you could press. */
-body[data-cian="on"] .rows.cian .row .tags {
-  align-self: center;
-  font-size: .78em; color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border-radius: 999px; padding: 1px 8px; white-space: nowrap;
-  /* **縮んでいい。** 真ん中の列は 330px しかないので、タグを縮まない
-     ものにすると題を押し出して、両方が読めなくなる。名前が先、タグは
-     入るだけ。 */
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; max-width: 45%;
-}
-body[data-cian="on"] .rows.cian .row .when { align-self: center; font-size: .78em; }
-body[data-cian="on"] .rows.cian .row .sub { padding-top: 2px; }
-/* The favourite's star, warm — the one colour in here that is not the
-   accent, because 「留めてある」 is not 「触れる」. */
-.rows.cian .row .name .star { color: var(--mark); font-weight: 400; }
-
-/* What this half is, above the list. The phone puts the name and the count
-   at the top of its list for the same reason: you arrive here on purpose,
-   and the first thing that should be true is that you are in the right
-   place. */
-body[data-cian="on"] .pane .crumb { padding: 14px 14px 10px; }
-/* The mark, the name, the count — the phone's header, in the space a window
-   has. Drawn rather than loaded: the same two brackets as the app icon, so
-   the thing on the dock and the thing at the top of the list are one thing. */
-/* **左から右に。** パンくずは長いパスの*頭*を切るために右から左の箱に
-   なっていて、その中に置いたものは並びが反転する ── 印が右端に飛び、
-   「7 のノート ・ 3 のフォルダ」が「のノート ・ 3 のフォルダ 7」になった。
-   ここはパスではないので、向きを戻す。 */
-body[data-cian="on"] .pane .crumb { direction: ltr; text-align: left; }
-.cianhead { display: flex; align-items: center; gap: 11px; direction: ltr; }
-.cianmark { display: none; }
-.cianmark .ground { fill: var(--accent); }
-.cianmark .brackets {
-  fill: none; stroke: var(--pane); stroke-width: 11;
-  stroke-linecap: round; stroke-linejoin: round;
-}
-.cianwords { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
-.ciantitle { font-size: 1.15em; font-weight: 700; letter-spacing: -.01em; }
-.ciansub { font-size: .78em; color: var(--dim); }
-/* The column headings are a file manager's furniture. A notes list has two
-   lines per row and no columns to head. */
-body[data-cian="on"] .pane .dhead { display: none; }
-.rows.cian .row .when { grid-area: when; color: var(--dim); font-size: .85em; }
-.rows.cian .row .sub  {
-  grid-area: sub; color: var(--dim); font-size: .9em;
-  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
 
 /* The gutter marks: which lines differ from the file on disk.
    A bar in the margin, not a wash behind the text — a colour under the words
@@ -1476,9 +1310,6 @@ body[data-cian="on"] .pane .dhead { display: none; }
        than the whole file, the way the terminal build does: a listing of a
        hundred thousand rows is a hundred thousand elements otherwise, and the
        scroll goes to treacle on exactly the files worth opening this way. -->
-  <!-- cian モードの左列。行き先の一覧であって、歩く場所ではない。 -->
-  <div id="cianrail" hidden></div>
-  <div id="cianpad"></div>
   <div id="view" hidden>
     <div class="vhead"><span id="v-name"></span><span id="v-about"></span></div>
     <div class="vbody" id="v-body"></div>

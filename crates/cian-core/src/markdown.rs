@@ -81,11 +81,10 @@ pub fn inline(text: &str) -> Vec<Inline> {
     while i < chars.len() {
         let c = chars[i];
 
-        // A colour span. Recognised by `note::spans`, so the window and the
-        // phone cannot end up with two opinions about what a note says.
+        // A colour span, `<span style="color:#rrggbb">…</span>`.
         if c == '<' {
             let rest: String = chars[i..].iter().collect();
-            if let Some((inner, color, took)) = crate::note::first_color(&rest) {
+            if let Some((inner, color, took)) = first_color(&rest) {
                 flush(&mut out, &mut buf);
                 out.push(Inline::Colored { text: inner, color });
                 i += took;
@@ -399,12 +398,10 @@ fn inline_html(text: &str) -> String {
 /// the Markdown people write, not the Markdown a specification describes.
 pub fn to_html(lines: &[String]) -> String {
     let mut out = String::new();
-    // The front matter goes, if there is one: it is how a note describes
-    // itself, not something it says, and the title and tags are already on
-    // screen wherever this is being drawn. `note::front` decides whether the
-    // leading `---` is a front matter or a rule — one answer, so the phone
-    // and the window agree about where a note starts.
-    let mut i = crate::note::front(lines).lines;
+    // The front matter goes, if there is one: it is how a document describes
+    // itself, not something it says. `front_matter_lines` decides whether the
+    // leading `---` is a front matter or a horizontal rule.
+    let mut i = front_matter_lines(lines);
     // Which list levels are open, by indent. Markdown's nesting is indentation
     // and nothing else, so this is the whole of it.
     let mut open_lists: Vec<usize> = Vec::new();
@@ -602,6 +599,115 @@ pub fn to_html(lines: &[String]) -> String {
     out
 }
 
+/// Whether `[ ] x` / `[x] x` starts this bullet's text, and which.
+///
+/// `[X]` counts too: a file written on somebody else's machine is still a file
+/// cian is being asked to read.
+fn ticked(rest: &str) -> Option<bool> {
+    let b = rest.as_bytes();
+    if b.len() < 3 || b[0] != b'[' || b[2] != b']' {
+        return None;
+    }
+    match b[1] {
+        b' ' => Some(false),
+        b'x' | b'X' => Some(true),
+        _ => None,
+    }
+}
+
+/// Tick or untick the checkbox on one line, and hand the whole document back.
+///
+/// **By line number, not by which checkbox it is.** The preview on screen was
+/// drawn from a parse that may be a moment old; counting boxes would tick the
+/// wrong one the first time a file gains a task above the one that was
+/// pressed — which is why `to_html` writes the line number onto each box. A
+/// line that is not a checkbox is left exactly as it was: the screen and the
+/// file can disagree, and when they do nothing should happen.
+pub fn set_check(text: &str, line: usize, done: bool) -> String {
+    let mut lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
+    let Some(row) = lines.get_mut(line) else { return text.to_string() };
+    let indent: String = row.chars().take_while(|c| c.is_whitespace()).collect();
+    let t = row.trim_start();
+    let Some(rest) = t.strip_prefix("- ").or_else(|| t.strip_prefix("* ")) else {
+        return text.to_string();
+    };
+    if ticked(rest).is_none() {
+        return text.to_string();
+    }
+    let lead = &t[..t.len() - rest.len()];
+    *row = format!("{indent}{lead}[{}]{}", if done { "x" } else { " " }, &rest[3..]);
+    let mut out = lines.join("\n");
+    if text.ends_with('\n') {
+        out.push('\n');
+    }
+    out
+}
+
+/// How many leading lines the YAML front matter takes, if there is one.
+///
+/// A `---` on the first line opens one and the next `---` or `...` closes it;
+/// anything else is a horizontal rule and the document starts at line zero.
+/// Only the *extent* is decided here — this module never reads the fields.
+///
+/// **Counting it rather than parsing it.** What a front matter *means* is a
+/// notes application's question and left with amber; what a Markdown renderer
+/// needs is where the prose begins, and an unterminated `---` must not eat the
+/// file.
+fn front_matter_lines(lines: &[String]) -> usize {
+    if lines.first().map(|l| l.trim_end()) != Some("---") {
+        return 0;
+    }
+    match lines.iter().skip(1).position(|l| {
+        let t = l.trim_end();
+        t == "---" || t == "..."
+    }) {
+        Some(end) => end + 2,
+        None => 0,
+    }
+}
+
+/// A colour span at the very start of `s`: its text, its colour, and how
+/// many **characters** it took.
+///
+/// For the scanner in [`inline`], which walks a line character by character
+/// and needs to know whether *this* is the start of one.
+///
+/// **Characters and not bytes.** `find` counts bytes; the caller counts
+/// characters. With Japanese inside the span the two are three times apart,
+/// so the scanner jumped past the span *and* the text after it — which showed
+/// up as a second coloured word coming out as
+/// `e="color:#0E93A8">シアン</span>` in the middle of a sentence.
+fn first_color(s: &str) -> Option<(String, String, usize)> {
+    if !s.starts_with("<span") {
+        return None;
+    }
+    let gt = s.find('>')?;
+    let color = color_of(&s[..=gt])?;
+    let after = &s[gt + 1..];
+    let end = after.find("</span>")?;
+    let bytes = gt + 1 + end + "</span>".len();
+    Some((after[..end].to_string(), color, s[..bytes].chars().count()))
+}
+
+/// `#rrggbb` out of `<span style="color:#0e93a8">`, if that is what this is.
+///
+/// Only hex, and only six digits: a name like `red` means a different colour
+/// in every renderer. Anything else is left exactly as typed, including a
+/// `<span>` carrying some other style — cian is not an HTML renderer and
+/// should not pretend to be one.
+fn color_of(open: &str) -> Option<String> {
+    let lower = open.to_ascii_lowercase();
+    let at = lower.find("color:")?;
+    let rest = lower[at + "color:".len()..].trim_start();
+    let hex = rest.strip_prefix('#')?;
+    let digits: String = hex.chars().take(6).collect();
+    if digits.len() == 6 && digits.chars().all(|c| c.is_ascii_hexdigit()) {
+        Some(format!("#{digits}"))
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -641,6 +747,20 @@ mod tests {
         let out = to_html(&lines("<span class=\"x\">あ</span>"));
         assert!(out.contains("&lt;span"), "{out}");
     }
+    #[test]
+    fn pressing_a_task_changes_that_line_and_nothing_else() {
+        let text = "- [ ] 牛乳\n- [ ] 珈琲\n";
+        let on = set_check(text, 1, true);
+        assert_eq!(on, "- [ ] 牛乳\n- [x] 珈琲\n");
+        assert_eq!(set_check(&on, 1, false), text);
+        // 行がずれていた・そこは箇条書きだった、のときは何もしない ──
+        // 画面とファイルが食い違っているのに書き込むのが一番悪い。
+        assert_eq!(set_check(text, 9, true), text);
+        assert_eq!(set_check("- ふつう\n", 0, true), "- ふつう\n");
+        // 字下げは字下げのまま
+        assert_eq!(set_check("  - [ ] 中\n", 0, true), "  - [x] 中\n");
+    }
+
     use super::*;
 
     fn lines(s: &str) -> Vec<String> {
