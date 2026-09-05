@@ -18,8 +18,7 @@ use crossterm::event::{
     KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::render::clamp_list_scroll;
-use crate::{hit_rect, App, FocusedPane, Mode, PendingOp, Popup};
+use crate::{hit_rect, App, FocusedPane, Mode, Popup};
 
 /// How long a typed prefix stays live. Long enough to finish a word, short
 /// enough that a letter pressed a moment later is obviously a new search.
@@ -379,42 +378,6 @@ impl App {
         inside
     }
 
-    /// A double click: a directory is entered, a file is handed to whichever
-    /// application owns it.
-    ///
-    /// Not what Enter does. Enter *reads* — cian's rule is that looking at a
-    /// file is the common case and launching another program is the rare one.
-    /// But a double click in a grid of icons means "open" to everyone who has
-    /// ever used a desktop, and this view is for those people.
-    pub(crate) fn grid_double_click(&mut self, col: u16, row: u16) -> bool {
-        if !self.icon_view {
-            return false;
-        }
-        let Some(i) = self.grid_entry_at(col, row) else { return false };
-        if let Some(p) = self.active_pane_mut() {
-            p.cursor = i;
-        }
-        // Over SFTP the row's path belongs to the server, so neither entering it
-        // as a local directory nor handing it to the desktop can work. The
-        // remote pane's own Enter does both jobs — descend, or fetch and read.
-        if self.active_pane().map(|p| p.is_remote()).unwrap_or(false) {
-            self.remote_pane_enter();
-            return true;
-        }
-        let is_dir = self.active_pane().and_then(|p| p.selected()).map(|e| e.is_dir);
-        match is_dir {
-            Some(true) => {
-                if let Some(p) = self.active_pane_mut() {
-                    p.marks.clear();
-                    let _ = p.enter_selected();
-                }
-            }
-            Some(false) => self.open_externally(),
-            None => {}
-        }
-        true
-    }
-
     /// A toolbar button.
     fn grid_button(&mut self, which: crate::GridButton) {
         use crate::GridButton::*;
@@ -469,107 +432,4 @@ impl App {
 /// where letting go would put it — with the drawing left to whoever owns the
 /// surface and the *doing* left to cian's existing confirmation.
 impl App {
-    /// What a press at this cell would pick up, if anything.
-    ///
-    /// The marked files when the one under the pointer is among them, so a
-    /// selection built up with `Space` or Ctrl-click drags as a group; just the
-    /// one file otherwise. `..` is never picked up — it is a way out, not a
-    /// thing.
-    pub(crate) fn drag_targets_at(&self, col: u16, row: u16) -> Vec<std::path::PathBuf> {
-        let i = match self.icon_view {
-            true => self.grid_entry_at(col, row),
-            false => self.row_entry_at(col, row),
-        };
-        let Some(i) = i else { return Vec::new() };
-        let Some(pane) = self.active_pane() else { return Vec::new() };
-        let Some(entry) = pane.entries.get(i) else { return Vec::new() };
-        if entry.is_parent {
-            return Vec::new();
-        }
-        if pane.is_marked(i) {
-            let marked = pane.target_paths();
-            if !marked.is_empty() {
-                return marked;
-            }
-        }
-        vec![entry.path.clone()]
-    }
-
-    /// Which entry a cell falls on in a list pane, if any.
-    fn row_entry_at(&self, col: u16, row: u16) -> Option<usize> {
-        let area = self.layout_rects.for_pane(self.focused);
-        if !hit_rect(area, col, row) {
-            return None;
-        }
-        // One row for the border, one for the column headings.
-        let first = area.y + 2;
-        if row < first {
-            return None;
-        }
-        let pane = self.active_pane()?;
-        let list_h = area.height.saturating_sub(3) as usize;
-        let start = clamp_list_scroll(pane.scroll, pane.cursor, list_h, pane.entries.len());
-        let i = start + (row - first) as usize;
-        (i < pane.entries.len()).then_some(i)
-    }
-
-    /// Where letting go at this cell would put the files, if anywhere.
-    ///
-    /// A folder under the pointer, a place in the sidebar, or the other pane.
-    /// Anywhere else is not a destination, and the drag is simply abandoned —
-    /// a drop that lands on nothing should do nothing.
-    pub(crate) fn drop_target_at(&self, col: u16, row: u16) -> Option<std::path::PathBuf> {
-        if let Some(path) = self.sidebar_at(row) {
-            if col < crate::render::SIDEBAR_W + 1 {
-                return Some(path);
-            }
-        }
-        let over = match self.icon_view {
-            true => self.grid_entry_at(col, row),
-            false => self.row_entry_at(col, row),
-        };
-        if let Some(i) = over {
-            if let Some(e) = self.active_pane().and_then(|p| p.entries.get(i)) {
-                if e.is_dir {
-                    return Some(e.path.clone());
-                }
-            }
-        }
-        // The other pane, in the two-pane view.
-        if !self.icon_view {
-            for (which, rect) in [
-                (FocusedPane::Left, self.layout_rects.left),
-                (FocusedPane::Right, self.layout_rects.right),
-            ] {
-                if which != self.focused
-                    && hit_rect(rect, col, row)
-                {
-                    let tabs = if which == FocusedPane::Left { &self.left } else { &self.right };
-                    return Some(tabs.active_ref().cwd.clone());
-                }
-            }
-        }
-        None
-    }
-
-    /// Ask to put `targets` in `dest`. Opens the confirmation cian already
-    /// uses for every copy and move — a drag is a new way to *say* it, not a
-    /// new way to move files without being asked.
-    pub(crate) fn drop_onto(
-        &mut self,
-        targets: Vec<std::path::PathBuf>,
-        dest: std::path::PathBuf,
-        move_it: bool,
-    ) {
-        if targets.is_empty() {
-            return;
-        }
-        // Dropping a folder into itself, or into where it already is, is a
-        // gesture that missed rather than a request.
-        if targets.iter().any(|t| *t == dest || t.parent() == Some(dest.as_path())) {
-            return;
-        }
-        let op = if move_it { PendingOp::Move } else { PendingOp::Copy };
-        self.open_popup(Popup::ConfirmTransfer { op, targets, dest });
-    }
 }

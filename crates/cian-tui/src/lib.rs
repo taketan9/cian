@@ -44,7 +44,6 @@ mod drop;
 mod font;
 mod ime;
 mod preview;
-pub mod prof;
 mod markdown;
 mod viewer;
 mod vim;
@@ -60,9 +59,6 @@ mod edit;
 mod macro_run;
 mod session;
 mod grid;
-mod host;
-/// The seam a windowed front end sits on. See [`host`].
-pub use host::Session;
 
 /// A button on the icon grid's toolbar.
 ///
@@ -3349,20 +3345,6 @@ impl App {
         }
         if next != self.focused {
             self.focus(next);
-        }
-    }
-
-    /// Read both listings again, keeping where each cursor was.
-    ///
-    /// For when something outside cian has changed the disk and cian knows the
-    /// moment it happened — the desktop's own context menu, which can rename or
-    /// delete or extract while cian is showing the folder it did it in.
-    pub(crate) fn reload_both_panes(&mut self) {
-        for tabs in [&mut self.left, &mut self.right] {
-            let pane = tabs.active_mut();
-            if !pane.is_synthetic() {
-                let _ = pane.reload();
-            }
         }
     }
 

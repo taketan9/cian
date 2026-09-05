@@ -87,16 +87,21 @@ if (missing.length) {
 fs.rmSync(OUT, { recursive: true, force: true });
 for (const [from, to] of WANTED) copy(path.join(MODULES, from), path.join(OUT, to));
 
-// The font, same treatment as the window build (crates/cian-gui): HackGen
-// Console NF — Japanese, monospaced, Nerd glyphs — carried with the app
-// rather than hoped for on the machine. Relying on it being installed put
-// the whole listing in Hiragino (proportional) and drew the shell prompt as
-// tofu on any Mac without it, which is most Macs. Copied, never downloaded:
-// the release workflow fetches it once into crates/cian-gui/fonts/ and both
-// front ends take it from there.
+// The font: HackGen Console NF — Japanese, monospaced, Nerd glyphs — carried
+// with the app rather than hoped for on the machine. Relying on it being
+// installed put the whole listing in Hiragino (proportional) and drew the
+// shell prompt as tofu on any Mac without it, which is most Macs. Copied,
+// never downloaded: the release workflow fetches it once into `vendor-font/`
+// and this takes it from there.
+//
+// **It used to live in `crates/cian-gui/fonts/`**, fetched for the winit
+// build and borrowed by this one. That crate left on 2026-09-06 and the
+// borrow would have gone with it — the release's "the font, or stop" guard
+// would have caught it, loudly, in CI. Moved somewhere that belongs to
+// nobody instead.
 const FONT_SOURCES = [
     process.env.CIAN_FONT,
-    path.join(HERE, '..', 'crates', 'cian-gui', 'fonts', 'cian.ttf'),
+    path.join(HERE, '..', 'vendor-font', 'cian.ttf'),
     path.join(require('node:os').homedir(), 'Library/Fonts/HackGenConsoleNF-Regular.ttf'),
     'C:/Windows/Fonts/HackGenConsoleNF-Regular.ttf',
     '/usr/share/fonts/truetype/hackgen/HackGenConsoleNF-Regular.ttf',
@@ -107,6 +112,6 @@ if (font) {
 } else {
     console.error('フォントが見つかりません（無くても動きますが、一覧が等幅になりません）。探した場所:');
     for (const p of FONT_SOURCES) console.error(`  ${p}`);
-    console.error('release.yml と同じ HackGen_NF の zip から crates/cian-gui/fonts/cian.ttf に置いてください。');
+    console.error('release.yml と同じ HackGen_NF の zip から vendor-font/cian.ttf に置いてください。');
 }
 console.log(`gui/vendor/  ${(bytes(OUT) / 1024 / 1024).toFixed(1)} MB`);

@@ -7,7 +7,7 @@
 
 **C**omfortable **I**nterface for **A**gile File e**X**plorer **N**avigation — シェルを内蔵した2ペイン型のターミナルファイラーです。[AFXW（あふｗ）](https://akt.d.dooo.jp/akt_afxw.htm)に着想を得ています。
 
-バイナリ1つ。macOS / Windows / Linux。ランタイムもDLLも要らず、一緒に入れるものもありません。
+バイナリ1つ。macOS と Windows。ランタイムもDLLも要らず、一緒に入れるものもありません。
 
 **目次** — [ダウンロード](#ダウンロード) · [基本](#基本) · [すばやく移動する](#すばやく移動する) · [テキストエディタパネル](#テキストエディタパネル) · [探す](#探す) · [比較と整理](#比較と整理) · [ファイルとバージョン管理](#ファイルとバージョン管理) · [SSH とリモートペイン](#ssh-とリモートペイン) · [シェルパネル](#シェルパネル) · [マクロ](#マクロ) · [AI](#ai-任意) · [日本語入力](#日本語入力-ime) · [設定](#設定) · [ソースからビルド](#ソースからビルド) · [構成](#構成) · [Windows 導入](#windows-へオフライン導入) · [困ったとき](#困ったとき) · [ライセンス](#ライセンス)
 
@@ -21,7 +21,6 @@
 |---|---|---|
 | macOS（Intel / Apple シリコン） | `cian-macos.zip` | ダブルクリックで起動する `cian.app` と、ターミナル用の `cian-tui` |
 | Windows x64 | `cian-windows-x64.zip` | `cian.exe` / `cian-tui.exe` / `install.ps1` — [オフライン導入](#windows-へオフライン導入)を参照 |
-| Linux x64 | `cian-linux-x64.tar.gz` | `cian` と `cian-tui` |
 | エンジンだけ | `cian-server-win-x64.exe` | 約1MB — Electron 版が喋る相手。Rust の無い機械向け |
 | ビルドする人向け | `cian-source-offline.zip` | 依存クレートを全部同梱したソース一式 — [ソースからビルド](#ソースからビルド)を参照 |
 
@@ -497,13 +496,12 @@ cian.font{                                                                     -
 ```sh
 cargo build --release
 ./target/release/cian-tui   # 今使っている端末の中で
-./target/release/cian       # 自前のウィンドウで
 ```
 
-stable の Rust だけで通ります（残りは cargo が取ってきます）。リリース版の
-ウィンドウ側は `--features cian-gui/bundled-font` 付きでビルドしていて、
-日本語 Nerd Font を埋め込むためフォントを入れなくても表示できます。この
-feature なしの場合はシステムにあるフォントを探します。
+stable の Rust だけで通ります（残りは cargo が取ってきます）。窓版は
+Electron なので Rust では建てません ── `gui/run.sh`（Mac / Linux）か
+`gui/run.bat`（Windows）です。同梱するフォントは `node gui/vendor.js` が
+`vendor-font/cian.ttf` から拾います。
 
 **ネットワークのない環境でビルドする場合。** リリースページの
 `cian-source-offline.zip` は、依存クレートを全部 `vendor/` に落とし込んだ
@@ -529,7 +527,6 @@ Build Tools・CMake・NASM です。それらをオフライン導入する手�
 | `cian-ai` | 任意の AI ヘルパー（同梱 Python 経由で Azure OpenAI） |
 | `cian-lua` | Lua 設定ホスト（mlua）：キーマップ・テーマ・マクロ |
 | `cian-bin` | 端末版のエントリポイント（`cian-tui` バイナリを生成） |
-| `cian-gui` | ウィンドウ版のエントリポイント（`cian` バイナリを生成。winit + wgpu） |
 
 ```mermaid
 flowchart TD

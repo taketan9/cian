@@ -14614,10 +14614,6 @@ mod grid_mouse {
         (cx + 7, cy + 2)
     }
 
-    fn under_cursor(app: &App) -> String {
-        app.active_pane().and_then(|p| p.selected()).map(|e| e.name.clone()).unwrap_or_default()
-    }
-
     #[test]
     fn clicking_a_tile_moves_the_cursor_to_it() {
         let (_d, mut app) = grid(&["a.txt", "b.txt", "c.txt", "d.txt"]);
@@ -14666,40 +14662,6 @@ mod grid_mouse {
             left_before,
             "and the pane that is not on screen was left alone"
         );
-    }
-
-    #[test]
-    fn double_clicking_a_directory_enters_it() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::create_dir(dir.path().join("sub")).unwrap();
-        std::fs::write(dir.path().join("sub").join("inside.txt"), b"").unwrap();
-        let p = dir.path().to_path_buf();
-        let mut app = App::new(p.clone(), p.clone(), en_config()).unwrap();
-        app.icon_view = true;
-        app.icon_cols = 3;
-        app.grid_area = Some(Rect::new(0, 0, 3 * 14, 4 * 6));
-
-        let n = app
-            .active_pane()
-            .unwrap()
-            .entries
-            .iter()
-            .position(|e| e.name == "sub")
-            .expect("the directory is listed");
-        let (col, row) = tile(n, 3);
-        assert!(app.grid_double_click(col, row));
-        // By name, not by path: cian canonicalises, and on macOS a temp
-        // directory comes back with a `/private` in front of it.
-        assert_eq!(
-            app.active_pane().unwrap().cwd.file_name().unwrap(),
-            "sub",
-            "the pane on screen is the one that moved"
-        );
-        assert!(
-            app.active_pane().unwrap().entries.iter().any(|e| e.name == "inside.txt"),
-            "and it is listing what is in there"
-        );
-        let _ = under_cursor(&app);
     }
 
     #[test]
@@ -14847,119 +14809,6 @@ mod input_select_all {
         assert_eq!(text(&app), before, "copy is not cut");
     }
 
-}
-
-/// Dragging files with the mouse: what gets picked up, and where letting go
-/// would put it. The drawing is the window's; these are the decisions.
-mod drag_and_drop {
-    use super::*;
-    use ratatui::layout::Rect;
-
-    fn grid(names: &[&str]) -> (tempfile::TempDir, App) {
-        let (dir, mut app) = app_with(names);
-        app.icon_view = true;
-        app.icon_cols = 3;
-        app.grid_area = Some(Rect::new(0, 0, 3 * 14, 4 * 6));
-        (dir, app)
-    }
-
-    fn tile(n: usize, cols: usize) -> (u16, u16) {
-        let (cx, cy) = ((n % cols) as u16 * 14, (n / cols) as u16 * 6);
-        (cx + 7, cy + 2)
-    }
-
-    #[test]
-    fn a_press_on_a_file_picks_up_that_file() {
-        let (_d, app) = grid(&["a.txt", "b.txt"]);
-        let (c, r) = tile(1, 3);
-        let got = app.drag_targets_at(c, r);
-        assert_eq!(got.len(), 1);
-        assert!(got[0].ends_with("a.txt"));
-    }
-
-    #[test]
-    fn a_press_on_a_marked_file_picks_up_the_whole_selection() {
-        // A selection built with Ctrl-click or Space drags as a group; that is
-        // the point of having made it.
-        let (_d, mut app) = grid(&["a.txt", "b.txt", "c.txt"]);
-        if let Some(p) = app.active_pane_mut() {
-            p.toggle_mark_at(1);
-            p.toggle_mark_at(3);
-        }
-        let (c, r) = tile(1, 3);
-        assert_eq!(app.drag_targets_at(c, r).len(), 2);
-    }
-
-    #[test]
-    fn the_parent_row_is_not_a_thing_to_drag() {
-        let (_d, app) = grid(&["a.txt"]);
-        let (c, r) = tile(0, 3);
-        assert!(app.drag_targets_at(c, r).is_empty(), "`..` is a way out, not a file");
-    }
-
-    #[test]
-    fn a_folder_under_the_pointer_is_a_destination() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::create_dir(dir.path().join("into")).unwrap();
-        std::fs::write(dir.path().join("a.txt"), b"").unwrap();
-        let p = dir.path().to_path_buf();
-        let mut app = App::new(p.clone(), p, en_config()).unwrap();
-        app.icon_view = true;
-        app.icon_cols = 3;
-        app.grid_area = Some(Rect::new(0, 0, 3 * 14, 4 * 6));
-        let n = app
-            .active_pane()
-            .unwrap()
-            .entries
-            .iter()
-            .position(|e| e.name == "into")
-            .unwrap();
-        let (c, r) = tile(n, 3);
-        assert!(app.drop_target_at(c, r).is_some_and(|d| d.ends_with("into")));
-    }
-
-    #[test]
-    fn a_plain_file_is_not_a_destination() {
-        let (_d, app) = grid(&["a.txt", "b.txt"]);
-        let (c, r) = tile(1, 3);
-        assert!(app.drop_target_at(c, r).is_none());
-    }
-
-    #[test]
-    fn dropping_asks_before_it_does_anything() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::create_dir(dir.path().join("into")).unwrap();
-        std::fs::write(dir.path().join("a.txt"), b"x").unwrap();
-        let p = dir.path().to_path_buf();
-        let mut app = App::new(p.clone(), p.clone(), en_config()).unwrap();
-        app.drop_onto(vec![p.join("a.txt")], p.join("into"), false);
-        assert!(
-            matches!(app.popup, Popup::ConfirmTransfer { .. }),
-            "a drag says what to do; the confirmation is still what does it"
-        );
-        assert!(p.join("a.txt").exists(), "and nothing has moved yet");
-    }
-
-    #[test]
-    fn dropping_something_where_it_already_is_does_nothing() {
-        // The commonest miss: picking a file up and putting it back down.
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("a.txt"), b"").unwrap();
-        let p = dir.path().to_path_buf();
-        let mut app = App::new(p.clone(), p.clone(), en_config()).unwrap();
-        app.drop_onto(vec![p.join("a.txt")], p.clone(), false);
-        assert!(matches!(app.popup, Popup::None), "no question worth asking");
-    }
-
-    #[test]
-    fn a_folder_cannot_be_dropped_into_itself() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::create_dir(dir.path().join("d")).unwrap();
-        let p = dir.path().to_path_buf();
-        let mut app = App::new(p.clone(), p.clone(), en_config()).unwrap();
-        app.drop_onto(vec![p.join("d")], p.join("d"), true);
-        assert!(matches!(app.popup, Popup::None));
-    }
 }
 
 /// `d` in the bookmark list asks first. It used to remove and save in one

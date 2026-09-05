@@ -71,7 +71,7 @@ jobs:
     # and until now the only way to get it onto a Mac was to clone the
     # repository and run `npm start` — which is fine for the person who wrote
     # it and is not a way to hand somebody a program. The heavy half (the
-    # winit build, the terminal build, the universal package) is still behind
+    # the terminal build, the universal package) is still behind
     # `everything`; what always runs is the engine and the window.
     runs-on: macos-latest
     steps:
@@ -91,10 +91,10 @@ jobs:
 
       - name: Fetch the bundled font
         run: |
-          mkdir -p crates/cian-gui/fonts
+          mkdir -p vendor-font
           curl -sL -o font.zip "$FONT_URL"
           unzip -q font.zip -d font
-          cp "$(find font -name 'HackGenConsoleNF-Regular.ttf' | head -1)" crates/cian-gui/fonts/cian.ttf
+          cp "$(find font -name 'HackGenConsoleNF-Regular.ttf' | head -1)" vendor-font/cian.ttf
         env:
           FONT_URL: https://github.com/yuru7/HackGen/releases/download/v2.10.0/HackGen_NF_v2.10.0.zip
 
@@ -108,12 +108,11 @@ jobs:
             cargo build --release --target "$target" --bin cian-server
           done
 
-      - name: Build the terminal build and the winit one
+      - name: Build the terminal build
         if: inputs.everything
         run: |
           for target in aarch64-apple-darwin x86_64-apple-darwin; do
             cargo build --release --target "$target" --bin cian-tui
-            cargo build --release --target "$target" --bin cian --features cian-gui/bundled-font
           done
 
       # One binary that holds both, where the bundler and the zip expect to
@@ -233,15 +232,15 @@ jobs:
       # **Always.** The first gui-only build gated this on `everything` and the
       # window's zip came back 6MB lighter — `gui/vendor.js` copies this same
       # file into `vendor/fonts/cian.ttf`, which is the face the window draws
-      # its file-type glyphs with. The winit build needs it too; that one is
+      # its file-type glyphs with. The window's zip needs it; that one is
       # optional, this is not.
       - name: Fetch the bundled font
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path crates/cian-gui/fonts | Out-Null
+          New-Item -ItemType Directory -Force -Path vendor-font | Out-Null
           Invoke-WebRequest -Uri "$env:FONT_URL" -OutFile font.zip
           Expand-Archive font.zip -DestinationPath font
-          Copy-Item (Get-ChildItem -Recurse -Filter "HackGenConsoleNF-Regular.ttf" font)[0].FullName crates/cian-gui/fonts/cian.ttf
+          Copy-Item (Get-ChildItem -Recurse -Filter "HackGenConsoleNF-Regular.ttf" font)[0].FullName vendor-font/cian.ttf
         env:
           FONT_URL: https://github.com/yuru7/HackGen/releases/download/v2.10.0/HackGen_NF_v2.10.0.zip
 
@@ -250,14 +249,12 @@ jobs:
       - name: Build the engine
         run: cargo build --release --bin cian-server
 
-      # `cian` is the frozen winit front end and by far the slowest thing here
-      # (wgpu). `cian-tui` is the terminal build. Neither is in the window's
-      # zip, so neither is built unless the full set was asked for.
-      - name: Build the terminal build and the winit one
+      # `cian-tui` は端末版。窓版の zip には入らないので、全部を頼まれた
+      # ときだけ建てる。
+      - name: Build the terminal build
         if: inputs.everything
         run: |
           cargo build --release --bin cian-tui
-          cargo build --release --bin cian --features cian-gui/bundled-font
 
       - name: Stage package
         if: inputs.everything
@@ -354,53 +351,6 @@ jobs:
           name: cian-gui-win-x64
           path: cian-gui-win-x64.zip
 
-  # The readme has said macOS, Windows and Linux since the first commit, and
-  # the release shipped two of them. A tarball rather than a zip, because that
-  # is what a Linux user's hands already know.
-  linux-x64:
-    needs: version
-    # Only when asked for — see the note above `jobs:`.
-    if: inputs.everything
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Fetch the bundled font
-        run: |
-          mkdir -p crates/cian-gui/fonts
-          curl -sL -o font.zip "$FONT_URL"
-          unzip -q font.zip -d font
-          cp "$(find font -name 'HackGenConsoleNF-Regular.ttf' | head -1)" crates/cian-gui/fonts/cian.ttf
-        env:
-          FONT_URL: https://github.com/yuru7/HackGen/releases/download/v2.10.0/HackGen_NF_v2.10.0.zip
-
-      - name: Build (release)
-        run: |
-          cargo build --release --bin cian-tui
-          cargo build --release --bin cian-server
-          cargo build --release --bin cian --features cian-gui/bundled-font
-
-      - name: Stage package
-        run: |
-          stage=cian-linux-x64
-          mkdir -p "$stage/examples"
-          cp target/release/cian target/release/cian-tui target/release/cian-server "$stage/"
-          cp examples/init.lua "$stage/examples/"
-          cp README.md README.ja.md LICENSE "$stage/"
-          tar czf cian-linux-x64.tar.gz "$stage"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: cian-linux-x64
-          path: cian-linux-x64.tar.gz
-
   # The whole of cian as one file that builds with no network at all: the
   # source, and every crate it depends on already downloaded. This is what
   # goes in-house, where the point is to change cian rather than to run it.
@@ -423,10 +373,10 @@ jobs:
       # GitHub for it, and without it the window build has no font.
       - name: Fetch the bundled font
         run: |
-          mkdir -p crates/cian-gui/fonts
+          mkdir -p vendor-font
           curl -sL -o font.zip "$FONT_URL"
           unzip -q font.zip -d font
-          cp "$(find font -name 'HackGenConsoleNF-Regular.ttf' | head -1)" crates/cian-gui/fonts/cian.ttf
+          cp "$(find font -name 'HackGenConsoleNF-Regular.ttf' | head -1)" vendor-font/cian.ttf
         env:
           FONT_URL: https://github.com/yuru7/HackGen/releases/download/v2.10.0/HackGen_NF_v2.10.0.zip
 
@@ -454,8 +404,8 @@ jobs:
           # The tracked tree, exactly — no target/, no .git, nothing local.
           git archive HEAD | tar -x -C "$stage"
           cp -R vendor .cargo "$stage/"
-          mkdir -p "$stage/crates/cian-gui/fonts"
-          cp crates/cian-gui/fonts/cian.ttf "$stage/crates/cian-gui/fonts/"
+          mkdir -p "$stage/vendor-font"
+          cp vendor-font/cian.ttf "$stage/vendor-font/"
           cp -R gui/vendor "$stage/gui/"
           cp packaging/offline/README.txt "$stage/"
           {
@@ -498,19 +448,9 @@ jobs:
         working-directory: cian-source-offline
         run: cargo build --release --offline --bin cian-tui --bin cian-server
 
-      # The window build pulls in wgpu and winit, which the terminal build
-      # never touches — vendoring that missed them would pass the step above
-      # and fail in-house. Checked rather than built: it walks the whole of
-      # that dependency graph, which is the thing in question, without paying
-      # for the link.
-      - name: And the window build's dependencies too
-        shell: pwsh
-        working-directory: cian-source-offline
-        run: cargo check --release --offline --bin cian --features cian-gui/bundled-font
-
   # One release, made once, over the finished set of packages.
   publish:
-    needs: [macos, windows-x64, linux-x64, source-offline-check]
+    needs: [macos, windows-x64, source-offline-check]
     # `always()`, because a skipped need would otherwise skip this too, and
     # three of the four are skipped on an ordinary tag now. The one that must
     # have succeeded is named explicitly.

@@ -4,7 +4,8 @@
 /spikes/*/target
 # The bundled font is fetched at build time, not committed: twelve megabytes
 # that would sit in every clone forever. See .github/workflows/release.yml.
-/crates/cian-gui/fonts/
+# （2026-09-06 に `crates/cian-gui/fonts/` から移した。あのクレートが出たので）
+/vendor-font/
 **/*.rs.bk
 .DS_Store
 

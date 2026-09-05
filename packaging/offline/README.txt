@@ -26,9 +26,7 @@ carrying it:
 
     cian-tui.exe              13 MB   the terminal build, one file
     cian-server.exe            9 MB   the engine, one file
-    cian.exe                  31 MB   the window build; 12 MB of that is
-                                      the font it carries inside itself
-    cian-windows-x64.zip      25 MB   all three, compressed, plus docs
+    cian-windows-x64.zip      25 MB   both, compressed, plus docs
 
     gui\ + gui\vendor\        29 MB   the Electron front end's own files
     Electron itself          247 MB   unzipped; ~100 MB as its own zip
@@ -36,7 +34,7 @@ carrying it:
 **So the Electron front end is not "an exe".** It is about 285 MB of
 files, or roughly 110 MB zipped, because Chromium comes with it. If the
 constraint is what fits on the way in, cian-tui.exe is one file and
-cian.exe is one file; the Electron build is a folder.
+cian-server.exe is one file; the Electron build is a folder.
 
 **To build the Rust side**, one thing or four, depending on which
 programs you want:
@@ -51,8 +49,8 @@ programs you want:
      — the standalone .msi, not rustup-init.exe, which wants the network.
      BUILT-WITH.txt records the version this package was verified with.
 
-  cian-tui.exe and cian.exe need three more, because they carry SFTP and
-  Lua, and those build C:
+  cian-tui.exe needs three more, because it carries SFTP and Lua, and
+  those build C:
 
   1. Rust, MSVC flavour this time
        rust-<version>-x86_64-pc-windows-msvc.msi  (about 290 MB)
@@ -96,16 +94,7 @@ with the MSVC environment already set — cd into this folder, and:
 What lands in target\release\ :
 
     cian-tui.exe     the terminal build
-    cian.exe         the window build
     cian-server.exe  the engine the Electron front end talks to
-
-The window build carries a Japanese Nerd Font inside it, and needs to be
-told to:
-
-    cargo build --release --offline --bin cian --features cian-gui/bundled-font
-
-Without that feature it looks for a font on the system instead, which is
-fine on a machine that has one.
 
 Running the tests:
 
@@ -171,7 +160,7 @@ What is in gui\vendor\, and when you have to rebuild it
 **The font is not decoration.** Without it the listing falls back to whatever
 the machine has, which on a Mac is a proportional face — columns stop lining
 up, the shell grid shears, and the icons come out as boxes. It is the same
-file the window build (`cian.exe`) carries inside itself.
+file the Electron front end draws the listing with.
 
 None of this is committed to the repository — several megabytes that never
 change do not belong in every clone — so a *checkout* has to build it once,
@@ -182,8 +171,8 @@ on a machine with a network:
     node vendor.js
 
 `vendor.js` copies out of node_modules and looks for the font in, in order:
-$CIAN_FONT, crates\cian-gui\fonts\cian.ttf (where the release workflow puts
-it), and the usual system locations. When it finds none it says every place it
+$CIAN_FONT, vendor-font\cian.ttf (where the release workflow puts it), and
+the usual system locations. When it finds none it says every place it
 looked and carries on — the window still runs, it just is not laid out on a
 grid.
 
@@ -223,9 +212,8 @@ Contents
     Cargo.toml, Cargo.lock, crates\   The source.
     vendor\                            Its dependencies.
     .cargo\config.toml                 The redirect that makes them count.
-    crates\cian-gui\fonts\cian.ttf     The bundled font, for cian.exe.
-                                       Normally fetched during a build;
-                                       carried here instead.
+    vendor-font\cian.ttf               The bundled font. Normally fetched
+                                       during a build; carried here instead.
     gui\vendor\                        The editor, the diagram drawer and
                                        the same font, for the Electron front
                                        end. Normally built by

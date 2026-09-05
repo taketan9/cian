@@ -8,7 +8,6 @@ members = [
     "crates/cian-ai",
     "crates/cian-lua",
     "crates/cian-bin",
-    "crates/cian-gui",
     "crates/cian-server",
 ]
 

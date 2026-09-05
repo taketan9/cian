@@ -148,14 +148,10 @@ fn draw_split(f: &mut Frame, main_area: Rect, app: &mut App, ov: AnimOverride) {
         app.take_git(FocusedPane::Left),
         app.take_git(FocusedPane::Right),
     );
-    crate::prof::timed(crate::prof::Phase::Panes, || {
     draw_file_pane(f, panes_split[0], &mut app.left, &mut tracks, app.focused == FocusedPane::Left, visual_for_left, app.mode, bg_l, fl_l, FocusedPane::Left, &mut tab_rects, git_l.as_ref(), app.lang, &mut sort_rects, &mut crumb_rects, &mut nav_rects, app.skin, app.native_icons, &mut icon_slots);
-    });
     if let Some(prev) = restore { set_theme(prev); }
     let restore = push_pane_theme(app, 1);
-    crate::prof::timed(crate::prof::Phase::Panes, || {
     draw_file_pane(f, panes_split[1], &mut app.right, &mut tracks, app.focused == FocusedPane::Right, visual_for_right, app.mode, bg_r, fl_r, FocusedPane::Right, &mut tab_rects, git_r.as_ref(), app.lang, &mut sort_rects, &mut crumb_rects, &mut nav_rects, app.skin, app.native_icons, &mut icon_slots);
-    });
     if let Some(prev) = restore { set_theme(prev); }
     app.put_git(FocusedPane::Left, git_l);
     app.put_git(FocusedPane::Right, git_r);
@@ -185,12 +181,10 @@ fn draw_split(f: &mut Frame, main_area: Rect, app: &mut App, ov: AnimOverride) {
     );
     let log_border = recording_pulse(app.started.elapsed());
     if app.preview_on && app.focused != FocusedPane::Shell {
-        crate::prof::timed(crate::prof::Phase::Shell, || draw_preview_panel(f, shell_area, app));
+        draw_preview_panel(f, shell_area, app);
     } else {
         // draw_shell sizes each pane's PTY to its computed sub-rect.
-        crate::prof::timed(crate::prof::Phase::Shell, || {
-            draw_shell(f, shell_area, &mut app.shell, app.lang, app.focused == FocusedPane::Shell, &mut dividers, &mut leaves, ov, &mut tab_rects, log_border)
-        });
+        draw_shell(f, shell_area, &mut app.shell, app.lang, app.focused == FocusedPane::Shell, &mut dividers, &mut leaves, ov, &mut tab_rects, log_border);
     }
     app.dividers = dividers;
     app.shell_leaves = leaves;
@@ -793,7 +787,7 @@ fn draw_desktop_chrome(
     // into two columns — which is what Finder does when you drag it small.
     if inner.width >= SIDEBAR_W + min_w * 2 {
         let side = Rect::new(inner.x, inner.y, SIDEBAR_W, inner.height);
-        crate::prof::timed(crate::prof::Phase::Sidebar, || draw_sidebar(f, side, app, th, bg));
+        draw_sidebar(f, side, app, th, bg);
         inner = Rect::new(
             inner.x + SIDEBAR_W,
             inner.y,
@@ -1196,13 +1190,11 @@ fn draw_detail_view(f: &mut Frame, area: Rect, app: &mut App, ov: AnimOverride) 
     let g = app.take_git(app.focused);
     let which = if side == 1 { FocusedPane::Right } else { FocusedPane::Left };
     let tabs = if side == 1 { &mut app.right } else { &mut app.left };
-    crate::prof::timed(crate::prof::Phase::Panes, || {
     draw_file_pane(
         f, inner, tabs, &mut tracks, true, va, app.mode, pane_bg, fl, which,
         &mut tab_rects, g.as_ref(), app.lang, &mut sort_rects, &mut crumb_rects,
         &mut nav_rects, app.skin, app.native_icons, &mut icon_slots,
     );
-    });
     app.put_git(which, g);
     if let Some(prev) = restore {
         set_theme(prev);

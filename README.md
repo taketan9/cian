@@ -7,7 +7,7 @@
 
 **C**omfortable **I**nterface for **A**gile File e**X**plorer **N**avigation — a two-pane terminal file manager with a real shell built in. Inspired by [AFXW (あふｗ)](https://akt.d.dooo.jp/akt_afxw.htm).
 
-One binary. macOS, Windows, Linux. No runtime, no DLLs, nothing to install alongside it.
+One binary. macOS and Windows. No runtime, no DLLs, nothing to install alongside it.
 
 **Contents** — [Download](#download) · [The basics](#the-basics) · [Get around fast](#get-around-fast) · [The text editor panel](#the-text-editor-panel) · [Find things](#find-things) · [Compare and clean up](#compare-and-clean-up) · [Files and version control](#files-and-version-control) · [SSH and remote panes](#ssh-and-remote-panes) · [The shell panel](#the-shell-panel) · [Macros](#macros) · [AI](#ai-optional) · [Japanese input](#japanese-input-ime) · [Configuration](#configuration) · [Build from source](#build-from-source) · [How it fits together](#how-it-fits-together) · [Windows install](#install-on-windows-offline) · [Troubleshooting](#troubleshooting) · [License](#license)
 
@@ -21,7 +21,6 @@ One binary. macOS, Windows, Linux. No runtime, no DLLs, nothing to install along
 |---|---|---|
 | macOS (Intel and Apple silicon) | `cian-macos.zip` | `cian.app` to double-click, and `cian-tui` for the terminal |
 | Windows x64 | `cian-windows-x64.zip` | `cian.exe`, `cian-tui.exe` and `install.ps1` — see [offline install](#install-on-windows-offline) |
-| Linux x64 | `cian-linux-x64.tar.gz` | `cian` and `cian-tui` |
 | Just the engine | `cian-server-win-x64.exe` | about a megabyte — what the Electron front end talks to, for a machine with no Rust |
 | Any, to build on | `cian-source-offline.zip` | the source with every dependency already downloaded — see [build from source](#build-from-source) |
 
@@ -499,13 +498,12 @@ cian.font{                                                                     -
 ```sh
 cargo build --release
 ./target/release/cian-tui   # in your terminal
-./target/release/cian       # in a window of its own
 ```
 
-Stable Rust and nothing else — cargo fetches the rest. The release packages
-build the window binary with `--features cian-gui/bundled-font`, which embeds a
-Japanese Nerd Font so the download needs no font installed; without the feature
-it looks for one on the system.
+Stable Rust and nothing else — cargo fetches the rest. The window is Electron
+and is not built by cargo: `gui/run.sh` (macOS / Linux) or `gui/run.bat`
+(Windows). The bundled Japanese Nerd Font is picked up by `node gui/vendor.js`
+from `vendor-font/cian.ttf`.
 
 **Building where there is no network.** `cian-source-offline.zip` on the
 releases page is the same source with every crate it depends on already
@@ -532,7 +530,6 @@ A cargo workspace of seven crates. One main loop owns all UI and drawing; anythi
 | `cian-ai` | Optional AI helper (Azure OpenAI via a bundled Python script) |
 | `cian-lua` | Lua config host (mlua): keymaps, themes, macros |
 | `cian-bin` | The terminal entry point — produces the `cian-tui` binary |
-| `cian-gui` | The window entry point — produces the `cian` binary (winit + wgpu) |
 
 ```mermaid
 flowchart TD

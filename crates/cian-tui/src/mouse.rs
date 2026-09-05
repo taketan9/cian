@@ -1427,44 +1427,6 @@ impl App {
         }
     }
 
-    /// Move a file pane's cursor to the entry drawn at absolute screen `row`.
-    /// Out-of-range rows (the border, or empty space past the last entry) leave
-    /// the cursor alone rather than jumping somewhere arbitrary.
-    /// Put the cursor on whatever is at this cell, without marking it or
-    /// opening anything. Returns whether it landed on a row.
-    ///
-    /// For a front end about to show the *system's* menu about that file: every
-    /// desktop moves its highlight to whatever was right-clicked, and cian's
-    /// highlight is the only sign of which file the menu is about.
-    pub(crate) fn point_at(&mut self, col: u16, row: u16) -> bool {
-        if self.single_pane_view() {
-            if let Some(i) = self.grid_entry_at(col, row) {
-                if let Some(p) = self.active_pane_mut() {
-                    p.cursor = i;
-                }
-                self.type_ahead.clear();
-                return true;
-            }
-            // The detail view is a listing like any other, and answers below.
-            if self.icon_view {
-                return false;
-            }
-        }
-        let in_rect = |r: Rect| hit_rect(r, col, row);
-        let target = if in_rect(self.layout_rects.left) {
-            FocusedPane::Left
-        } else if in_rect(self.layout_rects.right) {
-            FocusedPane::Right
-        } else {
-            return false;
-        };
-        if self.focused != target {
-            self.focus(target);
-        }
-        self.cursor_to_row(target, row);
-        true
-    }
-
     pub(crate) fn cursor_to_row(&mut self, pane: FocusedPane, row: u16) {
         let rect = match pane {
             FocusedPane::Left => self.layout_rects.left,
