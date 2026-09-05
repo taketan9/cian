@@ -12508,6 +12508,27 @@
         assert!(app.main_pct < 60, "shell grew: {}", app.main_pct);
     }
 
+    /// **All four arrows, not two.** With no inner split, Left/Right used to
+    /// do nothing at all from the shell — reported on 2026-09-06 as「シェル
+    /// パネルで Meta+Shift+矢印で窓サイズの変更ができなかった」. The outer
+    /// divider along the same axis is the answer, exactly as Up/Down already
+    /// had it.
+    #[test]
+    fn from_the_shell_left_right_move_the_pane_divider_when_there_is_no_split() {
+        let (_d, mut app) = app_with(&["a.txt"]);
+        app.focus(FocusedPane::Shell);
+        assert_eq!(app.panes_pct, 50);
+        let main_before = app.main_pct;
+
+        app.handle_key(ctrl_shift(KeyCode::Right)).unwrap();
+        assert!(app.panes_pct > 50, "left pane grew: {}", app.panes_pct);
+        let wider = app.panes_pct;
+        app.handle_key(ctrl_shift(KeyCode::Left)).unwrap();
+        assert!(app.panes_pct < wider, "and shrank back");
+        // The other divider is not touched: one key, one axis.
+        assert_eq!(app.main_pct, main_before, "files|shell stayed where it was");
+    }
+
     // ---- editing, confirms, search, history refinements ----
 
     #[test]

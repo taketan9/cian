@@ -10,9 +10,16 @@ impl App {
     ///
     /// - a file pane: Left/Right move the left|right split, Up/Down the
     ///   files|shell split;
-    /// - the shell: Left/Right resize the nearest side-by-side split; Up/Down
-    ///   resize the nearest stacked split, or the files|shell split when the
-    ///   shell has none.
+    /// - the shell: the nearest split along that axis, and **the outer
+    ///   divider along the same axis when the shell has none** — Up/Down the
+    ///   files|shell split, Left/Right the left|right one.
+    ///
+    /// The fallback is one rule, not two. It used to exist for Up/Down only,
+    /// so in a shell with no split half the key did nothing — and "nothing"
+    /// from inside a panel reads as "this key is not for here", which is the
+    /// wrong lesson: the key is about the window's layout wherever it is
+    /// pressed. 2026-09-06: 「シェルパネルで Meta+Shift+矢印で窓サイズの変更が
+    /// できなかった。ファイラパネルでは変更できるぞ」
     pub(crate) fn resize_split(&mut self, dir: KeyCode) {
         const STEP: i16 = 4;
         let clamp = |v: i16| v.clamp(MIN_SPLIT_PCT as i16, 100 - MIN_SPLIT_PCT as i16) as u16;
@@ -52,10 +59,11 @@ impl App {
                             t.nudge_split(n, delta);
                         }
                     }
-                    // No inner split along this axis: Up/Down still move the
-                    // files|shell divider so the whole shell grows or shrinks.
+                    // No inner split along this axis: the outer divider along
+                    // the same axis moves instead, so the key always means
+                    // "make the thing I am looking at bigger".
                     None if matches!(dir, KeyCode::Up | KeyCode::Down) => main(self, delta),
-                    None => {}
+                    None => self.panes_pct = clamp(self.panes_pct as i16 + delta),
                 }
             }
         }

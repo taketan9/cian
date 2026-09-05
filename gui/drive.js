@@ -574,6 +574,15 @@ async function main() {
 
         // シェル
         ['Shift+J', 'シェルへ'], ['wait:1200', ''],
+        // **分割が無い状態で、四方向とも効くこと。**2026-09-06 の依頼 152。
+        // ここに分割を作る前でなければ試せない ── 分割があると内側の境界が
+        // 動いてしまい、外側の境界へ落ちる道が確かめられない。
+        ['read:"境界の前: main="+layout.main+" panes="+layout.panes', ''],
+        ['Ctrl+Shift+ArrowUp', 'シェルを広げる'], ['wait:500', ''],
+        ['Ctrl+Shift+ArrowRight', '左ペインを広げる'], ['wait:500', ''],
+        ['read:"境界の後: main="+layout.main+" panes="+layout.panes+"（両方動いていること）"', ''],
+        ['Ctrl+Shift+ArrowDown', '戻す'], ['wait:500', ''],
+        ['Ctrl+Shift+ArrowLeft', '戻す'], ['wait:500', ''],
         ['Shift+F8', '左右に分割'], ['wait:800', ''],
         ['Shift+F9', '上下に分割'], ['wait:800', ''],
         ['Shift+F1', '前のペイン'], ['wait:400', ''],

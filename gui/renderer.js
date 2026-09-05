@@ -9302,25 +9302,41 @@ function startGripDrag(which, e) {
         document.body.classList.remove('dragging');
         // Written down once, at the end — not on every pixel of the drag.
         applyLayout();
-        say(tr(`files ${Math.round(layout.main)}%   left pane ${Math.round(layout.panes)}%`, `ファイル ${Math.round(layout.main)}%   左ペイン ${Math.round(layout.panes)}%`));
+        saySplit();
     };
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', done);
 }
 
+/// Move a divider from the keyboard — **the one door**, wherever the keys are.
+///
+/// In the shell the arrow first tries the nearest inner split along that axis;
+/// only when there is none does it move the outer divider along the same axis.
+/// That is the terminal build's rule (`keys.rs resize_split`), and it is what
+/// makes the key mean "make the thing I am looking at bigger" in both places.
+///
+/// **Every arrow, not two.** With no inner split, Left/Right used to do
+/// nothing from the shell — reported on 2026-09-06 as「シェルパネルで
+/// Meta+Shift+矢印で窓サイズの変更ができなかった。ファイラパネルではできる」。
+/// The panel's own capture handler was calling `shellresizepane` directly and
+/// stopping the event, so this function was never reached at all: a second
+/// copy of the rule that had only half of it.
 function resizeSplit(key) {
-    // In the shell, the arrow first tries the nearest inner split along that
-    // axis; only when there is none does it move the files|shell divider.
-    // That is the terminal build's order, and it is what makes the key mean
-    // "make the thing I am looking at bigger" in both places.
     if (term.on && term.focused) {
         const wider = key === 'ArrowRight' || key === 'ArrowDown';
         const down = key === 'ArrowUp' || key === 'ArrowDown';
         ask('shellresizepane', { wider, down }).then((r) => {
             if (r && r.moved) { takeShell(r); return; }
-            // No split that way: grow or shrink the whole panel instead.
-            if (key === 'ArrowUp') { layout.main -= STEP_PCT; applyLayout(); }
-            else if (key === 'ArrowDown') { layout.main += STEP_PCT; applyLayout(); }
+            // No split that way: the outer divider along the same axis.
+            if (key === 'ArrowUp') layout.main -= STEP_PCT;
+            else if (key === 'ArrowDown') layout.main += STEP_PCT;
+            else if (key === 'ArrowRight') layout.panes += STEP_PCT;
+            else if (key === 'ArrowLeft') layout.panes -= STEP_PCT;
+            applyLayout();
+            // Said, as it is from the listing. From inside the shell the pane
+            // divider is off-screen above, so without a line the key looks
+            // like it did nothing at all — which is what it used to do.
+            saySplit();
             if (r) takeShell(r);
         });
         return;
@@ -9332,7 +9348,14 @@ function resizeSplit(key) {
     else if (key === 'ArrowUp') layout.main -= STEP_PCT;
     else return;
     applyLayout();
-    say(tr(`files ${layout.main}%   left pane ${layout.panes}%`, `ファイル ${layout.main}%   左ペイン ${layout.panes}%`));
+    saySplit();
+}
+
+/// Where the two dividers stand now. One sentence, so the shell and the
+/// listing report a move the same way.
+function saySplit() {
+    say(tr(`files ${Math.round(layout.main)}%   left pane ${Math.round(layout.panes)}%`,
+           `ファイル ${Math.round(layout.main)}%   左ペイン ${Math.round(layout.panes)}%`));
 }
 
 /// `:preview` — follow the cursor.
@@ -9845,12 +9868,16 @@ document.addEventListener('keydown', (e) => {
         return;
     }
     // Ctrl+Shift+arrow drags the border the focused pane sits against.
+    //
+    // **Through `resizeSplit`, not past it.** This handler is on `document`
+    // in the *capture* phase, so its `stopPropagation` keeps the event from
+    // ever reaching the listing's bubble handler — where the same key lives.
+    // Written out again here, it was the half of the rule without the
+    // fallback, and in a shell with no inner split the key did nothing at all.
     if (mod(e) && e.shiftKey && e.key.startsWith('Arrow')) {
         e.stopPropagation();
         e.preventDefault();
-        const down = e.key === 'ArrowUp' || e.key === 'ArrowDown';
-        const wider = e.key === 'ArrowRight' || e.key === 'ArrowDown';
-        ask('shellresizepane', { wider, down }).then((r) => r && takeShell(r));
+        resizeSplit(e.key);
         return;
     }
     // F1-F8 go straight to a tab; the pane keys are the Shift ones.
