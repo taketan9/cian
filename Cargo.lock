@@ -557,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "cian"
-version = "2.1.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "cian-core",
@@ -569,7 +569,7 @@ dependencies = [
 
 [[package]]
 name = "cian-ai"
-version = "2.1.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "cian-core",
@@ -581,7 +581,7 @@ dependencies = [
 
 [[package]]
 name = "cian-core"
-version = "2.1.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -605,7 +605,7 @@ dependencies = [
 
 [[package]]
 name = "cian-gui"
-version = "2.1.0"
+version = "3.0.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -629,7 +629,7 @@ dependencies = [
 
 [[package]]
 name = "cian-lua"
-version = "2.1.0"
+version = "3.0.0"
 dependencies = [
  "cian-core",
  "mlua",
@@ -638,7 +638,7 @@ dependencies = [
 
 [[package]]
 name = "cian-pty"
-version = "2.1.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "cian-core",
@@ -649,7 +649,7 @@ dependencies = [
 
 [[package]]
 name = "cian-scp"
-version = "2.1.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "russh",
@@ -660,7 +660,7 @@ dependencies = [
 
 [[package]]
 name = "cian-server"
-version = "2.1.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "cian-ai",
@@ -677,7 +677,7 @@ dependencies = [
 
 [[package]]
 name = "cian-tui"
-version = "2.1.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "arboard",

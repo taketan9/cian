@@ -16,7 +16,7 @@ members = [
 # Bumped by hand as work lands: patch for fixes, minor for features. `:version`
 # (and `cian --version`) report it with the commit, so "which build is this"
 # has an answer from inside a running session.
-version = "2.1.0"
+version = "3.0.0"
 edition = "2021"
 rust-version = "1.75"
 license = "MIT"
