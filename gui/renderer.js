@@ -2137,7 +2137,10 @@ const TOGGLES = {
                 run: () => { togglePreview(); drawMenu(); },
             },
             {
-                label: tr("Read \u2601 cloud-only files", '☁ クラウド上のファイルも読む'),
+                // 印を先頭に置かない ── この行だけ左端がずれる（端末版の
+                // `toggles.rs` に同じ註）。**同じ言葉であること**が parity の
+                // 見ているところなので、二つを一緒に動かす。
+                label: tr("Read \u2601 cloud-only files", 'クラウド上（☁）のファイルも読む'),
                 value: onoff(switches.cloud),
                 run: async () => {
                     const r = await ask('switches', { cloud: !switches.cloud });

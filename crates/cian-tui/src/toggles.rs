@@ -64,7 +64,11 @@ impl App {
             ),
             (
                 ToggleId::ReadCloud,
-                tr(self.lang, "Read ☁ cloud-only files", "☁ クラウド上のファイルも読む").into(),
+                // **印を先頭に置かない。** 他の行のラベルは `│   ` の次から
+                // 始まるのに、この行だけ ☁ のぶん2桁ぶん右にずれていて、
+                // メニューの左端がここだけ揃っていなかった（2026-09-06 の指摘）。
+                // 英語は文の中に入っているので最初から揃っている。
+                tr(self.lang, "Read ☁ cloud-only files", "クラウド上（☁）のファイルも読む").into(),
                 onoff(cian_core::cloud::include()),
                 cian_core::cloud::include(),
             ),

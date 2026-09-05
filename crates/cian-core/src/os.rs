@@ -142,6 +142,11 @@ pub fn properties(path: &Path) -> Result<()> {
     }
     #[cfg(target_os = "linux")]
     {
+        // **`path` を1度触る。** Linux では上の2つの塊がまるごと消えるので、
+        // 引数はどこからも読まれず `unused_variables` になり、CI の
+        // `-D warnings` で落ちる ── **手元（macOS）では絶対に出ない**。
+        // `#[allow]` を関数に貼ると他の未使用まで黙るので、ここで捨てる。
+        let _ = path;
         anyhow::bail!("Properties is not available on this platform");
     }
 }
