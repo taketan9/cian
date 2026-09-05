@@ -3573,10 +3573,18 @@ impl Session {
                 if is_dir {
                     anyhow::bail!("{name} はディレクトリです");
                 }
-                let editor = std::env::var("VISUAL")
-                    .or_else(|_| std::env::var("EDITOR"))
-                    .unwrap_or_else(|_| if cfg!(windows) { "notepad".into() } else { "vi".into() });
-                cian_core::proc::quiet(&editor)
+                // **init.lua が先。** ここは `$VISUAL`/`$EDITOR` しか見て
+                // いなかったので、`cian.set_option("editor", "code")` は端末版
+                // でだけ効いていた ── 同じ設定で二つの前端が別のものを開く。
+                // 判断は `cian_core::editor`（端末版と同じ1か所）。
+                let cfg = cian_lua::load();
+                let words = cian_core::editor::resolve(cfg.options.editor.as_deref())
+                    .unwrap_or_else(|| {
+                        vec![if cfg!(windows) { "notepad".into() } else { "vi".into() }]
+                    });
+                let editor = words.join(" ");
+                cian_core::proc::quiet(&words[0])
+                    .args(&words[1..])
                     .arg(&path)
                     .spawn()
                     .map_err(|e| anyhow::anyhow!("{editor}: {e}"))?;
@@ -5123,10 +5131,23 @@ impl Session {
 }
 
 fn main() -> anyhow::Result<()> {
-    let start = std::env::args()
-        .nth(1)
-        .map(std::path::PathBuf::from)
-        .unwrap_or(std::env::current_dir()?);
+    // 開く場所。**引数が無いときは init.lua の `home`** ── 端末版の
+    // `default_home` と同じ順で、書いてあるものが先。窓版は場所を渡さずに
+    // 起こすことがあり（`main.js` がフォルダを与えられなかったとき）、
+    // そこで `home` が黙って落ちていた。無ければホーム、それも無ければ
+    // いま居るところ。
+    let start = match std::env::args().nth(1) {
+        Some(p) => std::path::PathBuf::from(p),
+        None => cian_lua::load()
+            .options
+            .home
+            .as_deref()
+            .map(shellexpand)
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.is_dir())
+            .or_else(cian_lua::home_dir)
+            .map_or_else(std::env::current_dir, Ok)?,
+    };
     let out = Out::start();
     let mut session = Session::new(start, out.clone())?;
 

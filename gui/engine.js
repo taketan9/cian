@@ -38,7 +38,9 @@ class Engine {
         this.pending = new Map();
         /// Set by whoever wants the unasked lines.
         this.onEvent = null;
-        this.child = spawn(enginePath(), [cwd], {
+        // `cwd` が null なら引数を渡さない ── エンジンが init.lua の `home`
+        // を見て決める。空文字を渡すと「空のパス」として扱われる。
+        this.child = spawn(enginePath(), cwd ? [cwd] : [], {
             stdio: ['pipe', 'pipe', 'pipe'],
             windowsHide: true,
         });

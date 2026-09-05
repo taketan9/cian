@@ -1657,6 +1657,43 @@ function setView(mode, remember = true) {
     if (remember) ask('remember', { key: 'gui_view', value: mode });
 }
 
+/// 「その面はいま無い」を言う3つ ── 同じ行を6回・4回・4回書いていた。
+///
+/// **括ったのは文言のためではなく、答えが1つであるため。** 同じ問いに同じ
+/// 言葉で答える場所が10か所あると、いつか1か所だけ別の言い方になる ──
+/// `audit.py` の②が数え続けていたのはそれ。
+///
+/// 呼び方は `if (!needViewer()) return;`。真偽を返すのは、`return null` の
+/// 側と `return` の側の両方があるから（中で return するとその違いが消える）。
+function needViewer() {
+    if (viewer.on && viewer.ed) return true;
+    say(tr('open a file first', '先にファイルを開いてください'), true);
+    return false;
+}
+
+function needShell() {
+    if (term.on) return true;
+    say(tr('no shell is open', 'シェルが開いていません'), true);
+    return false;
+}
+
+function needTargets(what) {
+    if (what.length) return true;
+    say(tr('nothing to work on', '対象がありません'), true);
+    return false;
+}
+
+/// いまどのシェルタブに居るか。タブを動かす4つが同じ行を書いていた。
+///
+/// **この関数自身が5つ目になっていた。** 括るときに同じ文字列を一括置換して、
+/// 中身まで `sayShellTab()` に置き換わり、呼ぶと自分を呼び続けた ──
+/// `node --check` は通り、audit は「きれいです」になり、台帳も通った。
+/// `node gui/drive.js` の例外欄だけが「Maximum call stack size exceeded」と
+/// 言った。**括ったあとは動かす。**
+function sayShellTab() {
+    say(tr(`shell ${term.tab + 1} / ${term.tabs}`, `シェル ${term.tab + 1} / ${term.tabs}`));
+}
+
 /// The lower-cased extension, or ''. Four functions asked this question with
 /// the same regex on four lines — the audit's "same line four times" — and
 /// four copies of one rule is how one of them starts answering differently.
@@ -2317,7 +2354,20 @@ async function cmdSubstitutePrompt() {
 /// What init.lua turned on, as far as the menu is concerned. Filled from the
 /// `settings` reply at startup; false until then, which is the safe way round
 /// — a row that is missing for a moment beats a row that leads nowhere.
-const cfg = { ai: false, snippets: false, macros: false, hosts: false };
+const cfg = { ai: false, snippets: false, macros: false, hosts: false, tabWidth: 0 };
+
+/// init.lua の `tab_width` を、いま開いているモデルに当てる。
+///
+/// **`create` の options ではなくモデルの側。** タブ幅は Monaco では文書の
+/// 性質（`ITextModelUpdateOptions`）で、エディタの表示設定ではない ── 作る
+/// ときに渡しても効かない。差分エディタは2つのモデルを持つので両方。
+function applyTabWidth() {
+    if (!cfg.tabWidth) return;
+    const opts = { tabSize: cfg.tabWidth };
+    for (const m of (window.monaco ? window.monaco.editor.getModels() : [])) {
+        m.updateOptions(opts);
+    }
+}
 
 /// What this platform will do, from the engine — not from the user agent.
 ///
@@ -4512,6 +4562,8 @@ async function openAsPicture(which) {
 /// closing it again, which worked exactly as badly as it sounds.
 function makeEditor(monaco, text, lang) {
     if (!viewer.ed) {
+    // 開くたびに当てる ── モデルは開くたびに新しく、既定の 4 で生まれる。
+    queueMicrotask(applyTabWidth);
     viewer.ed = monaco.editor.create(el.vBody, {
         value: text,
         language: lang,
@@ -6508,7 +6560,7 @@ async function transfer() {
     const pane = state[which];
     const rows = pane.entries.filter((x) => x.marked);
     const what = rows.length ? rows : [pane.entries[pane.cursor]].filter((x) => x && !x.parent);
-    if (!what.length) { say(tr('nothing to work on', '対象がありません'), true); return; }
+    if (!needTargets(what)) return;
     const up = !!state[other].remote;
     const relay = up && !!state[which].remote;
     const head = relay
@@ -6569,7 +6621,7 @@ async function cmdRenameList() {
     const pane = state[state.focus];
     const rows = pane.entries.filter((x) => x.marked);
     const what = rows.length ? rows : pane.entries.filter((x) => !x.parent);
-    if (!what.length) { say(tr('nothing to work on', '対象がありません'), true); return; }
+    if (!needTargets(what)) return;
 
     let monaco;
     try {
@@ -6664,7 +6716,7 @@ async function cmdOutline() {
 /// setValue** is the part that matters: it has to be undoable with the key
 /// that undoes everything else in here.
 async function rewriteBuffer(method, params, said) {
-    if (!viewer.on || !viewer.ed) { say(tr('open a file first', '先にファイルを開いてください'), true); return null; }
+    if (!needViewer()) return null;
     const lines = viewer.ed.getValue().split(/\r?\n/);
     const r = await ask(method, { ...params, lines });
     if (!r) return null;
@@ -6706,7 +6758,7 @@ async function cmdNoBom() {
     const pane = state[state.focus];
     const rows = pane.entries.filter((x) => x.marked);
     const what = rows.length ? rows : [pane.entries[pane.cursor]].filter((x) => x && !x.parent);
-    if (!what.length) { say(tr('nothing to work on', '対象がありません'), true); return; }
+    if (!needTargets(what)) return;
     if (!await confirm(tr(`Strip UTF-8 BOMs from ${what.length}`, `${what.length} 件から UTF-8 BOM を除去します`),
         what.map((x) => x.name).join('\n'))) { say(tr('stopped', 'やめました')); return; }
     const r = await ask('nobom', { pane: state.focus });
@@ -7516,7 +7568,7 @@ async function cmdCompress(kind, encrypted = false) {
     const pane = state[state.focus];
     const rows = pane.entries.filter((x) => x.marked);
     const what = rows.length ? rows : [pane.entries[pane.cursor]].filter((x) => x && !x.parent);
-    if (!what.length) { say(tr('nothing to work on', '対象がありません'), true); return; }
+    if (!needTargets(what)) return;
     const name = await askFor(tr('a name for the archive (no extension)', 'アーカイブの名前（拡張子なし）'), what[0].name.replace(/\.[^.]*$/, ''));
     if (name === null || !name) return;
     let password;
@@ -8130,7 +8182,7 @@ let blameOn = false;
 let blameMarks = [];
 
 async function cmdBlame() {
-    if (!viewer.on || !viewer.ed) { say(tr('open a file first', '先にファイルを開いてください'), true); return; }
+    if (!needViewer()) return;
     if (blameOn) {
         blameMarks = viewer.ed.deltaDecorations(blameMarks, []);
         blameOn = false;
@@ -8161,7 +8213,7 @@ async function cmdBlame() {
 /// That matters for a log something is still writing to: re-reading would show
 /// a different file than the one being looked at.
 async function cmdEncoding(name) {
-    if (!viewer.on || !viewer.ed) { say(tr('open a file first', '先にファイルを開いてください'), true); return; }
+    if (!needViewer()) return;
     const r = await ask('encoding', { as: name || undefined });
     if (!r) return;
     const model = viewer.ed.getModel();
@@ -8419,7 +8471,7 @@ document.addEventListener('keydown', (e) => {
 }, true);
 
 async function togglePreview2() {
-    if (!viewer.on || !viewer.ed) { say(tr('open a file first', '先にファイルを開いてください'), true); return; }
+    if (!needViewer()) return;
     if (reading) {
         reading = false;
         el.vRead.hidden = true;
@@ -8585,7 +8637,7 @@ function showReplacePlan(spec, plan) {
 /// The one line operation that filters rather than transforms, and the one
 /// people reach for on a log: "everything except the heartbeats", once.
 async function cmdLineFilter(pattern, keep) {
-    if (!viewer.on || !viewer.ed) { say(tr('open a file first', '先にファイルを開いてください'), true); return; }
+    if (!needViewer()) return;
     const lines = viewer.ed.getValue().split(/\r?\n/);
     const r = await ask('grepdel', { lines, pattern, keep });
     if (!r) return;
@@ -8595,7 +8647,7 @@ async function cmdLineFilter(pattern, keep) {
 
 /// `:combine` — join the next line up, with a space or without.
 async function cmdCombine(spec) {
-    if (!viewer.on || !viewer.ed) { say(tr('open a file first', '先にファイルを開いてください'), true); return; }
+    if (!needViewer()) return;
     const bang = /!$/.test(spec || '');
     const count = Math.max(2, Number((spec || '').replace('!', '').trim()) || 2);
     const lines = viewer.ed.getValue().split(/\r?\n/);
@@ -8625,7 +8677,7 @@ function replaceAll(lines) {
 /// once, which is the whole reason anybody selects a rectangle. Columns are
 /// display columns, so a line with a tab in it lines up the way it looks.
 async function blockEdit(what) {
-    if (!viewer.on || !viewer.ed) { say(tr('open a file first', '先にファイルを開いてください'), true); return; }
+    if (!needViewer()) return;
     const sels = viewer.ed.getSelections() || [];
     if (!sels.length) { say(tr('there is no rectangle selected', '矩形選択がありません'), true); return; }
     const top = Math.min(...sels.map((s) => s.startLineNumber)) - 1;
@@ -9524,7 +9576,7 @@ function dirPreview(r) {
 /// labels tell the tabs apart, and `shell 2` never does. Empty puts the
 /// number back.
 async function cmdShellName(name) {
-    if (!term.on) { say(tr('no shell is open', 'シェルが開いていません'), true); return; }
+    if (!needShell()) return;
     const now = (term.names || [])[term.tab] || '';
     // An optional argument arrives as `''`, not `undefined` — so testing for
     // undefined renamed the tab to nothing the moment `:shellname` was typed
@@ -9548,7 +9600,7 @@ async function cmdShellName(name) {
 /// one that *narrows* it — which is worth saying, because "1 pane in the
 /// group" reads like less than "all of them" until you have done it once.
 async function cmdSyncMember() {
-    if (!term.on) { say(tr('no shell is open', 'シェルが開いていません'), true); return; }
+    if (!needShell()) return;
     const r = await ask('shellsyncmember', {});
     if (!r) return;
     takeShell(r);
@@ -9558,7 +9610,7 @@ async function cmdSyncMember() {
 }
 
 async function cmdShellLog() {
-    if (!term.on) { say(tr('no shell is open', 'シェルが開いていません'), true); return; }
+    if (!needShell()) return;
     const d = new Date();
     const p = (n) => String(n).padStart(2, '0');
     const name = `cian-shell-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.log`;
@@ -9602,7 +9654,7 @@ async function cmdSnippets() {
 }
 
 async function cmdSync() {
-    if (!term.on) { say(tr('no shell is open', 'シェルが開いていません'), true); return; }
+    if (!needShell()) return;
     const r = await ask('shellsync', {});
     if (!r) return;
     takeShell(r);
@@ -9638,21 +9690,21 @@ async function shellTab() {
     const r = await ask('shelltab', { pane: state.focus, ...shellSize() });
     if (!r) return;
     takeShell(r);
-    say(tr(`shell ${term.tab + 1} / ${term.tabs}`, `シェル ${term.tab + 1} / ${term.tabs}`));
+    sayShellTab();
 }
 
 async function goTabOfShell(at) {
     const r = await ask('shellgo', { at });
     if (!r) return;
     takeShell(r);
-    say(tr(`shell ${term.tab + 1} / ${term.tabs}`, `シェル ${term.tab + 1} / ${term.tabs}`));
+    sayShellTab();
 }
 
 async function shellGo(how) {
     const r = await ask('shellgo', how);
     if (!r) return;
     takeShell(r);
-    say(tr(`shell ${term.tab + 1} / ${term.tabs}`, `シェル ${term.tab + 1} / ${term.tabs}`));
+    sayShellTab();
 }
 
 /// Close the whole shell tab — every split pane in it.
@@ -9667,7 +9719,7 @@ async function shellCloseTab() {
     if (!r) return;
     if (r.gone) { closeShell(); say(tr('the shell is closed', 'シェルを閉じました')); return; }
     takeShell(r);
-    say(tr(`shell ${term.tab + 1} / ${term.tabs}`, `シェル ${term.tab + 1} / ${term.tabs}`));
+    sayShellTab();
 }
 
 function drawShell(screen, into) {
@@ -10323,6 +10375,13 @@ async function recall() {
     // exist at all. Kept rather than re-asked: the menu is built synchronously
     // on a keystroke, and a row that appears a moment after the menu does is
     // worse than one that never appears.
+    // `cian.set_option("tab_width", n)`。**端末版は `viewer::set_tab_width`
+    // でずっと効いていて、窓版は受け取って捨てていた** ── Monaco の既定の 4
+    // のまま。開いているものにも、次に開くものにも当てる。
+    if (Number.isFinite(c.tab_width) && c.tab_width > 0) {
+        cfg.tabWidth = c.tab_width;
+        applyTabWidth();
+    }
     cfg.ai = c.ai === true;
     cfg.snippets = c.snippets === true;
     cfg.macros = c.macros === true;

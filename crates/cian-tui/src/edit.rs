@@ -205,7 +205,7 @@ impl App {
         };
         let words = match forced {
             // A named editor: use it only if it is actually on PATH.
-            Some(name) if crate::edit::on_path(name) => vec![name.to_string()],
+            Some(name) if cian_core::editor::on_path(name) => vec![name.to_string()],
             Some(name) => {
                 self.message = Some(format!("{name} not found on PATH"));
                 return;
@@ -317,86 +317,18 @@ pub(crate) fn tr_plan_error(lang: crate::Lang, e: &PlanError) -> String {
 /// Resolve the editor command (without the file argument) for `config`,
 /// honouring `$VISUAL`/`$EDITOR` and finally the nvim → vim → vi fallback.
 pub(crate) fn resolve_editor(config: &cian_lua::Config) -> Option<Vec<String>> {
-    let visual = std::env::var("VISUAL").ok().filter(|s| !s.trim().is_empty());
-    let editor = std::env::var("EDITOR").ok().filter(|s| !s.trim().is_empty());
-    pick_editor(config.options.editor.as_deref(), visual.as_deref(), editor.as_deref(), on_path)
-}
-
-/// The resolution logic, split from the environment so it can be tested: an
-/// explicit editor (config, then `$VISUAL`, then `$EDITOR`) is trusted as-is;
-/// otherwise the first of nvim → vim → vi that `found` reports on `PATH`.
-fn pick_editor(
-    configured: Option<&str>,
-    visual: Option<&str>,
-    editor_env: Option<&str>,
-    found: impl Fn(&str) -> bool,
-) -> Option<Vec<String>> {
-    if let Some(cmd) = configured.or(visual).or(editor_env) {
-        let words: Vec<String> = cmd.split_whitespace().map(|s| s.to_string()).collect();
-        if !words.is_empty() {
-            return Some(words);
-        }
-    }
-    ["nvim", "vim", "vi"].into_iter().find(|n| found(n)).map(|n| vec![n.to_string()])
-}
-
-/// Is `name` an executable on `PATH`? On Windows the usual executable
-/// extensions are tried too.
-pub(crate) fn on_path(name: &str) -> bool {
-    let Some(path) = std::env::var_os("PATH") else { return false };
-    let exts: &[&str] = if cfg!(windows) { &["", ".exe", ".cmd", ".bat"] } else { &[""] };
-    std::env::split_paths(&path).any(|dir| {
-        exts.iter().any(|ext| {
-            let cand: PathBuf = dir.join(format!("{name}{ext}"));
-            is_executable(&cand)
-        })
-    })
-}
-
-#[cfg(unix)]
-fn is_executable(p: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::metadata(p).map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0).unwrap_or(false)
-}
-
-#[cfg(not(unix))]
-fn is_executable(p: &Path) -> bool {
-    p.is_file()
+    // **判断は `cian_core::editor`。** ここに持っていたときは、窓版のエンジンが
+    // `$VISUAL`/`$EDITOR` しか見ておらず、`cian.set_option("editor", …)` が
+    // 端末版でだけ効いていた（2026-09-06、`configcover.py` が見つけた）。
+    cian_core::editor::resolve(config.options.editor.as_deref())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn configured_editor_is_trusted_verbatim() {
-        // Even split into program + args, and even if "found" says no (the user
-        // knows their own machine).
-        let cmd = pick_editor(Some("code -w"), None, None, |_| false);
-        assert_eq!(cmd, Some(vec!["code".into(), "-w".into()]));
-    }
-
-    #[test]
-    fn falls_back_through_visual_then_editor() {
-        assert_eq!(pick_editor(None, Some("hx"), Some("nano"), |_| false), Some(vec!["hx".into()]));
-        assert_eq!(pick_editor(None, None, Some("nano"), |_| false), Some(vec!["nano".into()]));
-    }
-
-    #[test]
-    fn path_search_prefers_nvim_then_vim_then_vi() {
-        // Only vim + vi present → vim wins over vi.
-        let have = |n: &str| n == "vim" || n == "vi";
-        assert_eq!(pick_editor(None, None, None, have), Some(vec!["vim".into()]));
-        // nvim present → it wins.
-        assert_eq!(pick_editor(None, None, None, |n| n == "nvim" || n == "vim"), Some(vec!["nvim".into()]));
-        // only vi.
-        assert_eq!(pick_editor(None, None, None, |n| n == "vi"), Some(vec!["vi".into()]));
-    }
-
-    #[test]
-    fn nothing_found_is_none() {
-        assert_eq!(pick_editor(None, None, None, |_| false), None);
-    }
+    // エディタの選び方のテストは `cian-core/src/editor.rs` へ ── 判断が
+    // あちらへ移ったので、検査もあちらに置く（両前端が同じものを見る）。
 
     fn v(names: &[&str]) -> Vec<String> {
         names.iter().map(|s| s.to_string()).collect()

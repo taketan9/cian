@@ -221,8 +221,13 @@ app.whenReady().then(async () => {
     // argv[2] whatever it was meant that adding `--remote-debugging-port` gave
     // the engine a switch as its starting directory, and the window came up
     // empty with the reason only in a stream nobody was reading.
+    // **場所を渡さないときは、渡さない。** `os.homedir()` を埋めていたので、
+    // `cian.set_option("home", …)` はエンジンに届く前に上書きされて消えて
+    // いた（2026-09-06、`scripts/configcover.py` が見つけた）。引数が無ければ
+    // エンジンが init.lua の `home` → ホーム、の順で決める ── 端末版の
+    // `default_home` と同じ判断が、同じ1か所にある。
     const where = process.argv.slice(2).find((a) => !a.startsWith('-'));
-    engine = new Engine(where || os.homedir());
+    engine = new Engine(where || null);
     // Every call from the renderer, forwarded whole. The engine names its own
     // methods; this does not want a case per method that would need editing
     // each time one is added.
