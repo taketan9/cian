@@ -1754,21 +1754,44 @@ enum ChatMode {
     Ai,
 }
 
+impl ChatMode {
+    /// The name written into `ai_history.json`.
+    fn stored(self) -> &'static str {
+        match self {
+            ChatMode::Ai => "Ai",
+        }
+    }
+
+    /// …and back. An unrecognised name — a file written by a build with a
+    /// backend this one has not got — reads as the local model rather than
+    /// being refused: a conversation you can still read is the whole reason
+    /// the backend is stored as a name instead of a number.
+    fn from_stored(_name: &str) -> Self {
+        ChatMode::Ai
+    }
+}
+
 /// How a chat window presents itself: the name in its frame, and whether it
 /// wears the local model's cyan and signs its answers "AI - simple".
 ///
 /// Deliberately separate from [`ChatMode`], which only says where a typed
 /// follow-up goes: every AI-simple action opens the same chat, so the title has
-/// to name the action that opened it ("Triage this log", not just "Chat"), and
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct ChatSkin {
-    /// Shown at the top of the window — the menu item that opened it.
-    title: String,
-    /// True when the local `cian.ai` model is the one answering.
-    simple: bool,
+/// to name the action that opened it ("Triage this log", not just "Chat").
+///
+/// Stored beside the transcript, so a reopened conversation keeps the title it
+/// had. In `cian-core` for the same reason [`ChatMsg`] is.
+pub(crate) use cian_core::chatlog::Skin as ChatSkin;
+
+/// The two ways this build makes one. A trait rather than an inherent `impl`
+/// because the type is `cian-core`'s now — the file's shape belongs to the
+/// file, and how a *window title* is chosen belongs to the front end drawing
+/// the window.
+pub(crate) trait ChatSkinExt {
+    fn of(mode: ChatMode) -> Self;
+    fn simple(title: impl Into<String>) -> Self;
 }
 
-impl ChatSkin {
+impl ChatSkinExt for ChatSkin {
     /// The default look for a mode, used when nothing more specific applies.
     fn of(mode: ChatMode) -> Self {
         ChatSkin { title: mode.title().to_string(), simple: mode == ChatMode::Ai }
@@ -1795,47 +1818,10 @@ impl ChatMode {
     }
 }
 
-/// One line of an AI chat transcript.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct ChatMsg {
-    /// True for the user's turn, false for the assistant's.
-    user: bool,
-    text: String,
-    /// What that turn really was, when what is shown is a label for it.
-    ///
-    /// The doors that open with something already asked — triage this log,
-    /// summarise this file — show `Triage the log: access.log` and send the
-    /// log. That reads well and, once the conversation started being carried,
-    /// meant a follow-up asked about *the file name*: the model was handed a
-    /// sentence naming a log it had never been shown. Displaying the payload
-    /// instead would make the transcript unreadable, so the turn holds both.
-    ///
-    /// `None` when they are the same, which is every turn that was typed.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    sent: Option<String>,
-}
-
-impl ChatMsg {
-    /// A turn the person typed: shown and sent alike.
-    fn you(text: impl Into<String>) -> Self {
-        ChatMsg { user: true, text: text.into(), sent: None }
-    }
-
-    /// A turn the person *made* — a label on screen, a payload to the model.
-    fn you_sending(label: impl Into<String>, sent: impl Into<String>) -> Self {
-        ChatMsg { user: true, text: label.into(), sent: Some(sent.into()) }
-    }
-
-    /// A turn the model answered with.
-    fn ai(text: impl Into<String>) -> Self {
-        ChatMsg { user: false, text: text.into(), sent: None }
-    }
-
-    /// What goes into the request for this turn.
-    fn for_model(&self) -> &str {
-        self.sent.as_deref().unwrap_or(&self.text)
-    }
-}
+/// One line of an AI chat transcript. **Defined in `cian-core`** — it is what
+/// `ai_history.json` holds and what the engine hands the window, and one file
+/// read by two front ends needs one definition of its rows.
+pub(crate) use cian_core::chatlog::Turn as ChatMsg;
 
 /// Work deferred until a shrink transition finishes.
 #[derive(Debug, Clone, Copy)]

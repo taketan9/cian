@@ -1,4 +1,5 @@
     use super::*;
+use crate::ai::StoredChatExt;
     use ratatui::backend::TestBackend;
     use ratatui::widgets::BorderType;
 
@@ -7144,6 +7145,25 @@
         assert!(app.chat_prior.is_empty(), "a fresh chat starts with no memory");
     }
 
+    /// The window build's history file opens in the terminal build.
+    ///
+    /// **Two stores would be the one place where "two programs wearing one
+    /// name" actually hurts.** The reason to open a history is to find
+    /// something you asked before, and "before" does not know which build you
+    /// were in. So the bytes here are the bytes the window really wrote
+    /// (driven at the real window, 2026-09-06), not a hand-made sample that
+    /// agrees with this build by construction.
+    #[test]
+    fn a_conversation_the_window_wrote_reads_here() {
+        let written = r#"[{"mode":"Ai","skin":{"title":"チャット","simple":true},"log":[{"user":true,"text":"一手目"},{"user":false,"text":"[mock] 一手目"}]}]"#;
+        let all: Vec<crate::ai::StoredChat> = serde_json::from_str(written).unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].mode(), ChatMode::Ai, "the backend came across");
+        assert_eq!(all[0].skin().title, "チャット", "and the window's title");
+        assert_eq!(all[0].log().len(), 2);
+        assert_eq!(App::ai_history_title(all[0].log()), "一手目", "the picker names it");
+    }
+
     /// A seeded chat carries what it really sent, not the label on screen.
     ///
     /// `:ailog` shows `Triage the log: access.log` and sends the log. Once the
@@ -9970,8 +9990,16 @@
         }
     }
 
+    /// A folder is something to upload.
+    ///
+    /// **This test used to assert the opposite**, and the opposite was a bug:
+    /// `start_scp` filtered directories out, so choosing a folder and pressing
+    /// 送る ▸ アップロード answered "select a file to upload" — as if nothing
+    /// had been chosen. The window build has carried folders since
+    /// `plan_upload` existed, so the two halves of one program disagreed about
+    /// what "send this" means and the terminal blamed the person for it.
     #[test]
-    fn scp_upload_without_a_selected_file_is_refused() {
+    fn a_folder_is_something_to_upload() {
         let d = tempfile::tempdir().unwrap();
         std::fs::create_dir(d.path().join("onlydir")).unwrap();
         let mut config = en_config();
@@ -9984,10 +10012,39 @@
         }];
         let p = d.path().to_path_buf();
         let mut app = App::new(p.clone(), p, config).unwrap();
-        app.active_pane_mut().unwrap().cursor = 0; // the directory
+        // By name, not by index. Row 0 is `..`, and the test this replaces
+        // sat on it — so it passed by refusing the parent row while claiming
+        // to be about folders.
+        let at = app
+            .active_pane()
+            .unwrap()
+            .entries
+            .iter()
+            .position(|e| e.name == "onlydir")
+            .expect("the folder is listed");
+        app.active_pane_mut().unwrap().cursor = at;
+        app.start_scp(ScpDir::Upload);
+        assert!(
+            !matches!(app.popup, Popup::None),
+            "it got on with choosing a server, got message {:?}",
+            app.message,
+        );
+    }
+
+    /// …and with genuinely nothing chosen, it says so — about *something*,
+    /// not about a file, because a folder is now one of the things it takes.
+    #[test]
+    fn an_empty_pane_has_nothing_to_upload() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().to_path_buf();
+        let mut app = App::new(p.clone(), p, en_config()).unwrap();
         app.start_scp(ScpDir::Upload);
         assert!(matches!(app.popup, Popup::None));
-        assert!(app.message.as_deref().unwrap().contains("select a file"));
+        assert!(
+            app.message.as_deref().unwrap().contains("select something"),
+            "got {:?}",
+            app.message,
+        );
     }
 
     #[test]

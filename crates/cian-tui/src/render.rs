@@ -13,6 +13,7 @@ use ratatui::Frame;
 use tui_term::widget::PseudoTerminal;
 
 use super::*;
+use crate::ai::StoredChatExt;
 
 /// The local model's colour. Every "AI - simple" window — the chat, the prompts
 /// it asks first, and the review lists its answers become — wears this cyan, so

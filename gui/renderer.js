@@ -1992,7 +1992,8 @@ function hintsNow() {
     // naming keys that do not fire.
     if (chat.on) {
         return [['Enter', tr('send', '送信')], ['Shift+Enter', tr('newline', '改行')],
-                ['Ctrl+V', tr('paste', '貼り付け')], ['Esc', tr('close', '閉じる')]];
+                ['Ctrl+V', tr('paste', '貼り付け')], ['Ctrl+R', tr('history', '履歴')],
+                ['Esc', chat.pending ? tr('stop', '中断') : tr('close', '閉じる')]];
     }
     if (viewer.on) {
         // `STYLES[0]` is notepad and `STYLES[1]` is vim; this asked for 1 and
@@ -3876,7 +3877,13 @@ document.addEventListener('keydown', (e) => {
 /// asked: "summarise this file" reads better than the file, but a follow-up
 /// about line 30 needs the file. Showing the payload would make the transcript
 /// unreadable; sending the label would make the follow-up meaningless.
-const chat = { on: false, log: [], pending: false, title: '' };
+const chat = { on: false, log: [], pending: false, title: '',
+               /// Images pasted for the *next* question, as base64 PNG. Sent
+               /// with it and cleared then, as cian-tui's `chat_attachments`
+               /// is — an image belongs to the question it was pasted for, and
+               /// one that rode along with every later turn would be a
+               /// screenshot answering questions it was not about.
+               images: [] };
 
 /// The one door. Everything that opens or closes the chat comes through here.
 ///
@@ -3886,15 +3893,92 @@ const chat = { on: false, log: [], pending: false, title: '' };
 /// flag and the element have to move together or the keys it advertises are
 /// not the keys that work.
 function setChatOn(on) {
+    // Put the conversation away before the log is cleared. Not on every turn:
+    // a history that grows while you are still talking would show the same
+    // exchange at four lengths.
+    if (!on && chat.on) archiveChat();
     chat.on = on;
     el.chat.hidden = !on;
     if (!on) {
         chat.log = [];
         chat.pending = false;
+        chat.images = [];
         el.cIn.value = '';
         el.cIn.blur();
     }
     drawHints();
+}
+
+/// Write the open conversation into `ai_history.json` — the *same* file the
+/// terminal build reads.
+///
+/// Two stores would be the one place where "two programs wearing one name" is
+/// not merely untidy: the reason to open a history is to find something you
+/// asked before, and "before" does not know which build you were in.
+///
+/// Nothing is kept until the model has answered once. A window opened and shut
+/// is not a conversation.
+function archiveChat() {
+    if (!chat.log.some((m) => !m.user)) return;
+    ask('aihistory', {
+        do: 'save',
+        chat: {
+            mode: 'Ai',
+            skin: { title: chat.title || tr('Chat', 'チャット'), simple: true },
+            log: chat.log.map((m) => (m.sent ? { user: m.user, text: m.text, sent: m.sent }
+                                             : { user: m.user, text: m.text })),
+        },
+    });
+}
+
+/// `Ctrl+R` in the chat: the conversations had before, newest first.
+///
+/// Enter reopens one, `d` forgets it — cian-tui's `AiHistory` popup, key for
+/// key. The list is the engine's, which is the same file, which is the point.
+async function openChatHistory() {
+    const r = await ask('aihistory', { do: 'list' });
+    if (!r) return;
+    if (!r.chats.length) {
+        say(tr('no conversations yet', 'まだ会話はありません'));
+        return;
+    }
+    const rows = r.chats.map((c) => ({
+        n: `${c.turns}`,
+        label: c.title,
+        sub: c.skin || '',
+        at: c.at,
+    }));
+    // **Out of the way, not closed.** `#report` is z-index 11 and the chat is
+    // 12, so a list raised from in here would open *behind* the conversation
+    // it was raised from — the exact accident that cost three rounds when
+    // `#view` and `#report` shared a number and the sheet opened behind the
+    // editor. The chat's state is untouched; only the element steps aside,
+    // and `leave` brings it back for an Esc that chose nothing.
+    el.chat.hidden = true;
+    show(tr('Past conversations', '過去の会話'), tr('newest first', '新しい順'), rows, {
+        foot: tr('Enter reopen   d forget   Esc back', 'Enter 開き直す   d 忘れる   Esc 戻る'),
+        leave: () => { el.chat.hidden = !chat.on; if (chat.on) el.cIn.focus(); },
+        pick: async (row) => {
+            const one = await ask('aihistory', { do: 'load', at: row.at });
+            if (!one) return;
+            closeReport();
+            el.chat.hidden = !chat.on;
+            openChat(one.skin?.title || tr('Chat', 'チャット'));
+            chat.log = (one.log || []).map((m) => ({ user: m.user, text: m.text, sent: m.sent }));
+            drawChat();
+            el.cIn.focus();
+        },
+        act: {
+            d: async () => {
+                const row = report.rows[report.at];
+                if (!row) return;
+                const gone = await ask('aihistory', { do: 'delete', at: row.at });
+                if (!gone) return;
+                closeReport();
+                openChatHistory();
+            },
+        },
+    });
 }
 
 /// Open a conversation. `seed` is an opening turn already spoken — the log to
@@ -3906,18 +3990,37 @@ function setChatOn(on) {
 /// follow-up there leans on the answer being in the transcript — which it is,
 /// and which is what a follow-up usually refers to anyway.
 function openChat(title, seed = null, sent = null) {
+    // Put the previous conversation away first, as cian-tui's
+    // `start_ai_chat_as` does. Deduped by the engine, so archiving the same
+    // exchange twice is one row.
+    if (chat.on) archiveChat();
     chat.title = title;
     chat.log = seed ? [{ user: true, text: seed, sent: sent || undefined }] : [];
     chat.pending = !!seed;
+    chat.images = [];
     setChatOn(true);
     el.cName.textContent = title;
     el.cAbout.textContent = tr("the AI's answers — check them before you use them",
                                'AI の答え — 確かめてから使ってください');
-    el.cHint.textContent = tr('Enter send   Shift+Enter newline   Esc close',
-                              'Enter 送信   Shift+Enter 改行   Esc 閉じる');
+    drawChatHint();
     el.cIn.value = '';
     drawChat();
     el.cIn.focus();
+}
+
+/// What the line under the input says, including anything waiting to go with
+/// the next question.
+///
+/// An attachment nobody can see is an attachment nobody knows they made — and
+/// the next thing they do is paste it again.
+function drawChatHint() {
+    const keys = tr('Enter send   Shift+Enter newline   Ctrl+R history   Esc close',
+                    'Enter 送信   Shift+Enter 改行   Ctrl+R 履歴   Esc 閉じる');
+    const n = chat.images.length;
+    el.cHint.textContent = n
+        ? tr(`${n} image(s) attached to the next question   ·   ${keys}`,
+             `次の質問に画像 ${n} 枚   ·   ${keys}`)
+        : keys;
 }
 
 function drawChat() {
@@ -3947,6 +4050,11 @@ function drawChat() {
     // The newest turn, always. A transcript that keeps its scroll where it
     // was is a transcript whose answer arrives off-screen.
     el.cBody.scrollTop = el.cBody.scrollHeight;
+    drawChatHint();
+    // …and the bar, because Esc means *stop* while an answer is coming and
+    // *close* when none is. A label that says the wrong one of those is the
+    // bar telling you which key to press to lose your transcript.
+    drawHints();
 }
 
 /// Send what is typed, carrying the conversation it belongs to.
@@ -3966,6 +4074,8 @@ async function askChat(text) {
     chat.log.push({ user: true, text });
     chat.pending = true;
     drawChat();
+    const images = chat.images;
+    chat.images = [];
     const r = await ask('ai', {
         pane: state.focus,
         what: 'text',
@@ -3973,6 +4083,7 @@ async function askChat(text) {
               + 'Answer briefly in plain text.',
         prior,
         text,
+        images,
     });
     if (!r) { chat.pending = false; drawChat(); return; }
     answerIntoChat();
@@ -3985,6 +4096,10 @@ async function askChat(text) {
 /// one?" meant starting again with the context retyped.
 function answerIntoChat() {
     aiWaiting = (answer) => {
+        // Stopped waiting. The engine has no idea, so the answer still
+        // arrives — pushed in, it would land under a "cancelled" line as if
+        // the cancel had not happened.
+        if (!chat.pending) return;
         chat.pending = false;
         // Closed while the answer was in flight. The engine has no idea a
         // window shut, so the reply still arrives; pushed onto a cleared log
@@ -4002,6 +4117,23 @@ function answerIntoChat() {
 function chatKey(e) {
     if (e.key === 'Escape') {
         e.preventDefault();
+        // First Esc stops a running answer and leaves the conversation open;
+        // a second closes it. cian-tui's rule (`cancel_ai_pending`), and the
+        // right way round — an answer that is taking too long is the common
+        // reason to reach for Esc, and losing the transcript as well would
+        // punish the impatience.
+        if (chat.pending) {
+            chat.pending = false;
+            // What it *cannot* do is stop the python worker: it is a
+            // subprocess the engine already handed the question to, and there
+            // is nothing to interrupt it with. So this stops waiting, and
+            // says that rather than implying the work stopped.
+            aiWaiting = null;
+            chat.log.push({ user: false, text: tr('⚠ cancelled', '⚠ 中断しました') });
+            drawChat();
+            el.cIn.focus();
+            return;
+        }
         setChatOn(false);
         // The viewer may be underneath — the chat can be opened from it. It
         // was never closed, so revealing it is the whole of putting it back.
@@ -4016,10 +4148,50 @@ function chatKey(e) {
         sendChat();
         return;
     }
+    // The conversations had before. cian-tui's key, so the finger that knows
+    // one build knows the other.
+    if (e.key === 'r' && mod(e)) {
+        e.preventDefault();
+        openChatHistory();
+        return;
+    }
     // Anything else types. Grown after the key lands, so the box is the size
     // of what is in it rather than the size of what was in it.
     queueMicrotask(growChatInput);
 }
+
+/// A screenshot pasted into the conversation.
+///
+/// The `paste` event rather than a key of its own: in a window Ctrl+V means
+/// "put what is on the clipboard here", and what is on it may be a picture.
+/// cian-tui needs Alt+V because a terminal has already claimed Ctrl+V for
+/// text — that is the terminal's constraint, not a rule worth copying into a
+/// place that does not have it.
+///
+/// Text still pastes natively; only an image is intercepted.
+el.cIn.addEventListener('paste', (e) => {
+    const items = [...(e.clipboardData?.items || [])];
+    const pics = items.filter((i) => i.type.startsWith('image/'));
+    if (!pics.length) return;
+    e.preventDefault();
+    for (const item of pics) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        const reader = new FileReader();
+        reader.onload = () => {
+            // `data:image/png;base64,XXXX` — the engine wants the payload, and
+            // it writes it to a temp PNG because the python helper reads
+            // paths. Sending the whole data URI would make it decode a
+            // prefix it never asked for.
+            const at = String(reader.result).indexOf(',');
+            if (at < 0) return;
+            chat.images.push(String(reader.result).slice(at + 1));
+            drawChatHint();
+            say(tr(`image attached (${chat.images.length})`, `画像を添付しました（${chat.images.length} 枚）`));
+        };
+        reader.readAsDataURL(file);
+    }
+});
 
 /// Fit the input to its content, up to the cap the CSS sets.
 ///
@@ -6653,7 +6825,9 @@ async function cmdSend(dir) {
         const rows = (here.entries || []).filter((r) => r.marked && !r.parent);
         const one = here.entries[here.cursor];
         if (!rows.length && (!one || one.parent)) {
-            say(tr('choose a file to upload', 'アップロードするファイルを選んでください'), true);
+            // Folders go too — `plan_upload` walks the tree — so this asks
+            // for "something", as the terminal build now does.
+            say(tr('choose something to upload', 'アップロードするものを選んでください'), true);
             return;
         }
     }

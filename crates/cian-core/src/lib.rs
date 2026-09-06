@@ -9,6 +9,7 @@ pub mod aiprompt;
 pub mod archive;
 pub mod attrs;
 pub mod auth;
+pub mod chatlog;
 pub mod clip;
 pub mod cloud;
 pub mod count;

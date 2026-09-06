@@ -45,10 +45,16 @@ impl App {
         let pane = self.effective_file_pane();
         let (locals, local_dir) = match dir {
             ScpDir::Upload => {
-                let files: Vec<PathBuf> =
-                    pane.target_paths().into_iter().filter(|p| p.is_file()).collect();
+                // **Folders too.** This filtered them out, so marking a folder
+                // and choosing 送る ▸ アップロード answered "select a file to
+                // upload" — as if nothing had been selected. The window build
+                // has carried folders since `plan_upload` existed; the two
+                // halves of one program disagreed about what "send this"
+                // means, and the terminal said so in a way that read as a
+                // mistake by the person.
+                let files: Vec<PathBuf> = pane.target_paths();
                 if files.is_empty() {
-                    self.message = Some(tr(self.lang, "select a file to upload", "アップロードするファイルを選んでください").into());
+                    self.message = Some(tr(self.lang, "select something to upload", "アップロードするものを選んでください").into());
                     return;
                 }
                 (files, PathBuf::new())
@@ -646,10 +652,9 @@ impl App {
         }
         if !a_remote && o_remote {
             // Upload: the local pane's marked files → the remote pane's dir.
-            let locals: Vec<PathBuf> =
-                self.side_pane(active).target_paths().into_iter().filter(|p| p.is_file()).collect();
+            let locals: Vec<PathBuf> = self.side_pane(active).target_paths();
             if locals.is_empty() {
-                self.message = Some(tr(self.lang, "select a file to upload", "アップロードするファイルを選択").into());
+                self.message = Some(tr(self.lang, "select something to upload", "アップロードするものを選択").into());
                 return true;
             }
             let rcwd = self.side_pane(opp).remote_view().map(|(_, p)| p.to_string());
@@ -1038,13 +1043,40 @@ impl App {
         self.start_op("uploading", move |ctl| {
             let mut report = OpReport::default();
             let cancel = ctl.cancel;
-            let total = locals.len();
+            // What each marked thing actually involves: a file is one entry,
+            // a folder is every file beneath it with the folders listed to be
+            // made first. **SFTP has no recursive put** — the tree has to be
+            // walked here and the directories created in order, which is what
+            // `plan_upload` works out and what the window build has always
+            // used. `modes` is indexed by the *marked* item, so the mode a
+            // folder was given applies to every file that came out of it.
+            let mut jobs: Vec<(PathBuf, String, Option<u32>)> = Vec::new();
+            let mut dirs: Vec<String> = Vec::new();
             for (i, local) in locals.iter().enumerate() {
+                let mode = modes.get(i).copied().flatten();
+                match cian_scp::plan_upload(local, remote.trim_end_matches('/')) {
+                    Ok(plan) => {
+                        dirs.extend(plan.dirs);
+                        jobs.extend(plan.files.into_iter().map(|(from, to)| (from, to, mode)));
+                    }
+                    Err(e) => report.note_error(format!("{}: {}", local.display(), e)),
+                }
+            }
+            // Parents before children — `plan_upload` returns them that way,
+            // and an existing directory is not an error worth stopping for.
+            for d in &dirs {
                 if cancel.load(Ordering::Relaxed) {
                     break;
                 }
+                let _ = cian_scp::make_dir(&target, d);
+            }
+            let total = jobs.len();
+            for (i, (local, dest, mode)) in jobs.iter().enumerate() {
+                if cancel.load(Ordering::Relaxed) {
+                    break;
+                }
+                let (local, dest, mode) = (local, dest.clone(), *mode);
                 let fname = local.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-                let dest = format!("{}/{}", remote.trim_end_matches('/'), fname);
                 let cur = fname.clone();
                 let mut fwd = |done: u64, tot: u64| {
                     (ctl.on_progress)(&cian_core::progress::Progress {
@@ -1055,7 +1087,6 @@ impl App {
                         current: cur.clone(),
                     });
                 };
-                let mode = modes.get(i).copied().flatten();
                 let mut sctl = cian_scp::Ctl { cancel, on_progress: &mut fwd, limit_bps: limit };
                 match cian_scp::upload(&target, local, &dest, mode, &mut sctl) {
                     Ok(via) => {

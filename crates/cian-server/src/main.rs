@@ -3100,6 +3100,37 @@ impl Session {
                 // does not depend on one. The terminal build hands the same
                 // list to `cian_ai::chat_with`; a conversation that only one
                 // front end remembers would be two programs again.
+                // Images pasted into the chat, as base64 PNG. Written to
+                // temp files because the helper wants paths — it reads them
+                // and base64s them back into the request itself, which is
+                // silly on this side of the pipe and exactly right on that
+                // one: the terminal build hands it paths too, and one helper
+                // taking two kinds of input would be the fork this project
+                // keeps having to undo.
+                let images: Vec<String> = req.params["images"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str())
+                            .filter_map(cian_core::chatlog::from_base64)
+                            .filter_map(|bytes| {
+                                let dir = std::env::temp_dir().join("cian-paste");
+                                std::fs::create_dir_all(&dir).ok()?;
+                                // Named off the clock, not an index: the list
+                                // is emptied on send, and an index would reuse
+                                // the name of a file the helper may still be
+                                // reading.
+                                let at = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .ok()?
+                                    .as_nanos();
+                                let path = dir.join(format!("{at}.png"));
+                                std::fs::write(&path, bytes).ok()?;
+                                Some(path.to_string_lossy().into_owned())
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 let prior: Vec<cian_ai::Turn> = req.params["prior"]
                     .as_array()
                     .map(|a| {
@@ -3120,7 +3151,7 @@ impl Session {
                 // engine — every keystroke in the listing queued behind a
                 // question about a log file. The first attempt did exactly
                 // that and looked like a freeze.
-                ai_in_background_with(self.out.clone(), cfg, system.to_string(), prior, user.to_string(), |answer| Ok(serde_json::json!({ "answer": answer })));
+                ai_in_background_with(self.out.clone(), cfg, system.to_string(), prior, user.to_string(), images, |answer| Ok(serde_json::json!({ "answer": answer })));
                 Ok(serde_json::json!({ "asked": true }))
             }
             // ---- Bookmarks ----
@@ -3129,6 +3160,67 @@ impl Session {
             // written back through the same renderer. A second bookmark list
             // would be the worst of the two-programs problems: the folders you
             // saved would depend on which one you saved them from.
+            // ---- The AI chat history ----
+            //
+            // The same `ai_history.json` the terminal build reads and writes,
+            // through the same `cian_core::chatlog`. **Not a second store.**
+            // A window that remembered its own conversations and a terminal
+            // that remembered its own would be two programs again, and this
+            // is the one thing where that is not merely untidy: the reason to
+            // look at a history is to find something you asked before, and
+            // "before" does not know which build you were in.
+            "aihistory" => {
+                let path = cian_lua::config_read_path("ai_history.json");
+                let mut all = cian_core::chatlog::load(path.as_deref());
+                match req.params["do"].as_str().unwrap_or("list") {
+                    "list" => Ok(serde_json::json!({
+                        "chats": all
+                            .iter()
+                            .enumerate()
+                            .map(|(at, c)| serde_json::json!({
+                                "at": at,
+                                "title": cian_core::chatlog::title_of(&c.log),
+                                "turns": c.log.len(),
+                                "skin": c.skin.as_ref().map(|s| s.title.clone()),
+                            }))
+                            .collect::<Vec<_>>(),
+                    })),
+                    "load" => {
+                        let at = req.params["at"].as_u64().unwrap_or(0) as usize;
+                        let one = all.get(at).ok_or_else(|| anyhow::anyhow!("そんな会話はありません"))?;
+                        Ok(serde_json::to_value(one)?)
+                    }
+                    "delete" => {
+                        let at = req.params["at"].as_u64().unwrap_or(0) as usize;
+                        if at >= all.len() {
+                            anyhow::bail!("そんな会話はありません");
+                        }
+                        all.remove(at);
+                        cian_core::chatlog::save(
+                            cian_lua::config_write_path("ai_history.json").as_deref(),
+                            &all,
+                        );
+                        Ok(serde_json::json!({ "left": all.len() }))
+                    }
+                    // Archiving happens when a conversation is put away, which
+                    // is the window's decision — it knows when its sheet
+                    // closed. Re-read first: the terminal build may have
+                    // written since this list was loaded, and writing back a
+                    // stale copy is how one build's history eats the other's.
+                    "save" => {
+                        let one: cian_core::chatlog::Stored =
+                            serde_json::from_value(req.params["chat"].clone())
+                                .map_err(|e| anyhow::anyhow!("会話の形が読めません: {e}"))?;
+                        cian_core::chatlog::remember(&mut all, one);
+                        cian_core::chatlog::save(
+                            cian_lua::config_write_path("ai_history.json").as_deref(),
+                            &all,
+                        );
+                        Ok(serde_json::json!({ "kept": all.len() }))
+                    }
+                    other => anyhow::bail!("知らない履歴の操作: {other}"),
+                }
+            }
             "shortcuts" => {
                 let path = cian_lua::config_read_path("shortcuts.lua");
                 let nodes = path
@@ -5565,7 +5657,7 @@ fn ai_in_background(
     user: String,
     wrap: impl FnOnce(String) -> Result<serde_json::Value, String> + Send + 'static,
 ) {
-    ai_in_background_with(out, cfg, system, Vec::new(), user, wrap)
+    ai_in_background_with(out, cfg, system, Vec::new(), user, Vec::new(), wrap)
 }
 
 /// The same, carrying the conversation so far.
@@ -5579,9 +5671,10 @@ fn ai_in_background_with(
     system: String,
     prior: Vec<cian_ai::Turn>,
     user: String,
+    images: Vec<String>,
     wrap: impl FnOnce(String) -> Result<serde_json::Value, String> + Send + 'static,
 ) {
-    std::thread::spawn(move || match cian_ai::chat_with(&cfg, &system, &prior, &user, &[]) {
+    std::thread::spawn(move || match cian_ai::chat_with(&cfg, &system, &prior, &user, &images) {
         Ok(answer) => match wrap(answer) {
             Ok(v) => out.event("ai", v),
             Err(e) => out.event("ai", serde_json::json!({ "error": e })),

@@ -6,51 +6,42 @@
 
 use super::*;
 
-/// A stored chat conversation for `ai_history.json` — a transcript, the backend
-/// it spoke to (so a reopened conversation still routes follow-ups) and how the
-/// window looked, so a reopened conversation keeps the title it had.
-/// `skin` is absent in files written before it existed; those fall back to the
-/// mode's default look.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub(crate) struct StoredChat {
-    mode: ChatMode,
-    #[serde(default)]
-    skin: Option<ChatSkin>,
-    log: Vec<ChatMsg>,
-}
+/// A stored conversation. **The shape lives in `cian-core`** — there are two
+/// front ends and one `ai_history.json`, and two definitions of one file drift.
+pub(crate) use cian_core::chatlog::Stored as StoredChat;
 
-/// Load the saved chat history (portable-aware), newest first. Empty if there
-/// is none or it is unreadable.
+/// Load the saved chat history (portable-aware), newest first.
 pub(crate) fn restore_ai_history() -> Vec<StoredChat> {
-    let Some(path) = cian_lua::config_read_path("ai_history.json").filter(|p| p.exists()) else {
-        return Vec::new();
-    };
-    let Ok(text) = std::fs::read_to_string(path) else { return Vec::new() };
-    serde_json::from_str::<Vec<StoredChat>>(&text).unwrap_or_default()
+    cian_core::chatlog::load(cian_lua::config_read_path("ai_history.json").as_deref())
 }
 
-impl StoredChat {
-    pub(crate) fn new(mode: ChatMode, skin: ChatSkin, log: Vec<ChatMsg>) -> Self {
-        StoredChat { mode, skin: Some(skin), log }
+/// Everything about a stored chat that only the terminal build cares about:
+/// which backend answers a follow-up, and what the window was called.
+pub(crate) trait StoredChatExt {
+    fn made(mode: ChatMode, skin: ChatSkin, log: Vec<ChatMsg>) -> Self;
+    fn mode(&self) -> ChatMode;
+    fn log(&self) -> &[ChatMsg];
+    fn skin(&self) -> ChatSkin;
+}
+
+impl StoredChatExt for StoredChat {
+    fn made(mode: ChatMode, skin: ChatSkin, log: Vec<ChatMsg>) -> Self {
+        StoredChat { mode: mode.stored().to_string(), skin: Some(skin), log }
     }
-    pub(crate) fn mode(&self) -> ChatMode {
-        self.mode
+    /// Which backend answers a follow-up. An unrecognised name — a file
+    /// written by a build with a backend this one has not got — is read as the
+    /// local model rather than refused: a conversation you can still read is
+    /// the whole reason the name is stored as a name.
+    fn mode(&self) -> ChatMode {
+        ChatMode::from_stored(&self.mode)
     }
-    pub(crate) fn log(&self) -> &[ChatMsg] {
+    fn log(&self) -> &[ChatMsg] {
         &self.log
     }
     /// How the window looked, or the mode's default for entries saved before
     /// skins existed.
-    pub(crate) fn skin(&self) -> ChatSkin {
-        self.skin.clone().unwrap_or_else(|| ChatSkin::of(self.mode))
-    }
-}
-
-impl PartialEq for StoredChat {
-    /// Two snapshots are the same conversation when the backend and transcript
-    /// match; the window dressing does not make it a different chat.
-    fn eq(&self, other: &Self) -> bool {
-        self.mode == other.mode && self.log == other.log
+    fn skin(&self) -> ChatSkin {
+        self.skin.clone().unwrap_or_else(|| ChatSkin::of(self.mode()))
     }
 }
 
@@ -583,10 +574,9 @@ impl App {
     pub(crate) fn archive_current_ai_chat(&mut self) {
         if let Popup::AiChat { log, mode, skin, .. } = &self.popup {
             if log.iter().any(|m| !m.user) {
-                let snap = StoredChat::new(*mode, skin.clone(), log.clone());
+                let snap = StoredChat::made(*mode, skin.clone(), log.clone());
                 if self.ai_history.first() != Some(&snap) {
-                    self.ai_history.insert(0, snap);
-                    self.ai_history.truncate(30);
+                    cian_core::chatlog::remember(&mut self.ai_history, snap);
                     self.save_ai_history();
                 }
             }
@@ -598,22 +588,15 @@ impl App {
     /// conversation text — including RAG answers — to `ai_history.json` in
     /// plaintext; failures are silent.
     pub(crate) fn save_ai_history(&self) {
-        let Some(path) = cian_lua::config_write_path("ai_history.json") else { return };
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        if let Ok(json) = serde_json::to_string(&self.ai_history) {
-            let _ = std::fs::write(path, json);
-        }
+        cian_core::chatlog::save(
+            cian_lua::config_write_path("ai_history.json").as_deref(),
+            &self.ai_history,
+        );
     }
 
     /// A one-line title for a stored conversation — its first question.
     pub(crate) fn ai_history_title(log: &[ChatMsg]) -> String {
-        log.iter()
-            .find(|m| m.user)
-            .map(|m| m.text.replace('\n', " "))
-            .map(|t| if t.chars().count() > 60 { format!("{}…", t.chars().take(60).collect::<String>()) } else { t })
-            .unwrap_or_else(|| "(empty)".to_string())
+        cian_core::chatlog::title_of(log)
     }
 
     /// `Ctrl+R` in the chat: archive the current conversation, then show the
@@ -1489,7 +1472,7 @@ mod ai_history_tests {
     #[test]
     fn stored_chats_round_trip_mode_skin_and_log() {
         let stored = vec![
-            StoredChat::new(
+            StoredChat::made(
                 ChatMode::Ai,
                 ChatSkin::of(ChatMode::Ai),
                 vec![
@@ -1499,7 +1482,7 @@ mod ai_history_tests {
             ),
             // A window with a title of its own — the AI actions that name what
             // they did rather than just "Chat".
-            StoredChat::new(
+            StoredChat::made(
                 ChatMode::Ai,
                 ChatSkin { title: "AI - Rename".into(), simple: true },
                 vec![ChatMsg::you("q2")],
