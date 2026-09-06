@@ -483,6 +483,24 @@ cian.font{                                                                     -
 }
 ```
 
+**The typeface — `face`. The window build only.** A terminal's face is the
+emulator's, for the same reason its size is. The window draws through Chromium
+and can be told:
+
+```lua
+cian.font{ face = "JetBrainsMono Nerd Font" }
+```
+
+**The bundled face stays.** A name here only moves to the front of the queue;
+every fallback behind it is still there, so a character the chosen face has no
+glyph for — Japanese in a Latin-only Nerd Font, say — does not fall through to
+whatever the machine calls its default, which on Japanese Windows is 明朝.
+This is a program that draws in columns, and a proportional face has none.
+
+**A face that is not installed is walked past in silence** — indistinguishable
+from one that is. So cian says so once when it cannot find the name, and
+`:version` reports the face that was actually used.
+
 `set` (with `{}` for the size) is the one worth having: it is the only form cian can put *back* at startup. A `bigger`/`smaller` pair only knows how to step, so the size lasts as long as the window does. With nothing configured the keys say so rather than doing nothing.
 
 - **Themes.** 18 presets, live-previewed: `:theme` opens the gallery, `:theme <name>` sets one, and panes can be themed separately. The choice survives a restart.

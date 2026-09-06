@@ -92,9 +92,16 @@
   --status-h:  20px;
   --hints-h:   0px;
   --size:      15px;
+  /* What `cian.font{ face = "…" }` asked for, ahead of everything else.
+     Defaults to the bundled face, so a config that says nothing gets exactly
+     what it got before this existed — and a config that names one is only
+     moving the front of the queue, never emptying it: every fallback below
+     is still there for the characters the chosen face has no glyph for. */
+  --user-face: "cian gothic";
   /* The face the listing and the code use. Named so the preview can borrow
      it for code while setting prose in something proportional. */
-  --mono: "cian gothic", "HackGen Console NF", "HackGen35 Console NF", Menlo,
+  --mono: var(--user-face), "cian gothic", "HackGen Console NF",
+          "HackGen35 Console NF", Menlo,
           Consolas, "BIZ UDGothic", ui-monospace, monospace;
   /* The bundled face first — HackGen Console NF, carried in gui/vendor/fonts
      the way the window build carries the same file. Hoping HackGen was
@@ -103,7 +110,8 @@
      the fallbacks are *monospaced* — this is a grid program, and columns cut
      in a proportional face never line up — ending on `monospace` rather than
      nothing, so a miss lands on a gothic grid and never on 明朝. */
-  --face: "cian gothic", "HackGen Console NF", "HackGen35 Console NF",
+  --face: var(--user-face), "cian gothic", "HackGen Console NF",
+          "HackGen35 Console NF",
           "UDEV Gothic NF", "Cica", Menlo, "Osaka-Mono", "MS Gothic",
           "BIZ UDGothic", ui-monospace, monospace;
 }

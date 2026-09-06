@@ -66,13 +66,13 @@ pub struct Options {
     /// Duration of split/zoom/close transitions in milliseconds. `0` disables
     /// animation entirely.
     pub animation_ms: Option<u64>,
-    /// Which view the window opens in: `"classic"`, `"details"` or `"icons"`.
+    /// Which view the window opens in: `"classic"` or `"details"`.
     ///
     /// Only the windowed build has views to choose between; the terminal build
     /// ignores it. Defaults to `"classic"` — the two panes, because that is
-    /// what cian is; the other two are one pane at a time and give up the
+    /// what cian is; `"details"` is one pane at a time and gives up the
     /// arrangement the whole program is built around. Anyone who wants
-    /// Explorer's list or a wall of tiles says so here, or on `T`.
+    /// Explorer's list says so here, or on `T`.
     pub view: Option<String>,
     /// Show the contextual key-hint bar above the status line.
     pub key_hints: Option<bool>,
@@ -319,16 +319,28 @@ impl ImeOptions {
     }
 }
 
-/// Settings from `cian.font{...}`: how to make the terminal's font bigger and
-/// smaller.
+/// Settings from `cian.font{...}`: which face, and how to make the size
+/// bigger and smaller.
 ///
 /// A program inside a terminal cannot resize that terminal's font — the font
 /// belongs to the emulator, and there is no portable escape sequence for it.
 /// What cian can do is run the command *your* terminal offers and remember
 /// the level, so `Ctrl+-` / `Ctrl++` mean the same thing in cian as they do
 /// everywhere else and the size survives a restart.
+///
+/// `face` is the window build's, and only the window build's, for the same
+/// reason: a terminal's face is the emulator's setting. The window draws
+/// through Chromium and can be told, so it is told.
 #[derive(Debug, Clone, Default)]
 pub struct FontOptions {
+    /// The typeface the window build should draw the listing and the shell in.
+    ///
+    /// A request, not an instruction — the browser takes the first name on the
+    /// list it can actually find, and cian's bundled HackGen Console NF stays
+    /// behind this one as the fallback. `:version` reports which one was
+    /// really used, because a font that is not installed fails silently and
+    /// looks exactly like a font that is.
+    pub face: Option<String>,
     /// Set an absolute size; `{}` is replaced by the level. Preferred, because
     /// it is the only form that can be restored on the next launch.
     pub set: Option<String>,
@@ -1096,7 +1108,7 @@ fn install_api(lua: &Lua, builder: &Rc<RefCell<Builder>>) -> mlua::Result<()> {
         )?;
     }
 
-    // cian.font{ set = "…{}…" } or { bigger = "…", smaller = "…" }
+    // cian.font{ face = "…" } / { set = "…{}…" } / { bigger = "…", smaller = "…" }
     {
         let b = builder.clone();
         cian.set(
@@ -1105,6 +1117,7 @@ fn install_api(lua: &Lua, builder: &Rc<RefCell<Builder>>) -> mlua::Result<()> {
                 let mut c = FontOptions { start: 13, min: 6, max: 40, ..Default::default() };
                 if let Some(t) = t {
                     let s = |k: &str| -> Option<String> { t.get::<Option<String>>(k).ok().flatten() };
+                    c.face = s("face").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
                     c.set = s("set");
                     c.bigger = s("bigger");
                     c.smaller = s("smaller");
@@ -1350,6 +1363,42 @@ pub fn state_with(text: &str, key: &str, value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `cian.font{ face = … }` arrives, and does not disturb the size half.
+    ///
+    /// The face is the window build's; a terminal's belongs to the emulator.
+    /// So the only place this can be checked without a window is here, where
+    /// the config is read — and it is worth checking, because a setting that
+    /// is parsed into nothing looks from outside exactly like a font that is
+    /// not installed.
+    #[test]
+    fn a_typeface_can_be_named_and_the_size_commands_still_work() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("init.lua"),
+            "cian.font{ face = \"JetBrainsMono Nerd Font\", set = \"wezterm-size {}\", start = 14 }\n",
+        )
+        .unwrap();
+        let cfg = load_from(&dir.path().join("init.lua"));
+        assert!(cfg.errors.is_empty(), "{:?}", cfg.errors);
+        let font = cfg.font.expect("cian.font ran");
+        assert_eq!(font.face.as_deref(), Some("JetBrainsMono Nerd Font"));
+        assert_eq!(font.set.as_deref(), Some("wezterm-size {}"), "the size half is untouched");
+        assert_eq!(font.start, 14);
+    }
+
+    /// A name that is only whitespace is no name.
+    ///
+    /// `face = ""` would otherwise reach the window as an empty family, and
+    /// `font-family: ""` is not "use the default" — it is a parse error that
+    /// takes the whole declaration with it, bundled fallbacks included.
+    #[test]
+    fn a_blank_typeface_is_the_same_as_not_saying_one() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("init.lua"), "cian.font{ face = \"   \" }\n").unwrap();
+        let cfg = load_from(&dir.path().join("init.lua"));
+        assert_eq!(cfg.font.expect("cian.font ran").face, None);
+    }
 
     #[test]
     fn ssh_and_keymap_can_live_in_their_own_files() {

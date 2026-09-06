@@ -53,7 +53,7 @@ ENGINE_SIDE = {
 
 # 送る側の下限。`"cfg": { … }` から名前が拾えなくなったら、検査ではなく
 # 読み取りが壊れている。
-FLOOR = 12
+FLOOR = 14
 
 
 def cfg_block() -> tuple[int, int]:

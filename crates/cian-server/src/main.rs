@@ -2885,6 +2885,12 @@ impl Session {
                     "edit_style": cfg.options.edit_style,
                     "show_hidden": cfg.options.show_hidden,
                     "tab_width": cfg.options.tab_width,
+                    // `cian.font{ face = "…" }`. The window is the only front
+                    // end that can act on it: a terminal's face belongs to the
+                    // emulator. Passed through as written — which name is
+                    // actually found is the browser's answer, and `:version`
+                    // reports it.
+                    "font_face": cfg.font.as_ref().and_then(|f| f.face.clone()),
                     "lang": cfg.options.lang,
                     "notify": cfg.options.notify,
                     "notify_min_secs": cfg.options.notify_min_secs,

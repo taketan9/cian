@@ -109,6 +109,14 @@
 -- those glyphs are dropped (no mojibake); folders are still marked by colour.
 -- cian.set_option("nerd_fonts", false)
 
+-- The typeface — **the window build only.** A terminal's face is the
+-- emulator's, for the same reason its size is; the window draws through
+-- Chromium and can be told. The bundled HackGen Console NF stays behind this
+-- one, so a character the chosen face has no glyph for (Japanese in a
+-- Latin-only Nerd Font, say) does not break the columns. A face that is not
+-- installed is said once, and `:version` reports the one actually used.
+-- cian.font{ face = "JetBrainsMono Nerd Font" }
+
 -- Border corners: "rounded" (╭╮╯╰) or "plain" (square). Unset auto-picks —
 -- rounded where the terminal/font can render them, square in the legacy
 -- Windows console. Force "plain" if the corners look misaligned.

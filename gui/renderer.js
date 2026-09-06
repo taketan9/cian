@@ -2334,7 +2334,10 @@ async function cmdSubstitutePrompt() {
 /// What init.lua turned on, as far as the menu is concerned. Filled from the
 /// `settings` reply at startup; false until then, which is the safe way round
 /// — a row that is missing for a moment beats a row that leads nowhere.
-const cfg = { ai: false, snippets: false, macros: false, hosts: false, tabWidth: 0 };
+const cfg = { ai: false, snippets: false, macros: false, hosts: false, tabWidth: 0,
+              /// The face `cian.font{ face = … }` asked for, so the opening line
+              /// can say whether it is the one that drew. See [`applyFace`].
+              faceAsked: null };
 
 /// init.lua の `tab_width` を、いま開いているモデルに当てる。
 ///
@@ -3830,6 +3833,58 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
 });
 
+/// Is this family actually here, in a way that can be believed?
+///
+/// **`document.fonts.check()` cannot answer this.** It reports whether the
+/// *stack* can draw the text, so it says yes to a name no machine has ever
+/// heard of — measured 2026-09-06: `check('16px "Nonexistent Nerd Font XYZ"')`
+/// is `true`. Everything built on it was reporting the first name in the list
+/// and calling that the answer, which is the guess it was meant to replace.
+///
+/// So it is measured. The same string is drawn in `"<name>", <generic>` and in
+/// `<generic>` alone; if the family exists it displaces the generic and the
+/// width moves. Three generics, because a face that happens to match one of
+/// them in metrics would look absent against that one — matching all three is
+/// not a thing real faces do. The probe mixes wide Latin, narrow Latin and
+/// 日本語 so a Latin-only face still parts from a CJK-capable generic.
+function faceIsHere(name) {
+    if (!name || /^(monospace|serif|sans-serif|ui-monospace|system-ui)$/i.test(name)) return false;
+    const c = faceIsHere.ctx || (faceIsHere.ctx = document.createElement('canvas').getContext('2d'));
+    const probe = 'MMMMMWWWWWiiiii日本語0123';
+    const quoted = `"${name.replace(/"/g, '')}"`;
+    return ['monospace', 'serif', 'sans-serif'].some((generic) => {
+        c.font = `72px ${generic}`;
+        const alone = c.measureText(probe).width;
+        c.font = `72px ${quoted}, ${generic}`;
+        return c.measureText(probe).width !== alone;
+    });
+}
+
+/// Put the face `cian.font{ face = "…" }` named at the front of the queue.
+///
+/// **Only the front.** The stacks in index.html stay behind it, bundled face
+/// included, because a chosen face is a preference about the letters cian
+/// mostly draws and not a promise about every codepoint a listing can contain:
+/// a Latin-only Nerd Font asked to draw 日本語 would otherwise fall through to
+/// whatever the machine calls its default, which on Japanese Windows is 明朝 —
+/// proportional, and this is a program that draws in columns.
+///
+/// Silence is the failure mode worth guarding: a face that is not installed
+/// looks exactly like one that is, because the browser walks past it without a
+/// word. So the name asked for is kept, and the opening line below compares it
+/// with the one that actually drew.
+///
+/// **Not said from here.** It was, and it was never seen: the status line is
+/// one slot, and the listing's own "9 件 / 9 件" lands after the config does.
+/// A message that is written and immediately painted over is worse than no
+/// message, because it looks like it was handled.
+function applyFace(name) {
+    const face = typeof name === 'string' ? name.trim() : '';
+    if (!face) return;
+    cfg.faceAsked = face;
+    document.documentElement.style.setProperty('--user-face', `"${face.replace(/"/g, '')}"`);
+}
+
 /// Which face the listing actually got.
 ///
 /// Naming a font is a request, not an instruction: the browser walks the list
@@ -3837,14 +3892,15 @@ document.addEventListener('keydown', (e) => {
 /// the machine calls `sans-serif` — or worse, its default, which on Japanese
 /// Windows is 明朝. That happened, and it took a person at the machine to
 /// notice. A guess about type is not worth having when the answer can be
-/// measured in one line.
+/// measured — and measuring is [`faceIsHere`], because the API that looks like
+/// it answers this does not.
 function resolvedFace() {
     const asked = getComputedStyle(document.body).fontFamily.split(',');
     for (const raw of asked) {
-        const name = raw.trim().replace(/^["']|["']$/g, '');
-        if (document.fonts.check(`16px "${name}"`)) return name;
+        const name = raw.trim().replace(/^["\']|["\']$/g, '');
+        if (faceIsHere(name)) return name;
     }
-    return '(none of them — the browser chose)';
+    return tr('(none of them — the browser chose)', '(どれも無く、ブラウザが選びました)');
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -10355,6 +10411,7 @@ async function recall() {
         cfg.tabWidth = c.tab_width;
         applyTabWidth();
     }
+    applyFace(c.font_face);
     cfg.ai = c.ai === true;
     cfg.snippets = c.snippets === true;
     cfg.macros = c.macros === true;
@@ -10455,21 +10512,41 @@ document.fonts.ready.then(() => {
     // The listing counts rows the same way, and the hint bar's own height
     // feeds the space everything else is laid out in.
     drawHints();
-    refresh();
+    // …and the opening line goes after that listing, not before it: this
+    // `refresh()` is what used to paint over the greeting. `recall()` is
+    // awaited too, because the face it reports is the one `cian.font{ face }`
+    // asked for and that arrives with the settings.
+    Promise.all([refresh(), recall()]).then(greet);
 });
 
 drawHints();
 
-refresh().then(() => {
+/// The opening line: what init.lua got wrong, or what cian is drawing in.
+///
+/// **Called last, on purpose.** It used to sit in the first `refresh().then`,
+/// which is before `fonts.ready` and before the config has arrived — so it
+/// measured the fallback, named it as the answer, and was then painted over
+/// by the `refresh()` that `fonts.ready` runs. Written, correct-looking in the
+/// source, and never once on screen. Measured 2026-09-06.
+function greet() {
     if (keymapErrors.length) {
         say(tr(`init.lua keymap: ${keymapErrors.join('  /  ')}`, `init.lua の keymap: ${keymapErrors.join('  /  ')}`), true);
         return;
     }
-    // Said once, on the status line, where it costs nothing and answers the
-    // only question this milestone exists to answer.
     const face = resolvedFace();
     const size = getComputedStyle(document.body).fontSize;
+    // `cian.font{ face = … }` named something this machine does not have.
+    // Worth interrupting the greeting for: the browser walks past a name it
+    // cannot find without a word, so the only other way to find out is to
+    // notice that the letters are not the ones that were asked for.
+    if (cfg.faceAsked && !faceIsHere(cfg.faceAsked)) {
+        say(tr(
+            `${cfg.faceAsked} is not installed — drawing in ${face} ${size}`,
+            `${cfg.faceAsked} は入っていません — ${face} ${size} で描いています`,
+        ), true);
+        return;
+    }
     // The message half only — the whole bar carries chips now, and reading
     // the element back would fold the badge and counts into the greeting.
     say(`${status.msg}   ·   ${face} ${size}`);
-});
+}
