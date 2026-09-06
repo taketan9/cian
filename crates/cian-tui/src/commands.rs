@@ -12,24 +12,6 @@ impl App {
         self.mode = Mode::Command;
     }
 
-    /// Say that a view belongs to the windowed build, when this is not one.
-    ///
-    /// The request itself is harmless in a terminal — nothing collects it — but
-    /// a command that changes nothing and says nothing reads as broken.
-    fn say_view_is_window_only(&mut self) {
-        if crate::theme::in_a_window() {
-            return;
-        }
-        self.message = Some(
-            tr(
-                self.lang,
-                "that view is in the windowed build — the terminal has the classic panes",
-                "その表示は窓版のものです — 端末版はクラシック表示のみ",
-            )
-            .into(),
-        );
-    }
-
     pub(crate) fn run_command(&mut self) {
         let raw = self.command_buffer.trim().to_string();
         self.command_buffer.clear();
@@ -66,7 +48,6 @@ impl App {
 
         match verb {
             "q" | "quit" => self.should_quit = true,
-            "shell" if !self.has_shell_panel() => self.no_shell_panel_here(),
             "shell" => self.focus(FocusedPane::Shell),
             "man" | "help" | "h" => self.open_manual(),
             "paste" => { let _ = self.paste_clip(); }
@@ -74,26 +55,16 @@ impl App {
             // `r` and the menu have always had this; the command line never
             // did, and the name was taken by the AI renamer.
             "rename" | "ren" => self.start_rename(),
-            // `:view` on its own has always opened the file under the cursor,
-            // and still does. `:view details|icons|classic` switches the look —
-            // the same three the switcher in the corner offers, for a hand that
-            // is already on the keyboard.
+            // `:view` opens the file under the cursor. It used to take
+            // `details` / `classic` / `icons` as well, which set a flag only
+            // the windowed build collected — so in a terminal they were three
+            // words that did nothing. The window has its own `:view` and keeps
+            // both looks; the terminal has one look and says so.
             "view" => match rest {
                 "" => self.look_inside(),
-                // Two of the three only exist in a window: `view_request` is
-                // read by the windowed build alone, so in a terminal these set
-                // a flag nobody collects. The request still goes up — one code
-                // path, and the window is where it lands — but a terminal is
-                // told why nothing happened, which it never was. Silence is
-                // indistinguishable from the command not existing.
-                "details" | "finder" => {
-                    self.view_request = Some(crate::ViewWanted::Details);
-                    self.say_view_is_window_only();
-                }
-                "classic" => self.view_request = Some(crate::ViewWanted::Classic),
                 other => {
                     self.message = Some(format!(
-                        "{other}? — :view details | icons | classic",
+                        "{other}? — :view opens the file under the cursor",
                     ))
                 }
             },

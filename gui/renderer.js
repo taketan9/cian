@@ -493,7 +493,6 @@ function draw(which) {
     // Rebuilt whole. A listing is a few hundred rows and Chromium does not
     // notice; the moment it does, this is where a windowed list goes.
     const frag = document.createDocumentFragment();
-    rows.classList.toggle('icons', viewMode === 'icons');
     rows.classList.toggle('details', viewMode === 'details');
     rows.classList.toggle('classic', viewMode === 'classic');
     // The columns that fit, decided by the pane's real width — the terminal
@@ -509,8 +508,7 @@ function draw(which) {
     // draws one in every list view, and a table without its sort marker is a
     // table you have to remember about. Clicking a heading sorts by it.
     const head = root.querySelector('.dhead');
-    head.hidden = viewMode === 'icons';
-    if (!head.hidden && head.dataset.built !== `${viewMode}/${lang}`) {
+    if (head.dataset.built !== `${viewMode}/${lang}`) {
         // Keyed by the language too: the headings are words, and a cache on
         // the view alone kept 名前 / サイズ / 日時 after the switch.
         head.dataset.built = `${viewMode}/${lang}`;
@@ -559,10 +557,7 @@ function draw(which) {
     // a mechanism that only runs where it is needed cannot break the case
     // where it is not.
     //
-    // Not in the icon view: those tiles wrap, so their count per row depends
-    // on the width, and arithmetic that assumes a fixed row is arithmetic
-    // that will be wrong the first time somebody drags the divider.
-    const virtual = viewMode !== 'icons' && pane.entries.length >= VIRTUAL_FROM;
+    const virtual = pane.entries.length >= VIRTUAL_FROM;
     const cellH = virtual ? rowHeight(rows) : 0;
     let from = 0;
     let to = pane.entries.length;
@@ -605,15 +600,7 @@ function draw(which) {
         const name = document.createElement('span');
         name.className = 'name';
         name.textContent = row.parent ? '..' : row.name;
-        if (viewMode === 'icons') {
-            const g = document.createElement('span');
-            g.className = 'glyph';
-            g.textContent = glyphFor(row);
-            // The tiles are where a picture is the point, so this is where
-            // the desktop's own icon is worth waiting a frame for.
-            nativeIconFor(row, g);
-            div.append(g, name);
-        } else if (viewMode === 'details') {
+        if (viewMode === 'details') {
             // Explorer's details, in Explorer's order: icon, name, size,
             // kind, date. The icon belongs here too — a details list with no
             // picture in it reads as a table of strings, and the kind of a
@@ -1072,24 +1059,9 @@ async function clearMarksAndFilter() {
     say(tr('marks and filter cleared', 'マークとフィルタを解除しました'));
 }
 
-/// How many tiles sit on one visual row of the icon grid, measured off the
-/// live layout — the grid is `auto-fill` and only the browser knows.
-function iconCols() {
-    const grid = el[state.focus].querySelector('.rows');
-    const tiles = grid.children;
-    if (tiles.length < 2) return 1;
-    const top = tiles[0].offsetTop;
-    let n = 1;
-    while (n < tiles.length && tiles[n].offsetTop === top) n += 1;
-    return n;
-}
-
 function move(delta) {
     const pane = state[state.focus];
     if (!pane || !pane.entries.length) return;
-    // In the icon grid, a step up or down is a visual row, not a file — the
-    // keys follow the eyes.
-    if (viewMode === 'icons' && Math.abs(delta) === 1) delta *= iconCols();
     const last = pane.entries.length - 1;
     pane.cursor = Math.min(last, Math.max(0, pane.cursor + delta));
     draw(state.focus);
@@ -1632,14 +1604,9 @@ function clearPalette() {
     delete document.documentElement.dataset.dark;
 }
 
-/// How the listing is laid out: the terminal build's `:view`, which it
-/// could only ask for — ":view icons" in a terminal answers "window only",
-/// because this is the feature a window exists to have.
-/// **`icons` は入口から外した**（2026-09-02、一覧・クラシック・ノートの三つで
-/// よい、との判断）。描く側のコードは残してある ── アイコン表示の当たり判定は
-/// 詳細ビューのアドレスバー・パンくず・タブ・サイドバーと同じ関数の中にいて、
-/// 三度ほどいて三度とも詳細ビューを壊しかけた。**入口を閉じるのは安全で、
-/// 分解は別の日にできる。**
+/// How the listing is laid out. **窓版だけの話** ── 端末版は 2026-09-06 に
+/// `:view` の引数ごと落とした（旗を立てるだけで誰も読まなかった）。
+/// アイコンモードは 2026-09-02 に入口を閉じ、描く側も 2026-09-06 に消した。
 // モードの順番はここ一つ。`モード ▸` も T トグルの巡回も `表示 ▸` も
 // この順に従う（クラシック → 詳細一覧）。**amber モードは 2026-09-06 に
 // 出た** ── ノートのアプリは `~/workspace/amber` で、cian は2画面ファイラ。
@@ -1650,23 +1617,17 @@ function viewName(mode) {
     return {
         classic: tr("classic mode", 'クラシックモード'),
         details: tr("details mode", '詳細一覧モード'),
-        // 引退済み。`VIEWS` に無いので選べないが、名前は残す ── `:view icons`
-        // と打った人に「そんなモードは無い」ではなく、詳細一覧へ案内するため。
-        icons: tr("icons mode", 'アイコンモード'),
     }[mode];
 }
-/// The two that take the whole window. Both are the Explorer arrangement,
-/// where the listing is the thing you are looking at; classic keeps the two
-/// panes, which is what cian is for.
-const ONE_PANE = ['details', 'icons'];
+/// The one that takes the whole window: the Explorer arrangement, where the
+/// listing is the thing you are looking at. Classic keeps the two panes,
+/// which is what cian is for.
+const ONE_PANE = ['details'];
 let viewMode = 'classic';
 
 function setView(mode, remember = true) {
     if (!VIEWS.includes(mode)) { say(`${mode}? — :view classic | details`, true); return; }
     viewMode = mode;
-    // Icons take the whole window; the other two keep the two panes. A wall
-    // of tiles split down the middle is two narrow columns of icons, which is
-    // not what either half of that arrangement is for.
     el.panes.classList.toggle('one', ONE_PANE.includes(mode));
     // `draw` already paints `active` on the focused pane, which is what
     // decides who is at the front here — so the two views need no second
@@ -1807,7 +1768,7 @@ const nativeIcons = new Map();
 
 function nativeIconFor(row, into) {
     if (!window.cian.fileIcon || row.parent) return;
-    // Folders too. They were excluded here, so `:view icons` drew the desktop's
+    // Folders too. They were excluded here, so the listing drew the desktop's
     // real icon for every file and a Nerd Font glyph for every directory —
     // which is what "these are not Windows' icons" was about: the one row
     // shape a person looks at first was the one row shape still coming from
@@ -3702,8 +3663,6 @@ document.addEventListener('keydown', (e) => {
     // Shift+H / Shift+L cross the panes, as in the terminal build.
     else if (k === 'H' && bare) focusPane('left');
     else if (k === 'L' && bare) focusPane('right');
-    else if (k === 'ArrowLeft' && !e.altKey && viewMode === 'icons') { const p = state[state.focus]; p.cursor = Math.max(0, p.cursor - 1); draw(state.focus); }
-    else if (k === 'ArrowRight' && !e.altKey && viewMode === 'icons') { const p = state[state.focus]; p.cursor = Math.min(p.entries.length - 1, p.cursor + 1); draw(state.focus); }
     else if (k === 'ArrowLeft' && !e.altKey) focusPane('left');
     else if (k === 'h' && mod(e)) focusPane('left');
     else if (k === 'ArrowRight' && !e.altKey) focusPane('right');
@@ -7734,10 +7693,8 @@ async function cmdView(arg, invokedAs) {
     const mode = (arg || invokedAs || '').trim();
     // `grid` と `icons` はアイコンモードのこと。**引退させたのは彼の判断**
     // （2026-09-05）── クラシックが基本、Explorer/Finder ふうが要るなら詳細
-    // 一覧で足りる。アイコンモードは「くどい」うえ、Windows で OS のアイコンを
-    // 出すのに手間が掛かっていたので、そこにコストを掛けないと決めた。
-    // **描画の分岐はまだ動く**（試すと正しく描ける）が、戻すのは彼の判断。
-    // 打った人を「そんなモードは無い」で突き放さず、詳細一覧へ案内する。
+    // 一覧で足りる。描く側も 2026-09-06 に消したので、もう戻せる分岐は無い。
+    // それでも打った人を「そんなモードは無い」で突き放さず、詳細一覧へ案内する。
     const map = { grid: 'details', icons: 'details', finder: 'details' };
     if (!mode || mode === 'view') {
         setView(VIEWS[(VIEWS.indexOf(viewMode) + 1) % VIEWS.length]);

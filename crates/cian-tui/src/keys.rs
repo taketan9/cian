@@ -213,12 +213,6 @@ impl App {
         // while its op is genuinely still running. Both polls no-op when idle.
         self.poll_op_job();
         self.poll_diff_job();
-        // The icon grid claims the letters and the arrows for itself — see
-        // [`crate::grid`]. Ahead of everything else because the whole point is
-        // that in that view a letter is a name, not a command.
-        if self.grid_key(key) {
-            return Ok(());
-        }
         // While the progress popup is up, it owns the keyboard: Esc stops the
         // op, and `b`/Enter tucks the popup away so work can continue while
         // the op runs (a status-line chip keeps showing it; `:queue` manages
@@ -2355,13 +2349,6 @@ impl App {
             // than a bar that stays quiet: it sends the hand somewhere.
             (false, _, KeyCode::Char('l')) if self.in_archive() => {
                 self.execute_action(Action::EnterDir)?;
-            }
-            // `q` quits — but not in the views that are a desktop rather than
-            // a terminal. There, as in the icon grid and as in every file
-            // manager, a letter looks for a file starting with it. Someone
-            // typing the name of a folder should not be asked whether to leave.
-            (false, _, KeyCode::Char('q')) if self.single_pane_view() => {
-                self.type_ahead_jump('q')
             }
             (false, _, KeyCode::Char('q')) => self.start_quit_confirm(),
             // `_` for shift, not `false`: `:` is Shift+; on most layouts, and a

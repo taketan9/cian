@@ -1393,8 +1393,7 @@
         }
     }
 
-    /// In the Finder and icon skins, a right-click inside the open file belongs
-    /// to the file.
+    /// A right-click inside the open file belongs to the file.
     ///
     /// The single-pane block claimed every click in the window — it asked only
     /// whether a panel was docked, never where the pointer was — and returned
@@ -1404,8 +1403,6 @@
     fn a_right_click_in_the_docked_panel_opens_the_panels_own_menu() {
         let (_d, mut app) = viewer_on("alpha\nbravo\ncharlie\n");
         app.handle_key(code(KeyCode::F(12))).unwrap();
-        app.skin = Skin::Finder;
-        assert!(app.single_pane_view(), "the skin this was reported in");
         let _ = render(&mut app, 160, 30);
         let f = app.viewer_frame;
         assert!(f.width > 0 && f.height > 0, "the panel was measured");
@@ -14484,247 +14481,6 @@
         assert!(out.contains("starting shell"), "expected placeholder; got:\n{}", out);
     }
 
-/// The icon grid gives the letters up: in that view a key names a file rather
-/// than running a command. See [`crate::grid`].
-mod grid_type_ahead {
-    use super::*;
-
-    /// A grid over these files, cursor at the top.
-    fn grid(names: &[&str]) -> (tempfile::TempDir, App) {
-        let (dir, mut app) = app_with(names);
-        app.icon_view = true;
-        app.icon_cols = 3;
-        (dir, app)
-    }
-
-    fn press(app: &mut App, c: char) {
-        app.handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)).unwrap();
-    }
-
-    fn under_cursor(app: &App) -> String {
-        app.active_pane().and_then(|p| p.selected()).map(|e| e.name.clone()).unwrap_or_default()
-    }
-
-    #[test]
-    fn a_letter_goes_to_the_first_file_starting_with_it() {
-        let (_d, mut app) = grid(&["apple.txt", "jam.txt", "juice.txt", "kiwi.txt"]);
-        press(&mut app, 'j');
-        assert_eq!(under_cursor(&app), "jam.txt");
-    }
-
-    #[test]
-    fn the_same_letter_again_walks_to_the_next_one() {
-        let (_d, mut app) = grid(&["apple.txt", "jam.txt", "juice.txt", "kiwi.txt"]);
-        press(&mut app, 'j');
-        press(&mut app, 'j');
-        assert_eq!(under_cursor(&app), "juice.txt");
-    }
-
-    #[test]
-    fn repeating_past_the_last_one_wraps_to_the_first() {
-        let (_d, mut app) = grid(&["jam.txt", "juice.txt"]);
-        press(&mut app, 'j');
-        press(&mut app, 'j');
-        press(&mut app, 'j');
-        assert_eq!(under_cursor(&app), "jam.txt");
-    }
-
-    #[test]
-    fn different_letters_build_a_prefix() {
-        let (_d, mut app) = grid(&["read.txt", "readme.md", "report.pdf"]);
-        press(&mut app, 'r');
-        assert_eq!(under_cursor(&app), "read.txt");
-        // `e` extends rather than jumping to something starting with `e`, so
-        // this stays inside the `re…` names instead of leaving them.
-        press(&mut app, 'e');
-        assert_eq!(under_cursor(&app), "read.txt");
-        press(&mut app, 'p');
-        assert_eq!(under_cursor(&app), "report.pdf");
-    }
-
-    #[test]
-    fn case_does_not_matter() {
-        let (_d, mut app) = grid(&["Report.pdf", "apple.txt"]);
-        press(&mut app, 'r');
-        assert_eq!(under_cursor(&app), "Report.pdf");
-    }
-
-    #[test]
-    fn a_prefix_that_matches_nothing_falls_back_to_the_last_letter() {
-        let (_d, mut app) = grid(&["apple.txt", "jam.txt"]);
-        press(&mut app, 'a');
-        // `q` cannot extend `a…`, so it is taken as a fresh search — which also
-        // matches nothing, and the cursor is left where it was rather than
-        // wandering off.
-        press(&mut app, 'q');
-        assert_eq!(under_cursor(&app), "apple.txt");
-        // ...and the next real letter still works, rather than being stuck
-        // behind a dead prefix.
-        press(&mut app, 'j');
-        assert_eq!(under_cursor(&app), "jam.txt");
-    }
-
-    #[test]
-    fn the_arrows_walk_the_grid_by_row_and_by_one() {
-        let (_d, mut app) = grid(&["a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt"]);
-        let first = under_cursor(&app);
-        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)).unwrap();
-        assert_ne!(under_cursor(&app), first);
-        // Down moves a whole row — three, because the grid is three wide.
-        let before = app.active_pane().unwrap().cursor;
-        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)).unwrap();
-        assert_eq!(app.active_pane().unwrap().cursor, before + 3);
-    }
-
-    #[test]
-    fn the_lists_are_unaffected() {
-        // The same keys outside the grid keep every meaning they had.
-        let (_d, mut app) = app_with(&["jam.txt", "juice.txt"]);
-        let before = app.active_pane().unwrap().cursor;
-        press(&mut app, 'j');
-        assert_eq!(
-            app.active_pane().unwrap().cursor,
-            before + 1,
-            "`j` outside the grid still moves down one"
-        );
-    }
-}
-
-/// The grid's mouse. Clicking a tile has to move the cursor of the pane the
-/// grid is actually *drawing* — they were two different panes once, which made
-/// a click move a cursor nobody could see and a double click walk into a
-/// directory that was not on screen.
-mod grid_mouse {
-    use super::*;
-    use ratatui::layout::Rect;
-
-    /// A grid three tiles wide, laid out at the origin, as a draw would leave
-    /// it. `TILE_W` and `TILE_H` are the renderer's own.
-    fn grid(names: &[&str]) -> (tempfile::TempDir, App) {
-        let (dir, mut app) = app_with(names);
-        app.icon_view = true;
-        app.icon_cols = 3;
-        app.grid_area = Some(Rect::new(0, 0, 3 * 14, 4 * 6));
-        (dir, app)
-    }
-
-    /// The middle of tile `n`, in cells.
-    fn tile(n: usize, cols: usize) -> (u16, u16) {
-        let (cx, cy) = ((n % cols) as u16 * 14, (n / cols) as u16 * 6);
-        (cx + 7, cy + 2)
-    }
-
-    #[test]
-    fn clicking_a_tile_moves_the_cursor_to_it() {
-        let (_d, mut app) = grid(&["a.txt", "b.txt", "c.txt", "d.txt"]);
-        let (col, row) = tile(2, 3);
-        assert!(app.grid_click(col, row), "the grid should take the click");
-        assert_eq!(app.active_pane().unwrap().cursor, 2);
-    }
-
-    #[test]
-    fn clicking_the_second_row_lands_on_the_right_entry() {
-        let (_d, mut app) = grid(&["a.txt", "b.txt", "c.txt", "d.txt", "e.txt"]);
-        // Index 4 is the second row, first column, on a three-wide grid.
-        let (col, row) = tile(4, 3);
-        assert!(app.grid_click(col, row));
-        assert_eq!(app.active_pane().unwrap().cursor, 4);
-    }
-
-    #[test]
-    fn clicking_past_the_last_entry_changes_nothing() {
-        let (_d, mut app) = grid(&["a.txt", "b.txt"]);
-        let before = app.active_pane().unwrap().cursor;
-        let (col, row) = tile(8, 3);
-        // Swallowed — the grid owns its rectangle — but the cursor stays put
-        // rather than jumping to the end.
-        app.grid_click(col, row);
-        assert_eq!(app.active_pane().unwrap().cursor, before);
-    }
-
-    #[test]
-    fn it_acts_on_the_pane_the_grid_is_drawing() {
-        // With the focus on the right pane, a click still has to move the
-        // cursor the user can see. Both panes open on the same directory here,
-        // so the test is about *which* pane changed, not about the contents.
-        let (_d, mut app) = grid(&["a.txt", "b.txt", "c.txt"]);
-        app.focus(FocusedPane::Right);
-        let left_before = app.left.active_ref().cursor;
-        let (col, row) = tile(2, 3);
-        assert!(app.grid_click(col, row));
-        assert_eq!(
-            app.active_pane().unwrap().cursor,
-            2,
-            "the focused pane — which is the one the grid draws — moved"
-        );
-        assert_eq!(
-            app.left.active_ref().cursor,
-            left_before,
-            "and the pane that is not on screen was left alone"
-        );
-    }
-
-    #[test]
-    fn holding_the_modifier_adds_to_the_selection() {
-        // Entry 0 is `..`, which is navigation and never a selection — so the
-        // files start at 1.
-        let (_d, mut app) = grid(&["a.txt", "b.txt", "c.txt"]);
-        let (c1, r1) = tile(1, 3);
-        let (c3, r3) = tile(3, 3);
-        assert!(app.grid_click_mods(c1, r1, true));
-        assert!(app.grid_click_mods(c3, r3, true));
-        let pane = app.active_pane().unwrap();
-        assert!(pane.is_marked(1) && pane.is_marked(3), "both are marked");
-        assert!(!pane.is_marked(2), "and the one in between is not");
-    }
-
-    #[test]
-    fn a_plain_click_leaves_the_marks_alone() {
-        // cian's marks are built with `Space` and operated on by every file
-        // command; a click that quietly emptied them would lose work.
-        let (_d, mut app) = grid(&["a.txt", "b.txt", "c.txt"]);
-        let (c1, r1) = tile(1, 3);
-        app.grid_click_mods(c1, r1, true);
-        let (c2, r2) = tile(2, 3);
-        app.grid_click_mods(c2, r2, false);
-        assert!(app.active_pane().unwrap().is_marked(1), "the earlier mark survives");
-        assert_eq!(app.active_pane().unwrap().cursor, 2, "and the cursor moved");
-    }
-
-    #[test]
-    fn the_lists_are_unaffected() {
-        let (_d, mut app) = app_with(&["a.txt", "b.txt"]);
-        assert!(!app.grid_click(7, 2), "outside the grid, the grid takes nothing");
-    }
-
-    #[test]
-    fn right_clicking_points_at_the_file_first() {
-        // A menu about "the selected file" has to be about the one that was
-        // right-clicked, not about wherever the cursor happened to be.
-        use crossterm::event::{KeyModifiers, MouseEvent, MouseEventKind};
-        let (_d, mut app) = grid(&["a.txt", "b.txt", "c.txt"]);
-        let (col, row) = tile(2, 3);
-        app.handle_mouse(MouseEvent {
-            kind: MouseEventKind::Down(crossterm::event::MouseButton::Right),
-            column: col,
-            row,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(app.active_pane().unwrap().cursor, 2, "the cursor moved to it");
-        assert!(matches!(app.popup, Popup::ContextMenu { .. }), "and the menu opened");
-    }
-
-    #[test]
-    fn the_parent_row_is_never_marked() {
-        // `..` is a way out, not a file. Ctrl-clicking it moves the cursor
-        // and marks nothing.
-        let (_d, mut app) = grid(&["a.txt"]);
-        let (c, r) = tile(0, 3);
-        app.grid_click_mods(c, r, true);
-        assert!(!app.active_pane().unwrap().is_marked(0));
-    }
-}
-
 /// `Ctrl+A` in a text field selects the line, and the clipboard keys act on it.
 /// The address bar is the reason — an address is copied, pasted and replaced
 /// far more often than it is edited in the middle.
@@ -14890,50 +14646,6 @@ mod shortcut_delete_asks {
     }
 }
 
-/// The windowed build hands the front end a list of "a picture goes here"
-/// slots, rebuilt every frame. It has to *be* rebuilt: the list only ever grew,
-/// and a window sitting still with thirty icons on it was asking the renderer
-/// for thousands of quads a few seconds later.
-mod pictures_do_not_pile_up {
-    use super::*;
-
-    fn frames(app: &mut App, n: usize) -> Vec<usize> {
-        (0..n)
-            .map(|_| {
-                let _ = render(app, 140, 40);
-                app.icon_slots.len()
-            })
-            .collect()
-    }
-
-    #[test]
-    fn the_detail_view_asks_for_the_same_pictures_every_frame() {
-        let (_d, mut app) = app_with(&["a.txt", "b.txt", "c.txt"]);
-        app.native_icons = true;
-        app.skin = Skin::Finder;
-        let counts = frames(&mut app, 4);
-        assert!(counts[0] > 0, "the detail view asks for pictures at all");
-        assert!(
-            counts.iter().all(|n| *n == counts[0]),
-            "a still screen asks for the same slots each time, got {counts:?}"
-        );
-    }
-
-    #[test]
-    fn the_icon_grid_asks_for_the_same_pictures_every_frame() {
-        let (_d, mut app) = app_with(&["a.txt", "b.txt", "c.txt"]);
-        app.native_icons = true;
-        app.skin = Skin::Finder;
-        app.icon_view = true;
-        let counts = frames(&mut app, 4);
-        assert!(counts[0] > 0, "the grid is made of pictures");
-        assert!(
-            counts.iter().all(|n| *n == counts[0]),
-            "a still grid asks for the same slots each time, got {counts:?}"
-        );
-    }
-}
-
 /// Opening things in a pane that is a server. The rows carry paths that mean
 /// nothing to this disk, so every "open it" route has to go over the network.
 mod remote_pane_opens {
@@ -15013,23 +14725,12 @@ mod advice_is_for_terminals {
 
     #[test]
     fn only_the_legacy_windows_console_is_told_about_itself() {
-        // (host, on Windows, host says it is a modern terminal)
-        assert!(wants_terminal_advice(Host::Terminal, true, false), "the case it exists for");
-        assert!(!wants_terminal_advice(Host::Terminal, true, true), "Windows Terminal is fine");
-        assert!(!wants_terminal_advice(Host::Terminal, false, false), "not a Windows problem");
+        // (on Windows, host says it is a modern terminal)
+        assert!(wants_terminal_advice(true, false), "the case it exists for");
+        assert!(!wants_terminal_advice(true, true), "Windows Terminal is fine");
+        assert!(!wants_terminal_advice(false, false), "not a Windows problem");
     }
 
-    #[test]
-    fn a_window_is_never_told_to_go_and_find_a_terminal() {
-        for windows in [true, false] {
-            for modern in [true, false] {
-                assert!(
-                    !wants_terminal_advice(Host::Window, windows, modern),
-                    "windows={windows} modern={modern}"
-                );
-            }
-        }
-    }
 }
 
 /// Where the desktop is. Not always `~/Desktop`: OneDrive takes the folder
@@ -15069,79 +14770,6 @@ mod where_the_desktop_is {
     }
 }
 
-/// A theme the user asked for holds in every view. The detail and icon views
-/// bring the Finder palette with them, and were bringing it over the top of a
-/// theme chosen in init.lua — the same cian looked like two programs depending
-/// on which view was showing.
-mod a_chosen_theme_survives_the_view {
-
-    #[test]
-    fn only_a_theme_nobody_asked_for_may_be_replaced() {
-        assert!(
-            crate::theme::skin_may_swap_theme(false),
-            "nobody chose these colours, so the detail view brings its own"
-        );
-        assert!(
-            !crate::theme::skin_may_swap_theme(true),
-            "these are the user's colours, and they hold in every view"
-        );
-    }
-}
-
-/// The single-pane views are the filer and nothing else — that is what someone
-/// who did not want a terminal picked. So there is no shell panel in them, and
-/// asking for one says where it lives rather than moving the focus somewhere
-/// nothing is drawn (which is what made the shell look like it would not
-/// start).
-mod the_filer_views_have_no_shell {
-    use super::*;
-
-    fn detail_view(names: &[&str]) -> (tempfile::TempDir, App) {
-        let (d, mut app) = app_with(names);
-        app.skin = Skin::Finder;
-        app.native_icons = true;
-        (d, app)
-    }
-
-    #[test]
-    fn the_detail_view_keeps_the_focus_on_the_files() {
-        let (_d, mut app) = detail_view(&["a.txt"]);
-        app.handle_key(KeyEvent::new(KeyCode::Char('J'), KeyModifiers::SHIFT)).unwrap();
-        assert_eq!(app.focused, FocusedPane::Left, "the focus never left the listing");
-        assert!(app.message.is_some(), "and it says where the shell is");
-        let _ = render(&mut app, 140, 40);
-        assert_eq!(app.layout_rects.shell.height, 0, "no panel is drawn for it");
-    }
-
-    #[test]
-    fn the_icon_grid_answers_the_same_way() {
-        let (_d, mut app) = detail_view(&["a.txt"]);
-        app.icon_view = true;
-        app.handle_key(KeyEvent::new(KeyCode::Char('J'), KeyModifiers::SHIFT)).unwrap();
-        assert_ne!(app.focused, FocusedPane::Shell);
-    }
-
-    #[test]
-    fn the_classic_view_still_goes_to_the_shell() {
-        let (_d, mut app) = app_with(&["a.txt"]);
-        app.handle_key(KeyEvent::new(KeyCode::Char('J'), KeyModifiers::SHIFT)).unwrap();
-        assert_eq!(app.focused, FocusedPane::Shell, "classic has a panel, so J reaches it");
-    }
-}
-
-/// The mark for a cloud placeholder, and why the window does not get the cloud.
-mod the_cloud_mark_fits_its_cell {
-    #[test]
-    fn a_terminal_keeps_the_cloud_and_the_window_does_not() {
-        assert_eq!(crate::render::cloud_mark_for(false), "☁ ", "a terminal draws it fine");
-        assert_eq!(
-            crate::render::cloud_mark_for(true),
-            "↓ ",
-            "the window rasterises per cell, and ☁ is a two-cell glyph there"
-        );
-    }
-}
-
 /// What a frame costs, on this machine, in a directory big enough to fill the
 /// pane. Not an assertion — "fast enough" is not something a test can decide —
 /// but a number that can be taken before and after a change to the drawing
@@ -15160,7 +14788,6 @@ mod frame_cost {
         }
         let p = d.path().to_path_buf();
         let mut app = App::new(p.clone(), p, en_config()).unwrap();
-        app.native_icons = true;
 
         // Warm: the first frame pays for whatever is lazily built.
         for _ in 0..20 {
@@ -15198,115 +14825,12 @@ mod frame_cost {
         }
         let q = e.path().to_path_buf();
         let mut empty = App::new(q.clone(), q, en_config()).unwrap();
-        empty.native_icons = true;
         empty.preview_on = false;
         for _ in 0..20 {
             let _ = render(&mut empty, 200, 60);
         }
         let bare = cost(&mut empty, 200, 60);
         eprintln!("frame_cost: {bare:?} 200x60 with three files (no preview)");
-    }
-}
-
-/// The sidebar is drawn on every frame, and the disk must not be asked about
-/// it on every frame. On Windows those paths are usually OneDrive's, where a
-/// question costs a round trip to the sync engine — sixteen milliseconds a
-/// frame of them, measured in the window.
-mod the_sidebar_does_not_ask_the_disk_every_frame {
-    use super::*;
-
-    #[test]
-    fn what_it_learned_is_kept_between_frames() {
-        let (_d, mut app) = app_with(&["a.txt"]);
-        app.skin = Skin::Finder;
-        app.native_icons = true;
-        assert!(app.sidebar_dirs.1.is_empty(), "nothing known before the first frame");
-        let _ = render(&mut app, 140, 40);
-        let learned = app.sidebar_dirs.1.len();
-        assert!(learned > 0, "the first frame asks, and remembers what it heard");
-        let _ = render(&mut app, 140, 40);
-        assert_eq!(app.sidebar_dirs.1.len(), learned, "the second frame asks nothing new");
-    }
-
-    /// The standard places are worked out once for the life of the process:
-    /// each one probes up to ten paths, and they cannot move while cian runs.
-    #[test]
-    fn the_standard_places_are_worked_out_once() {
-        let first = crate::render::standard_places().as_ptr();
-        let again = crate::render::standard_places().as_ptr();
-        assert_eq!(first, again, "the same list, not a fresh one per frame");
-    }
-}
-
-/// What the single-pane views do with keys that have nowhere to go, and what
-/// Ctrl+click means when nothing is marked yet.
-mod desktop_view_keys {
-    use super::*;
-    use ratatui::layout::Rect;
-
-    fn detail(names: &[&str]) -> (tempfile::TempDir, App) {
-        let (d, mut app) = app_with(names);
-        app.skin = Skin::Finder;
-        app.native_icons = true;
-        (d, app)
-    }
-
-    #[test]
-    fn shift_l_does_not_swap_which_listing_is_shown() {
-        let (_d, mut app) = detail(&["a.txt"]);
-        app.handle_key(KeyEvent::new(KeyCode::Char('L'), KeyModifiers::SHIFT)).unwrap();
-        assert_eq!(app.focused, FocusedPane::Left, "one pane in this view");
-        assert!(app.message.is_some(), "and it says so");
-    }
-
-    #[test]
-    fn shift_h_likewise() {
-        let (_d, mut app) = detail(&["a.txt"]);
-        app.focus(FocusedPane::Right);
-        app.handle_key(KeyEvent::new(KeyCode::Char('H'), KeyModifiers::SHIFT)).unwrap();
-        assert_eq!(app.focused, FocusedPane::Right);
-    }
-
-    #[test]
-    fn the_classic_view_still_moves_between_panes() {
-        let (_d, mut app) = app_with(&["a.txt"]);
-        app.handle_key(KeyEvent::new(KeyCode::Char('L'), KeyModifiers::SHIFT)).unwrap();
-        assert_eq!(app.focused, FocusedPane::Right);
-    }
-
-    /// `q` quits in the classic view and looks for a file in the desktop ones.
-    #[test]
-    fn q_looks_for_a_file_rather_than_the_way_out() {
-        let (_d, mut app) = detail(&["apple.txt", "quince.txt"]);
-        app.handle_key(key('q')).unwrap();
-        assert!(matches!(app.popup, Popup::None), "no 'really quit?' box");
-        let name = app.active_pane().unwrap().selected().unwrap().name.clone();
-        assert_eq!(name, "quince.txt", "it went to the file starting with q");
-    }
-
-    #[test]
-    fn q_still_quits_in_the_classic_view() {
-        let (_d, mut app) = app_with(&["quince.txt"]);
-        app.handle_key(key('q')).unwrap();
-        assert!(!matches!(app.popup, Popup::None), "the classic view asks");
-    }
-
-    /// Ctrl+click adds to a selection, and the file under the cursor is part of
-    /// what the user believes is already selected — it is drawn that way.
-    #[test]
-    fn ctrl_click_keeps_the_file_that_was_already_pointed_at() {
-        let (_d, mut app) = app_with(&["a.txt", "b.txt", "c.txt"]);
-        app.icon_view = true;
-        app.icon_cols = 3;
-        app.grid_area = Some(Rect::new(0, 0, 3 * 14, 4 * 6));
-        // The cursor starts on the first real entry — index 1, since `..` is
-        // index 0. Ctrl+click the one after it.
-        let first = app.active_pane().unwrap().cursor;
-        assert_eq!(first, 1, "the cursor starts on the first file, not on `..`");
-        let (col, row) = (2 * 14 + 2, 1); // tile index 2
-        assert!(app.grid_click_mods(col, row, true), "the click landed on a tile");
-        let marks = app.active_pane().unwrap().marks.len();
-        assert_eq!(marks, 2, "the one that was pointed at, and the one clicked");
     }
 }
 
@@ -15356,61 +14880,6 @@ mod dropped_paths_are_read_the_platform_way {
         let p = unix("/home/taro/My\\ File.txt");
         assert_eq!(p.len(), 1, "the escape held it together: {p:?}");
         assert_eq!(p[0].to_string_lossy(), "/home/taro/My File.txt");
-    }
-}
-
-/// The places down the left of the desktop views are there to be clicked.
-mod the_sidebar_answers_a_click {
-    use super::*;
-
-    fn desktop(icon_view: bool) -> (tempfile::TempDir, App) {
-        let (d, mut app) = app_with(&["a.txt"]);
-        app.skin = Skin::Finder;
-        app.native_icons = true;
-        app.icon_view = icon_view;
-        // A place to go: a real directory, so the jump can succeed.
-        let target = d.path().join("sub");
-        std::fs::create_dir(&target).unwrap();
-        app.shortcuts.entries =
-            vec![crate::Shortcut { name: "sub".into(), target: Some(target.display().to_string()), children: None }];
-        (d, app)
-    }
-
-    fn click_the_bookmark(app: &mut App) -> bool {
-        // Draw first: the sidebar's rows are recorded by the frame that draws
-        // them, which is what a click is tested against.
-        let _ = render(app, 140, 40);
-        let row = app
-            .sidebar_rows
-            .iter()
-            .find(|(p, _)| p.file_name().map(|n| n == "sub").unwrap_or(false))
-            .map(|(_, y)| *y);
-        let Some(row) = row else { return false };
-        app.grid_click_mods(2, row, false)
-    }
-
-    #[test]
-    fn the_detail_view_goes_to_the_place_that_was_clicked() {
-        let (_d, mut app) = desktop(false);
-        assert!(click_the_bookmark(&mut app), "the click landed on the sidebar");
-        assert!(
-            app.active_pane().unwrap().cwd.ends_with("sub"),
-            "it went there: {}",
-            app.active_pane().unwrap().cwd.display()
-        );
-    }
-
-    #[test]
-    fn the_icon_grid_still_does_too() {
-        let (_d, mut app) = desktop(true);
-        assert!(click_the_bookmark(&mut app));
-        assert!(app.active_pane().unwrap().cwd.ends_with("sub"));
-    }
-
-    #[test]
-    fn the_classic_view_leaves_the_click_to_the_panes() {
-        let (_d, mut app) = app_with(&["a.txt"]);
-        assert!(!app.grid_click_mods(2, 5, false), "no chrome in the classic view");
     }
 }
 
@@ -15505,16 +14974,6 @@ mod the_desktop_views_show_where_they_are {
         (0..200).map(|i| format!("file{i:03}.txt")).collect()
     }
 
-    fn desktop(icon_view: bool) -> (tempfile::TempDir, App) {
-        let names = plenty();
-        let refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
-        let (d, mut app) = app_with(&refs);
-        app.skin = Skin::Finder;
-        app.native_icons = true;
-        app.icon_view = icon_view;
-        (d, app)
-    }
-
     /// Every symbol the frame drew, as one string.
     fn painted(app: &mut App, w: u16, h: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
@@ -15524,24 +14983,6 @@ mod the_desktop_views_show_where_they_are {
             .flat_map(|y| (0..w).map(move |x| (x, y)))
             .map(|(x, y)| buf[(x, y)].symbol().to_string())
             .collect()
-    }
-
-    #[test]
-    fn the_detail_view_draws_a_solid_thumb() {
-        let (_d, mut app) = desktop(false);
-        assert!(painted(&mut app, 140, 40).contains('█'), "a thumb you can see");
-    }
-
-    /// Two cells wide in the views driven with the mouse: a one-cell bar is
-    /// something to aim at rather than something to grab.
-    #[test]
-    fn the_desktop_bars_are_two_cells_wide() {
-        for icons in [false, true] {
-            let (_d, mut app) = desktop(icons);
-            let _ = painted(&mut app, 140, 40);
-            let bar = app.scroll_tracks.first().copied().expect("a track");
-            assert_eq!(bar.rect.width, 2, "icon_view={icons}");
-        }
     }
 
     /// …and the classic view's is still exactly its border.
@@ -15555,51 +14996,6 @@ mod the_desktop_views_show_where_they_are {
         assert_eq!(bar.rect.width, 1);
     }
 
-    #[test]
-    fn the_grid_draws_one_too_and_leaves_room_for_it() {
-        let (_d, mut app) = desktop(true);
-        assert!(painted(&mut app, 140, 40).contains('█'), "a thumb you can see");
-        let bar = app.scroll_tracks.first().copied().expect("a track to drag");
-        let grid = app.grid_area.expect("the tiles have a rectangle");
-        assert!(bar.rect.x >= grid.x + grid.width, "the bar is beside the tiles, not on them");
-    }
-
-    #[test]
-    fn the_wheel_walks_the_grid_a_row_at_a_time() {
-        let (_d, mut app) = desktop(true);
-        let _ = painted(&mut app, 140, 40);
-        let cols = app.icon_cols;
-        assert!(cols > 0, "the grid has columns");
-        let before = app.active_pane().unwrap().cursor;
-        app.handle_mouse(MouseEvent {
-            kind: MouseEventKind::ScrollDown,
-            column: 10,
-            row: 10,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(
-            app.active_pane().unwrap().cursor - before,
-            cols,
-            "one notch, one row of tiles",
-        );
-    }
-
-    #[test]
-    fn a_click_down_the_grids_track_jumps_that_far_in() {
-        let (_d, mut app) = desktop(true);
-        let _ = painted(&mut app, 140, 40);
-        let bar = app.scroll_tracks.first().copied().expect("a track to click");
-        app.handle_mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: bar.rect.x,
-            row: bar.rect.y + bar.rect.height - 1,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert!(
-            app.active_pane().unwrap().cursor > bar.shown,
-            "the foot of the track is the foot of the listing, not the first page",
-        );
-    }
 }
 
 /// A click off a popup closes it — in every view, and with nothing else
@@ -15607,12 +15003,8 @@ mod the_desktop_views_show_where_they_are {
 mod clicking_past_a_popup_closes_it {
     use super::*;
 
-    fn desktop(icon_view: bool) -> (tempfile::TempDir, App) {
-        let (d, mut app) = app_with(&["a.txt", "b.txt", "c.txt"]);
-        app.skin = Skin::Finder;
-        app.native_icons = true;
-        app.icon_view = icon_view;
-        (d, app)
+    fn a_pane_of_files() -> (tempfile::TempDir, App) {
+        app_with(&["a.txt", "b.txt", "c.txt"])
     }
 
     fn click(app: &mut App, col: u16, row: u16) {
@@ -15640,22 +15032,8 @@ mod clicking_past_a_popup_closes_it {
     }
 
     #[test]
-    fn in_the_detail_view() {
-        let (_d, mut app) = desktop(false);
-        menu_then_click_away(&mut app);
-        assert!(matches!(app.popup, Popup::None), "the menu went away");
-    }
-
-    #[test]
-    fn in_the_icon_view() {
-        let (_d, mut app) = desktop(true);
-        menu_then_click_away(&mut app);
-        assert!(matches!(app.popup, Popup::None), "the menu went away");
-    }
-
-    #[test]
     fn a_dialog_goes_too_and_is_never_answered_yes() {
-        let (_d, mut app) = desktop(false);
+        let (_d, mut app) = a_pane_of_files();
         let doomed = app.active_pane().unwrap().cwd.join("a.txt");
         app.popup = Popup::ConfirmDelete { targets: vec![doomed.clone()] };
         let _ = render(&mut app, 140, 40);
@@ -15666,7 +15044,7 @@ mod clicking_past_a_popup_closes_it {
 
     #[test]
     fn a_click_inside_it_is_left_alone() {
-        let (_d, mut app) = desktop(false);
+        let (_d, mut app) = a_pane_of_files();
         let doomed = app.active_pane().unwrap().cwd.join("a.txt");
         app.popup = Popup::ConfirmDelete { targets: vec![doomed] };
         let _ = render(&mut app, 140, 40);
@@ -15674,50 +15052,6 @@ mod clicking_past_a_popup_closes_it {
         let box_ = crate::render::popup_ink().expect("the dialog said where it is");
         click(&mut app, box_.x + box_.width / 2, box_.y + box_.height / 2);
         assert!(matches!(app.popup, Popup::ConfirmDelete { .. }), "still open: {:?}", app.popup);
-    }
-}
-
-/// The window draws file icons as pictures over the cells, so a popup has to
-/// take them with it. The full-window popups used to leave before that
-/// happened, and a listing's worth of icons was drawn on top of the AI chat.
-mod a_popup_takes_the_icons_with_it {
-    use super::*;
-
-    fn desktop_with_a_chat(icon_view: bool) -> (tempfile::TempDir, App) {
-        let (d, mut app) = app_with(&["a.txt", "b.txt", "c.txt"]);
-        app.skin = Skin::Finder;
-        app.native_icons = true;
-        app.icon_view = icon_view;
-        (d, app)
-    }
-
-    #[test]
-    fn the_listing_has_icons_to_begin_with() {
-        let (_d, mut app) = desktop_with_a_chat(false);
-        let _ = render(&mut app, 140, 40);
-        assert!(!app.icon_slots.is_empty(), "the detail view asks for pictures");
-    }
-
-    #[test]
-    fn and_none_of_them_survive_the_chat() {
-        for icons in [false, true] {
-            let (_d, mut app) = desktop_with_a_chat(icons);
-            app.start_ai_chat(ChatMode::Ai, Vec::new(), true);
-            let _ = render(&mut app, 140, 40);
-            assert!(
-                app.icon_slots.is_empty(),
-                "icon_view={icons}: {} icons left over the chat",
-                app.icon_slots.len(),
-            );
-        }
-    }
-
-    #[test]
-    fn nor_the_other_full_window_popups() {
-        let (_d, mut app) = desktop_with_a_chat(false);
-        app.start_toggles();
-        let _ = render(&mut app, 140, 40);
-        assert!(app.icon_slots.is_empty(), "{} icons left over the toggles", app.icon_slots.len());
     }
 }
 
@@ -15772,55 +15106,6 @@ mod switching_language_switches_the_menu {
     }
 }
 
-/// Tabs, in the view that had nowhere to show them.
-mod the_icon_view_shows_its_tabs {
-    use super::*;
-
-    fn grid(names: &[&str]) -> (tempfile::TempDir, App) {
-        let (d, mut app) = app_with(names);
-        app.skin = Skin::Finder;
-        app.native_icons = true;
-        app.icon_view = true;
-        (d, app)
-    }
-
-    fn painted(app: &mut App) -> String {
-        render(app, 140, 40).join("").chars().filter(|c| !c.is_whitespace()).collect()
-    }
-
-    #[test]
-    fn a_second_tab_appears_in_the_strip() {
-        let (_d, mut app) = grid(&["a.txt"]);
-        assert!(app.left.tabs.len() == 1);
-        app.left.add_clone().unwrap();
-        let text = painted(&mut app);
-        assert!(text.contains("2"), "the second tab is named on screen");
-        assert!(!app.tab_rects.is_empty(), "and can be clicked");
-    }
-
-    #[test]
-    fn clicking_a_label_goes_to_that_tab() {
-        let (_d, mut app) = grid(&["a.txt"]);
-        app.left.add_clone().unwrap();
-        let _ = painted(&mut app);
-        assert_eq!(app.left.active, 1, "the new tab is the one showing");
-        let (_, idx, r) = app
-            .tab_rects
-            .iter()
-            .copied()
-            .find(|(_, i, _)| *i == 0)
-            .expect("the first tab has a label");
-        assert_eq!(idx, 0);
-        app.handle_mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: r.x,
-            row: r.y,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(app.left.active, 0, "clicking the first label went back to it");
-    }
-}
-
 /// A tab is opened on purpose or not at all.
 mod a_new_tab_is_asked_about_first {
     use super::*;
@@ -15851,71 +15136,6 @@ mod a_new_tab_is_asked_about_first {
         assert_eq!(app.left.active, 1, "and goes to it");
     }
 
-    #[test]
-    fn it_asks_in_the_desktop_views_too() {
-        for icons in [false, true] {
-            let (_d, mut app) = app_with(&["a.txt"]);
-            app.skin = Skin::Finder;
-            app.icon_view = icons;
-            // In the grid a letter is type-ahead, so F9 is the key that asks.
-            app.handle_key(code(KeyCode::F(9))).unwrap();
-            assert!(
-                matches!(app.popup, Popup::ConfirmNewTab { .. }),
-                "icon_view={icons}: {:?}",
-                app.popup,
-            );
-        }
-    }
-}
-
-/// In a window the picture is a picture, not an impression of one in
-/// half-blocks: the popup hands the rectangle to the front end and stays out
-/// of it.
-mod a_window_shows_the_picture_itself {
-    use super::*;
-
-    fn with_an_image(native: bool) -> (tempfile::TempDir, App) {
-        let (d, mut app) = app_with(&[]);
-        let mut img = image::RgbImage::new(40, 20);
-        for px in img.pixels_mut() {
-            *px = image::Rgb([30, 160, 90]);
-        }
-        img.save(d.path().join("pic.png")).unwrap();
-        app.reload_both();
-        app.native_icons = native;
-        app.active_pane_mut().unwrap().cursor =
-            app.active_pane().unwrap().entries.iter().position(|e| e.name == "pic.png").unwrap();
-        app.handle_key(code(KeyCode::F(3))).unwrap();
-        assert!(matches!(app.popup, Popup::ImageView { .. }), "{:?}", app.popup);
-        (d, app)
-    }
-
-    #[test]
-    fn the_window_is_told_where_the_picture_goes() {
-        let (_d, mut app) = with_an_image(true);
-        let text = render(&mut app, 80, 24).join("");
-        let slot = app.image_slot.clone().expect("a rectangle for the picture");
-        assert!(slot.path.ends_with("pic.png"));
-        assert!(slot.w > 0 && slot.h > 0, "with room in it: {slot:?}");
-        assert!(!text.contains('▀'), "and no half-blocks drawn into it");
-    }
-
-    #[test]
-    fn a_terminal_still_gets_its_half_blocks() {
-        let (_d, mut app) = with_an_image(false);
-        let text = render(&mut app, 80, 24).join("");
-        assert!(app.image_slot.is_none(), "nothing is asked of a terminal");
-        assert!(text.contains('▀'), "it draws the picture the only way it can");
-    }
-
-    #[test]
-    fn the_rectangle_is_forgotten_when_the_picture_closes() {
-        let (_d, mut app) = with_an_image(true);
-        let _ = render(&mut app, 80, 24);
-        app.handle_key(code(KeyCode::Esc)).unwrap();
-        let _ = render(&mut app, 80, 24);
-        assert!(app.image_slot.is_none(), "no picture, no rectangle");
-    }
 }
 
 /// Every popup there is, checked for the two things a popup has to get right
@@ -16299,11 +15519,8 @@ mod every_popup_behaves {
     /// and both are checked below through that door instead.
     const OPENED_WITH_A_KEY: &[&str] = &["ImageView", "Viewer"];
 
-    fn desktop(icon_view: bool) -> (tempfile::TempDir, App) {
+    fn a_pane_of_files() -> (tempfile::TempDir, App) {
         let (d, mut app) = app_with(&["a.txt", "b.txt", "c.txt"]);
-        app.skin = Skin::Finder;
-        app.native_icons = true;
-        app.icon_view = icon_view;
         // A server to be in the middle of picking a login for. Without one the
         // SSH popups have nothing to draw and draw nothing — which is a state
         // the keys already recover from (any key closes it), and not the state
@@ -16319,45 +15536,6 @@ mod every_popup_behaves {
     }
 
     #[test]
-    fn none_of_them_leaves_icons_on_top() {
-        // The theme picker restores the theme it was opened on when it is
-        // dismissed, and the theme is global: dismissing one here while the
-        // contrast tests are painting under another is how a frame ends up
-        // half in one theme and half in the other. Same lock they take.
-        let _g = THEME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let was = crate::theme::theme();
-        for icons in [false, true] {
-            let (d, mut app) = desktop(icons);
-            let dir = app.active_pane().unwrap().cwd.clone();
-            for (name, popup) in all(&dir) {
-                app.popup = popup;
-                let _ = render(&mut app, 140, 40);
-                if name == "ContextMenu" {
-                    // The menu is small, so the icons it does not cover stay:
-                    // a listing that empties itself the moment a menu opens is
-                    // the bug this behaviour was written to avoid.
-                    let m = app.menu_rect;
-                    for s in &app.icon_slots {
-                        let clear = s.x + s.w <= m.x
-                            || s.x >= m.x + m.width
-                            || s.y + s.h <= m.y
-                            || s.y >= m.y + m.height;
-                        assert!(clear, "icon_view={icons}: an icon sits on the menu: {s:?} vs {m:?}");
-                    }
-                    continue;
-                }
-                assert!(
-                    app.icon_slots.is_empty(),
-                    "icon_view={icons}: {name} left {} icons on top of itself",
-                    app.icon_slots.len(),
-                );
-            }
-            drop(d);
-        }
-        crate::theme::set_theme(was);
-    }
-
-    #[test]
     fn every_one_of_them_says_where_it_is() {
         // The theme picker restores the theme it was opened on when it is
         // dismissed, and the theme is global: dismissing one here while the
@@ -16365,7 +15543,7 @@ mod every_popup_behaves {
         // half in one theme and half in the other. Same lock they take.
         let _g = THEME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let was = crate::theme::theme();
-        let (_d, mut app) = desktop(false);
+        let (_d, mut app) = a_pane_of_files();
         let dir = app.active_pane().unwrap().cwd.clone();
         for (name, popup) in all(&dir) {
             app.popup = popup;
@@ -16387,7 +15565,7 @@ mod every_popup_behaves {
         let _g = THEME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let was = crate::theme::theme();
         for icons in [false, true] {
-            let (_d, mut app) = desktop(icons);
+            let (_d, mut app) = a_pane_of_files();
             let dir = app.active_pane().unwrap().cwd.clone();
             for (name, popup) in all(&dir) {
                 app.popup = popup;
@@ -16411,7 +15589,7 @@ mod every_popup_behaves {
 
     #[test]
     fn the_picture_popup_too() {
-        let (d, mut app) = desktop(false);
+        let (d, mut app) = a_pane_of_files();
         let mut img = image::RgbImage::new(40, 20);
         for px in img.pixels_mut() {
             *px = image::Rgb([200, 40, 40]);
@@ -16423,7 +15601,6 @@ mod every_popup_behaves {
         app.handle_key(code(KeyCode::F(3))).unwrap();
         assert!(matches!(app.popup, Popup::ImageView { .. }));
         let _ = render(&mut app, 140, 40);
-        assert!(app.icon_slots.is_empty(), "no listing icons over the picture");
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 139,
@@ -16435,14 +15612,12 @@ mod every_popup_behaves {
 
     /// The editor panel is the one popup that does *not* close on an outside
     /// click, on purpose: it is a place to be rather than a question to answer.
-    /// It still has to take the icons with it.
     #[test]
-    fn the_editor_panel_keeps_its_file_and_loses_the_icons() {
-        let (_d, mut app) = desktop(false);
+    fn the_editor_panel_keeps_its_file() {
+        let (_d, mut app) = a_pane_of_files();
         app.handle_key(code(KeyCode::F(3))).unwrap();
         assert!(matches!(app.popup, Popup::Viewer { .. }), "{:?}", app.popup);
         let _ = render(&mut app, 140, 40);
-        assert!(app.icon_slots.is_empty(), "no listing icons over the open file");
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 139,
@@ -16450,19 +15625,6 @@ mod every_popup_behaves {
             modifiers: KeyModifiers::NONE,
         });
         assert!(matches!(app.popup, Popup::Viewer { .. }), "and it stays open");
-    }
-
-    /// …and the same when it is split in two, which leaves the frame by a door
-    /// of its own.
-    #[test]
-    fn a_split_editor_panel_loses_them_too() {
-        let (_d, mut app) = desktop(false);
-        app.handle_key(code(KeyCode::F(3))).unwrap();
-        assert!(matches!(app.popup, Popup::Viewer { .. }), "{:?}", app.popup);
-        app.split_viewer(true);
-        assert!(app.viewer_split.is_some(), "split in two");
-        let _ = render(&mut app, 140, 40);
-        assert!(app.icon_slots.is_empty(), "{} icons over the split panel", app.icon_slots.len());
     }
 
     /// A popup added later has to be added to the sweep as well. Read out of
@@ -16510,196 +15672,6 @@ mod every_popup_behaves {
             .collect();
         assert!(missing.is_empty(), "popups the sweep never sees: {missing:?}");
         assert!(variants.len() > 50, "the enum was parsed, not merely searched: {}", variants.len());
-    }
-}
-
-/// In the two mouse-driven views a letter goes to a file, not to a command.
-mod letters_move_in_the_desktop_views {
-    use super::*;
-
-    fn desktop(icon_view: bool) -> (tempfile::TempDir, App) {
-        let (d, mut app) = app_with(&["alpha.txt", "delta.txt", "2024-report.txt", "zulu.txt"]);
-        app.skin = Skin::Finder;
-        app.icon_view = icon_view;
-        (d, app)
-    }
-
-    fn name_under_cursor(app: &App) -> String {
-        app.active_pane().unwrap().selected().map(|e| e.name.clone()).unwrap_or_default()
-    }
-
-    /// The keys that were asked for by name.
-    const GIVEN_UP: &[char] = &[
-        'h', 'q', 'c', 'p', 'g', 'G', 'P', 'r', 'j', 'k', 'a', 'A', 's', 'u', 't', 'd', 'z', 'v',
-        'm', 'b',
-    ];
-
-    #[test]
-    fn none_of_the_named_keys_does_anything_but_move() {
-        for icons in [false, true] {
-            for &c in GIVEN_UP {
-                let (_d, mut app) = desktop(icons);
-                let tabs = app.left.tabs.len();
-                app.handle_key(KeyEvent::new(
-                    KeyCode::Char(c),
-                    if c.is_uppercase() { KeyModifiers::SHIFT } else { KeyModifiers::NONE },
-                ))
-                .unwrap();
-                assert!(
-                    matches!(app.popup, Popup::None),
-                    "icon_view={icons}: {c:?} opened {:?}",
-                    app.popup,
-                );
-                assert_eq!(app.mode, Mode::Normal, "icon_view={icons}: {c:?} changed mode");
-                assert_eq!(app.left.tabs.len(), tabs, "icon_view={icons}: {c:?} touched the tabs");
-            }
-        }
-    }
-
-    #[test]
-    fn a_letter_goes_to_the_file_that_starts_with_it() {
-        for icons in [false, true] {
-            let (_d, mut app) = desktop(icons);
-            app.handle_key(key('d')).unwrap();
-            assert_eq!(name_under_cursor(&app), "delta.txt", "icon_view={icons}");
-            app.handle_key(key('z')).unwrap();
-            assert_eq!(name_under_cursor(&app), "zulu.txt", "icon_view={icons}");
-        }
-    }
-
-    #[test]
-    fn so_does_a_digit() {
-        for icons in [false, true] {
-            let (_d, mut app) = desktop(icons);
-            app.handle_key(key('2')).unwrap();
-            assert_eq!(name_under_cursor(&app), "2024-report.txt", "icon_view={icons}");
-        }
-    }
-
-    #[test]
-    fn the_detail_view_keeps_the_letters_that_were_not_asked_for() {
-        let (_d, mut app) = desktop(false);
-        app.handle_key(key('f')).unwrap();
-        assert!(matches!(app.popup, Popup::Search { .. }), "f still searches: {:?}", app.popup);
-    }
-
-    #[test]
-    fn the_classic_view_keeps_all_of_them() {
-        let (_d, mut app) = app_with(&["alpha.txt", "delta.txt"]);
-        app.handle_key(key('t')).unwrap();
-        assert!(
-            matches!(app.popup, Popup::ConfirmNewTab { .. }),
-            "t is still a command in the classic view: {:?}",
-            app.popup,
-        );
-    }
-}
-
-/// The three views, and the three ways of asking for one.
-mod the_view_switcher {
-    use super::*;
-
-    fn painted(app: &mut App) -> String {
-        render(app, 140, 40).join("").chars().filter(|c| !c.is_whitespace()).collect()
-    }
-
-    fn in_view(icon_view: bool, finder: bool) -> (tempfile::TempDir, App) {
-        let (d, mut app) = app_with(&["a.txt"]);
-        app.skin = if finder { Skin::Finder } else { Skin::Classic };
-        app.icon_view = icon_view;
-        (d, app)
-    }
-
-    /// **両方の言葉で。** ここは 2026-09-06 まで日本語しか出せず、
-    /// `cian.set_option("lang", "en")` を書いた人にも「詳細 / クラシック」と
-    /// 出ていた（`scripts/i18n.py` の端末版の目が見つけた8か所の一部）。
-    /// 言語を決めずに日本語を待つ検査は、直したことに気づけない。
-    #[test]
-    fn both_views_draw_it() {
-        for (icons, finder) in [(false, true), (false, false)] {
-            let (_d, mut app) = in_view(icons, finder);
-            app.lang = Lang::Ja;
-            let text = painted(&mut app);
-            assert!(text.contains("詳細"), "icons={icons} finder={finder}: {text:.200}");
-            assert!(text.contains("クラシック"), "icons={icons} finder={finder}");
-            app.lang = Lang::En;
-            let text = painted(&mut app);
-            assert!(text.contains("Details"), "icons={icons} finder={finder}: {text:.200}");
-            assert!(text.contains("Classic"), "icons={icons} finder={finder}");
-            assert_eq!(
-                app.grid_buttons.iter().filter(|(b, _)| matches!(b, GridButton::View(_))).count(),
-                2,
-                "two segments to click",
-            );
-        }
-    }
-
-    /// Clicking a segment asks for that view — in every view, including the
-    /// classic one, where the switcher rides the top border row.
-    #[test]
-    fn clicking_a_segment_asks_for_that_view() {
-        for (icons, finder) in [(false, true), (false, false)] {
-            let (_d, mut app) = in_view(icons, finder);
-            let _ = painted(&mut app);
-            // Every segment, and the middle of each — a control answered only
-            // at its left edge is a control that half works.
-            for want in
-                [crate::ViewWanted::Details, crate::ViewWanted::Classic]
-            {
-                let (_, r) = app
-                    .grid_buttons
-                    .iter()
-                    .copied()
-                    .find(|(b, _)| matches!(b, GridButton::View(w) if *w == want))
-                    .unwrap_or_else(|| panic!("icons={icons} finder={finder}: no {want:?} segment"));
-                app.view_request = None;
-                app.handle_mouse(MouseEvent {
-                    kind: MouseEventKind::Down(MouseButton::Left),
-                    column: r.x + r.width / 2,
-                    row: r.y,
-                    modifiers: KeyModifiers::NONE,
-                });
-                assert_eq!(
-                    app.view_request,
-                    Some(want),
-                    "icons={icons} finder={finder}: clicking {want:?} asked for it",
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn the_command_asks_too_and_leaves_the_viewer_alone() {
-        let (_d, mut app) = in_view(false, true);
-        app.command_buffer = "view details".into();
-        app.run_command();
-        assert_eq!(app.view_request, Some(crate::ViewWanted::Details));
-        assert!(matches!(app.popup, Popup::None), "no file was opened");
-
-        // …and bare `:view` still opens the file under the cursor.
-        app.view_request = None;
-        app.command_buffer = "view".into();
-        app.run_command();
-        assert_eq!(app.view_request, None, "no view was asked for");
-        assert!(matches!(app.popup, Popup::Viewer { .. }), "the file opened: {:?}", app.popup);
-    }
-
-    #[test]
-    fn the_menu_asks_too() {
-        let (_d, mut app) = in_view(false, true);
-        app.run_menu_item(MenuItem::ViewClassic).unwrap();
-        assert_eq!(app.view_request, Some(crate::ViewWanted::Classic));
-    }
-
-    /// Nothing switches by itself: the details view only exists in a window,
-    /// so cian only ever *asks*.
-    #[test]
-    fn asking_does_not_change_the_view_by_itself() {
-        let (_d, mut app) = in_view(false, true);
-        let was = app.skin;
-        app.run_menu_item(MenuItem::ViewDetails).unwrap();
-        assert_eq!(app.view_request, Some(crate::ViewWanted::Details), "it asked");
-        assert_eq!(app.skin, was, "and changed nothing itself");
     }
 }
 
@@ -16791,15 +15763,10 @@ mod backspace_undoes_the_filter_first {
 mod clicking_a_row_after_scrolling {
     use super::*;
 
-    fn many(detail: bool) -> (tempfile::TempDir, App) {
+    fn many() -> (tempfile::TempDir, App) {
         let names: Vec<String> = (0..200).map(|i| format!("file{i:03}.txt")).collect();
         let refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
-        let (d, mut app) = app_with(&refs);
-        if detail {
-            app.skin = Skin::Finder;
-            app.native_icons = true;
-        }
-        (d, app)
+        app_with(&refs)
     }
 
     /// Walk a long way down, then click a row near the middle of the screen.
@@ -16827,16 +15794,8 @@ mod clicking_a_row_after_scrolling {
     }
 
     #[test]
-    fn in_the_detail_view() {
-        let (_d, mut app) = many(true);
-        let (clicked, on_that_row) = scroll_then_click(&mut app);
-        assert_eq!(clicked, on_that_row, "the file that was under the pointer");
-        assert!(app.active_pane().unwrap().scroll > 0, "and the listing stayed where it was");
-    }
-
-    #[test]
-    fn and_in_the_classic_view() {
-        let (_d, mut app) = many(false);
+    fn the_row_under_the_pointer_is_the_one_that_is_picked() {
+        let (_d, mut app) = many();
         let (clicked, on_that_row) = scroll_then_click(&mut app);
         assert_eq!(clicked, on_that_row);
         assert!(app.active_pane().unwrap().scroll > 0);
@@ -17033,62 +15992,6 @@ mod the_transfer_limit {
         assert!(p.wait_after(10_000_000).is_none());
         let mut zero = cian_scp::Pacer::new(Some(0));
         assert!(zero.wait_after(10_000_000).is_none(), "0 means no ceiling, not no bytes");
-    }
-}
-
-/// `:reload` re-reads init.lua, and must not undress the view it is in.
-///
-/// The desktop views stand on their own palette — a borderless listing on a
-/// dark page is a pane with its edges missing — and a reload was putting
-/// init.lua's colours back underneath one. The rule is the same one the front
-/// end applies when it changes skin, and it is asserted here as a rule: given
-/// the configured colours, which skin is on, and whether the user named a
-/// theme, what should be worn?
-mod reload_keeps_the_look_it_is_wearing {
-    use super::*;
-    use crate::theme::{theme_for_skin, ResolvedTheme};
-
-    #[test]
-    fn the_desktop_views_wear_their_own() {
-        assert_eq!(
-            theme_for_skin(ResolvedTheme::DARK, true, false),
-            ResolvedTheme::FINDER,
-            "a borderless listing stands on its own page",
-        );
-    }
-
-    #[test]
-    fn the_classic_view_wears_what_init_lua_says() {
-        assert_eq!(theme_for_skin(ResolvedTheme::DARK, false, false), ResolvedTheme::DARK);
-    }
-
-    #[test]
-    fn a_theme_asked_for_by_name_outranks_the_skin() {
-        assert_eq!(
-            theme_for_skin(ResolvedTheme::DARK, true, true),
-            ResolvedTheme::DARK,
-            "the user's choice is not overruled by a change of view",
-        );
-    }
-
-    /// And the reload really asks: with the desktop skin on, re-reading the
-    /// config leaves the desktop palette in force rather than the file's.
-    #[test]
-    fn and_reload_puts_the_answer_into_force() {
-        let _g = THEME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let was = crate::theme::theme();
-        let (_d, mut app) = app_with(&["a.txt"]);
-        app.skin = Skin::Finder;
-        crate::theme::set_theme(ResolvedTheme::FINDER);
-        app.reload_config();
-        // Whatever the flag says on this run, the answer is one of the two the
-        // rule allows — never something else, which is what the bug was.
-        let now = crate::theme::theme();
-        assert!(
-            now == ResolvedTheme::FINDER || now == crate::theme::theme_preset("dark").unwrap(),
-            "reload settled on a theme the rule allows",
-        );
-        crate::theme::set_theme(was);
     }
 }
 

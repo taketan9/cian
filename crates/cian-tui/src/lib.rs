@@ -58,120 +58,7 @@ mod toggles;
 mod edit;
 mod macro_run;
 mod session;
-mod grid;
 
-/// A button on the icon grid's toolbar.
-///
-/// The grid has no title row to hang cian's usual arrows on, and someone who
-/// came for an icon view did not come to find out that Backspace goes up.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GridButton {
-    Back,
-    Forward,
-    Up,
-    /// One of the three segments of the view switcher.
-    View(ViewWanted),
-}
-
-/// Which of the three looks the panes should wear.
-///
-/// cian does not own this — the front end does, because two of the three only
-/// exist in a window — so this is a request rather than a setting. cian draws
-/// the switcher, knows which segment is lit (it can see its own skin), records
-/// where the segments are so they can be clicked, and says which one was asked
-/// for. What that means is the window's business.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ViewWanted {
-    /// Bordered panes and a shell: cian as it has always looked.
-    Classic,
-    /// One borderless listing with a sidebar and an address bar.
-    Details,
-    /// One pane, as a wall of pictures.
-    Icons,
-}
-
-/// Where a file's icon belongs on screen, in cells, and which file it is.
-///
-/// A glyph can never be wider than its cell, which is why cian's file-type
-/// icons are clipped in a window: the ink of a Nerd Font icon runs well past
-/// the advance it was given. So a windowed front end draws them itself, as
-/// pixels, and this is how it is told where. The renderer leaves the cells
-/// blank and records the rectangle; whoever owns the surface fills it.
-#[derive(Debug, Clone)]
-pub struct IconSlot {
-    pub x: u16,
-    pub y: u16,
-    pub w: u16,
-    pub h: u16,
-    pub path: PathBuf,
-    /// Directories and applications are worth telling apart from files when
-    /// deciding how hard to work for an icon.
-    pub is_dir: bool,
-    /// Whether the file is somewhere the system can be asked about it.
-    ///
-    /// False for a pane over SFTP, or a listing from inside an archive: the
-    /// path is real to cian and means nothing to the disk. The front end then
-    /// asks for an icon by file *type* instead of by path.
-    pub local: bool,
-    /// cian's own Nerd Font icon for this row, in this colour.
-    ///
-    /// A window cannot draw those glyphs in a cell without clipping them —
-    /// their ink is wider than the advance they were given — so it rasterises
-    /// them as pictures instead: same glyph, same colour, at whatever size the
-    /// row is.
-    ///
-    /// Always offered, and used whenever the system has no icon to give. That
-    /// is not a rare corner: on Windows and on Linux there is no answer at all
-    /// yet, and the details view and the grid were drawing *nothing* there —
-    /// rows of names with a blank square where the icon belongs.
-    pub glyph: Option<(char, (u8, u8, u8))>,
-    /// The glyph is the intent, not the fallback: draw it and do not ask the
-    /// system. True in the classic view, which is the look cian was built
-    /// around and which a window quietly replacing would be a different program
-    /// wearing the name.
-    pub prefer_glyph: bool,
-}
-
-/// Where the picture goes, when the picture is the point.
-///
-/// The image popup draws itself out of half-blocks: two pixels to a cell, and
-/// a photograph reduced to a few thousand of them. That is everything a
-/// terminal can do without a graphics protocol, and it is not what a window
-/// has to do — a window has real pixels, and already draws real pictures for
-/// the file icons.
-///
-/// So in a front end that draws its own icons, the popup draws its frame and
-/// its footer and leaves the middle empty, saying here — in cells — where the
-/// picture belongs. The front end decodes the file at the size that rectangle
-/// really is and puts it there.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ImageSlot {
-    pub x: u16,
-    pub y: u16,
-    pub w: u16,
-    pub h: u16,
-    pub path: PathBuf,
-}
-
-/// How the file panes are drawn.
-///
-/// Not a theme — a theme changes the colours, and this changes the furniture.
-/// [`Skin::Finder`] takes the box-drawing away entirely and lets colour do the
-/// work a border was doing: banded rows to separate them, a full-width block
-/// for the selection, whitespace and a hairline between the panes. It is what
-/// a desktop file manager looks like, drawn in cells.
-///
-/// Only the windowed build offers it, on purpose. A window is where someone
-/// meets cian without having chosen a terminal first, and that is the person
-/// the dense bordered look turns away.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Skin {
-    /// Bordered panes, dense rows — cian as it has always looked.
-    #[default]
-    Classic,
-    /// Borderless, banded, desktop-shaped.
-    Finder,
-}
 /// Re-exported so a front end speaks the *same* crossterm cian was built
 /// against. Two copies of it in one binary would be two unrelated `KeyCode`
 /// types that happen to share a name.
@@ -1134,9 +1021,6 @@ enum ZoneKind {
 /// An entry in the right-click menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MenuItem {
-    /// The three views. What they mean is the front end's — see [`ViewWanted`].
-    ViewDetails,
-    ViewClassic,
     Copy,
     Cut,
     /// Enter cian's `:` command line (shell menu — the shell can't type `:`).
@@ -1515,8 +1399,6 @@ impl MenuItem {
             MenuItem::InspectMenu => tr(lang, "Inspect ▸", "調べる ▸"),
             MenuItem::ViewMenu => tr(lang, "View ▸", "表示 ▸"),
             MenuItem::TogglesMenu => tr(lang, "Switches…  (T)", "各種スイッチ…  (T)"),
-            MenuItem::ViewDetails => tr(lang, "▤ Details  (:view details)", "▤ 詳細一覧  (:view details)"),
-            MenuItem::ViewClassic => tr(lang, "▥ Classic  (:view classic)", "▥ クラシック  (:view classic)"),
             MenuItem::SessionMenu => tr(lang, "Session ▸", "セッション ▸"),
             MenuItem::CopyPathText => tr(lang, "Copy path text  (p)", "パスをコピー  (p)"),
             MenuItem::CopyFileRef => tr(
@@ -2765,47 +2647,8 @@ pub struct App {
     /// the same `tick_background`, and the throttle has to survive between
     /// their turns.
     last_pulse: Instant,
-    /// How the file panes are drawn. Only a windowed front end ever changes it.
-    skin: Skin,
-    /// Leave the icon cells blank and report where they were, for a front end
-    /// that can draw a real one. Off unless something says it can.
-    native_icons: bool,
-    /// Filled every frame while `native_icons` is on.
-    icon_slots: Vec<IconSlot>,
-    /// Where the open picture goes, for a front end that can draw one.
-    image_slot: Option<ImageSlot>,
     /// The last "still blank" second written to the log, so each is said once.
     blank_said: u64,
-    /// Which sidebar paths are directories. Asked once per path, per session.
-    ///
-    /// The sidebar is drawn every frame, and on Windows these paths are usually
-    /// OneDrive's — a question about one of those goes to the sync engine and
-    /// is measured in milliseconds. All it decides is which icon to ask for, so
-    /// the answer is kept rather than refreshed.
-    sidebar_dirs: (Instant, std::collections::HashMap<PathBuf, bool>),
-    /// What the user has typed to jump by name in the grid, and when.
-    ///
-    /// Cleared once a pause makes it obvious the next letter starts a new
-    /// search rather than continuing this one.
-    type_ahead: String,
-    type_ahead_at: Instant,
-    /// Columns in the last grid drawn, so Up and Down can move by a row.
-    icon_cols: usize,
-    /// The grid's toolbar buttons and where they were drawn, for hit-testing.
-    grid_buttons: Vec<(GridButton, Rect)>,
-    /// The rectangle the tiles were laid out in, likewise.
-    grid_area: Option<Rect>,
-    /// The sidebar's places and the row each was drawn on, for hit-testing.
-    sidebar_rows: Vec<(PathBuf, u16)>,
-    /// The sidebar's "＋ 追加" row, when the favourites section is showing.
-    sidebar_add: Option<Rect>,
-    /// Where the grid's address bar was drawn, likewise.
-    grid_address: Option<Rect>,
-    /// Each breadcrumb segment in that bar and the place it leads to.
-    grid_crumbs: Vec<(PathBuf, Rect)>,
-    /// Set by the grid's ✕ button; the front end reads it and leaves.
-    /// The view the switcher (or `:view`) asked for, until the front end takes it.
-    view_request: Option<ViewWanted>,
     /// What was on top last frame, and how far it was scrolled.
     ///
     /// A popup covers cells it does not own, and every renderer under cian
@@ -2817,11 +2660,6 @@ pub struct App {
     /// asks for the whole surface to be repainted, which is cheap once and
     /// exact.
     popup_shape: Option<(std::mem::Discriminant<Popup>, usize)>,
-    /// Draw the left pane as a grid of pictures instead of two lists.
-    ///
-    /// Only a front end that can draw a picture offers this; in a terminal it
-    /// would be a grid of empty boxes.
-    icon_view: bool,
     /// Transition length; zero disables animation.
     anim_dur: Duration,
     /// The focused surface's rect from before it was zoomed.
@@ -3101,24 +2939,8 @@ impl App {
             anim: None,
             anim_then: None,
             last_pulse: Instant::now(),
-            skin: Skin::Classic,
-            native_icons: false,
-            icon_slots: Vec::new(),
-            image_slot: None,
             blank_said: 0,
-            sidebar_dirs: (Instant::now(), std::collections::HashMap::new()),
-            type_ahead: String::new(),
-            type_ahead_at: Instant::now(),
-            icon_cols: 1,
-            grid_buttons: Vec::new(),
-            grid_area: None,
-            sidebar_rows: Vec::new(),
-            sidebar_add: None,
-            grid_address: None,
-            grid_crumbs: Vec::new(),
-            view_request: None,
             popup_shape: None,
-            icon_view: false,
             anim_dur: Duration::from_millis(
                 config.options.animation_ms.unwrap_or(DEFAULT_ANIM_MS),
             ),
@@ -3288,31 +3110,13 @@ impl App {
 
     /// Is there a shell panel on screen at all?
     ///
-    /// The single-pane views — details and the icon grid — are the filer and
-    /// nothing else, deliberately: they are what someone who did not want a
-    /// terminal picked. So there is no shell panel in them, and moving the
-    /// focus into one would be moving it somewhere nothing is drawn.
+    /// Always, now. The question survives because the single-pane views —
+    /// details and the icon grid — were the filer and nothing else, and had no
+    /// shell panel under them. Those were the windowed build's, and it is gone.
+    /// The callers still have to ask, because the answer is the one thing that
+    /// tells `focus_direction` whether Ctrl+j leads anywhere.
     pub(crate) fn has_shell_panel(&self) -> bool {
-        !self.single_pane_view()
-    }
-
-    /// Is one pane filling the window?
-    ///
-    /// The details view and the icon grid both show a single listing over the
-    /// whole window. There is no pane beside it and no shell panel under it, so
-    /// the keys that move between those have nowhere to go.
-    pub(crate) fn single_pane_view(&self) -> bool {
-        self.icon_view || self.skin == Skin::Finder
-    }
-
-    /// Say why the shell is not here, rather than moving the focus to a panel
-    /// that is not on screen.
-    fn no_shell_panel_here(&mut self) {
-        self.message = Some(tr(
-            self.lang,
-            "the shell lives in the classic view — Ctrl+Shift+G",
-            "シェルはクラシック表示にあります — Ctrl+Shift+G",
-        ).into());
+        true
     }
 
     fn focus_direction(&mut self, dir: char) {
@@ -3326,21 +3130,6 @@ impl App {
             _ => self.focused,
         };
         if next == FocusedPane::Shell && !self.has_shell_panel() {
-            self.no_shell_panel_here();
-            return;
-        }
-        // The same for the pane beside it: in a single-pane view there is none
-        // on screen, and H / L quietly swapping which listing is shown looks
-        // like the view jumping for no reason.
-        if matches!(next, FocusedPane::Left | FocusedPane::Right)
-            && next != self.focused
-            && self.single_pane_view()
-        {
-            self.message = Some(tr(
-                self.lang,
-                "one pane in this view — Ctrl+Shift+G for the classic one",
-                "この表示はペインが1つです — クラシックは Ctrl+Shift+G",
-            ).into());
             return;
         }
         if next != self.focused {
@@ -3769,9 +3558,6 @@ fn load_saved_theme() -> Option<String> {
 /// a read-only config dir just means it does not stick, which is not worth
 /// interrupting the user over.
 pub(crate) fn save_theme_pref(name: &str) {
-    // Naming a theme is asking for it, and an asked-for theme is not replaced
-    // by the one the detail view would otherwise bring with it.
-    theme::theme_was_asked_for();
     state_set("theme", name);
 }
 
@@ -4666,14 +4452,9 @@ pub fn usage_text() -> String {
 
 /// Is the notice below worth showing?
 ///
-/// Split out from the text so all four answers can be checked on any platform,
-/// which matters because the one that was wrong could only be seen on Windows:
-/// the windowed build was showing terminal advice. It has no terminal. It also
-/// sets none of the environment variables a modern one sets, so it looked to
-/// this test exactly like the legacy console — and after the window stopped
-/// opening a console at all, the notice appeared on *every* start.
-fn wants_terminal_advice(host: Host, windows: bool, modern: bool) -> bool {
-    host == Host::Terminal && windows && !modern
+/// Split out from the text so both answers can be checked on any platform.
+fn wants_terminal_advice(windows: bool, modern: bool) -> bool {
+    windows && !modern
 }
 
 /// Note when the host terminal will not do cian justice.
@@ -4792,37 +4573,15 @@ pub(crate) fn rate_text(bps: u64) -> String {
     }
 }
 
-/// Which kind of front end this is being built for.
-///
-/// cian is deliberately incurious about its front end — the panes do not know
-/// whether they are cells in a terminal or pixels in a window. Two decisions
-/// genuinely need to know, and both are about what the *host* can draw rather
-/// than about what cian does: whether to warn about the terminal, and whether
-/// its font has the rounded corners cian would like to use.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Host {
-    /// Someone else's terminal, with someone else's font in it.
-    Terminal,
-    /// A window of cian's own, with a font it chose.
-    Window,
-}
-
 /// Build the application state: config, theme, session, startup macro.
 ///
-/// Everything both front ends do before anyone owns a screen. The terminal
-/// build follows it with raw mode and an alternate screen; the windowed one
-/// follows it with a window. Neither belongs in here.
+/// Everything done before anyone owns a screen; raw mode and the alternate
+/// screen follow it and do not belong in here.
 fn prepare_app(
     left: Option<PathBuf>,
     right: Option<PathBuf>,
     startup: StartupMacro,
-    host: Host,
 ) -> Result<App> {
-    // Before the theme is resolved: the corner glyphs are chosen by what the
-    // host's font is likely to have, and a window's font is cian's own.
-    if host == Host::Window {
-        theme::host_is_a_window();
-    }
     // Load user config (never fails; problems are reported below).
     let config = cian_lua::load();
 
@@ -4855,7 +4614,6 @@ fn prepare_app(
     // the choice survives a restart. Unknown names are ignored (init.lua wins).
     if let Some(name) = load_saved_theme() {
         if let Some(t) = theme_preset(&name) {
-            theme::theme_was_asked_for();
             set_theme(t);
         }
     }
@@ -4869,7 +4627,7 @@ fn prepare_app(
         }
     }
 
-    if wants_terminal_advice(host, cfg!(windows), theme::modern_terminal()) {
+    if wants_terminal_advice(cfg!(windows), theme::modern_terminal()) {
         startup_errors.extend(terminal_advice());
     }
 
@@ -4917,7 +4675,7 @@ fn prepare_app(
 }
 
 pub fn run(left: Option<PathBuf>, right: Option<PathBuf>, startup: StartupMacro) -> Result<()> {
-    let mut app = prepare_app(left, right, startup, Host::Terminal)?;
+    let mut app = prepare_app(left, right, startup)?;
 
     install_panic_hook();
     cian_core::log::log("cian starting");

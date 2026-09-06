@@ -123,8 +123,7 @@ impl ResolvedTheme {
     pub(crate) const SOLARIZED_LIGHT: ResolvedTheme = from_spec(cian_core::theme::SOLARIZED_LIGHT);
     /// The palette a desktop file manager is drawn in: near-white, one strong
     /// blue for the selection, and greys quiet enough that the eye goes to the
-    /// names. Paired with [`crate::Skin::Finder`], which is what takes the
-    /// borders away — the colours alone are just another light theme.
+    /// names.
     pub(crate) const FINDER: ResolvedTheme = from_spec(cian_core::theme::FINDER);
     pub(crate) const SOLARIZED_DARK: ResolvedTheme = from_spec(cian_core::theme::SOLARIZED_DARK);
     pub(crate) const DRACULA: ResolvedTheme = from_spec(cian_core::theme::DRACULA);
@@ -185,56 +184,6 @@ static THEME: RwLock<ResolvedTheme> = RwLock::new(ResolvedTheme::DARK);
 
 pub(crate) fn theme() -> ResolvedTheme {
     *THEME.read().unwrap_or_else(|e| e.into_inner())
-}
-
-/// Whether these colours were chosen by the user rather than by cian.
-///
-/// The detail and icon views bring the Finder palette with them, because the
-/// borderless shape they use only reads on a light surface — a borderless dark
-/// pane is not a Finder, it is a pane with its edges missing. That is the right
-/// default and the wrong override: someone who set `solarized-light` in
-/// init.lua, or picked a theme with `:theme`, watched it apply in the classic
-/// view and be replaced the moment they pressed Ctrl+Shift+G. A choice made out
-/// loud holds in every view.
-static ASKED_FOR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Note that a theme was named — in init.lua, by `:theme`, or in the gallery.
-pub(crate) fn theme_was_asked_for() {
-    ASKED_FOR.store(true, std::sync::atomic::Ordering::Relaxed);
-}
-
-pub(crate) fn theme_is_the_users() -> bool {
-    ASKED_FOR.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// May a change of skin replace the colours in force?
-///
-/// Split from the flag so the rule can be asserted without a process-wide
-/// switch that, once flipped, stays flipped for every other test in the run.
-pub(crate) fn skin_may_swap_theme(theme_is_the_users: bool) -> bool {
-    !theme_is_the_users
-}
-
-/// Which colours a view should be wearing.
-///
-/// The desktop skins only read on a light surface — a borderless dark pane is
-/// not a Finder, it is a pane with its edges missing — so switching to one
-/// brings its palette with it. A theme the user asked for by name outranks
-/// that, everywhere it comes up.
-///
-/// Written as a function of what it depends on, not of the process-wide flag,
-/// so the rule can be asserted without one test's `:theme` deciding another
-/// test's colours.
-pub(crate) fn theme_for_skin(
-    configured: ResolvedTheme,
-    finder_skin: bool,
-    theme_is_the_users: bool,
-) -> ResolvedTheme {
-    if finder_skin && skin_may_swap_theme(theme_is_the_users) {
-        ResolvedTheme::FINDER
-    } else {
-        configured
-    }
 }
 
 /// Swap the active theme (from `:theme`, the picker preview, or `:reload`).
@@ -308,34 +257,13 @@ pub(crate) fn resolve_border_type(configured: Option<&str>) -> BorderType {
     }
 }
 
-/// Set once by the windowed front end, before the theme is resolved.
-///
-/// There is no terminal in that build at all, and no environment variable says
-/// so — a window started from Explorer looks to every test below exactly like
-/// the legacy console, and was being treated as one.
-static WINDOWED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Say that cian owns its own window, and with it its own font.
-pub(crate) fn host_is_a_window() {
-    WINDOWED.store(true, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// Is cian drawing into a window of its own?
-///
-/// Asked by the few things that are decided by how the host draws a cell rather
-/// than by anything cian means — see [`crate::render::cloud_mark_for`].
-pub(crate) fn in_a_window() -> bool {
-    WINDOWED.load(std::sync::atomic::Ordering::Relaxed)
-}
-
 /// Whether the host can be trusted with the glyphs cian would rather use.
 ///
 /// A window can, always: the font is cian's own and it is a Nerd Font. A
 /// terminal can if it says which one it is — the legacy Windows console sets
 /// none of these.
 pub(crate) fn modern_terminal() -> bool {
-    WINDOWED.load(std::sync::atomic::Ordering::Relaxed)
-        || std::env::var_os("WT_SESSION").is_some()
+    std::env::var_os("WT_SESSION").is_some()
         || std::env::var_os("WEZTERM_PANE").is_some()
         || std::env::var_os("TERM_PROGRAM").is_some()
 }
@@ -683,16 +611,6 @@ pub(crate) fn resolve_theme(t: &cian_lua::Theme) -> (ResolvedTheme, Vec<String>)
 /// (call once, before drawing). Returns the non-fatal theme errors to report.
 pub(crate) fn install(theme: &cian_lua::Theme, borders: Option<&str>, nerd: bool) -> Vec<String> {
     // Did anyone actually ask for these colours, or are they the ones cian
-    // picked? Only the asked-for kind survives a change of view.
-    if theme.preset.is_some()
-        || theme.accent.is_some()
-        || theme.status_bg.is_some()
-        || theme.selected_bg.is_some()
-        || theme.visual_bg.is_some()
-        || theme.mark_fg.is_some()
-    {
-        theme_was_asked_for();
-    }
     let (resolved, errs) = resolve_theme(theme);
     set_theme(resolved);
     let _ = BORDERS.set(resolve_border_type(borders));

@@ -2605,18 +2605,7 @@ impl App {
         // whole frame is built from), so those still need a restart.
         let (resolved, theme_errors) = resolve_theme(&config.theme);
         problems.extend(theme_errors);
-        // …and then the same question the front end asks when it changes skin:
-        // the desktop views only read on a light surface, so switching to one
-        // brings its palette with it. A reload was putting init.lua's colours
-        // back underneath a borderless listing — the theme cian is *in* is not
-        // always the theme init.lua names, and reload was the one place that
-        // forgot it. Unless the theme is the user's own, in which case it wins
-        // here exactly as it wins there.
-        let wear = crate::theme::theme_for_skin(
-            resolved,
-            self.skin == Skin::Finder,
-            crate::theme::theme_is_the_users(),
-        );
+        let wear = resolved;
         set_theme(wear);
         self.theme_name = theme_name_of(&wear).unwrap_or("custom").to_string();
         let borders_changed =

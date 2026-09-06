@@ -348,25 +348,12 @@ impl App {
                 Some(v)
             }
             MenuItem::ViewMenu => {
-                let mut v = Vec::new();
-                // Details and Icons belong to the windowed build: they set
-                // `view_request`, and only `cian-gui` reads it. In a terminal
-                // they were two items that did nothing at all when chosen,
-                // which is worse than two items that are not offered.
-                // **クラシックが先。** 既定であり、彼が基本にしているモード
-                // （2026-09-05:「基本はクラシックモードを使う、どうしても
-                // エクスプローラーや Finder ライクがいいなら詳細一覧」）。
-                // 窓版の `表示 ▸` も同じ順に揃えてある ── 順番が二つあるのは
-                // 順番が無いのと同じ。
-                if crate::theme::in_a_window() {
-                    v.push(MenuItem::ViewClassic);
-                    v.push(MenuItem::ViewDetails);
-                }
-                v.push(MenuItem::HiddenToggle);
-                v.push(MenuItem::ThemePickPane);
-                v.push(MenuItem::TogglesMenu);
-                v.push(MenuItem::Back);
-                Some(v)
+                Some(vec![
+                    MenuItem::HiddenToggle,
+                    MenuItem::ThemePickPane,
+                    MenuItem::TogglesMenu,
+                    MenuItem::Back,
+                ])
             }
             MenuItem::SessionMenu => {
                 let mut v = Vec::new();
@@ -688,10 +675,6 @@ impl App {
                 self.start_pane_theme_picker(side);
             }
             MenuItem::Shortcuts => self.start_shortcuts(),
-            // Asked for, not done: the details view only exists in a window,
-            // so the window is what answers. See [`crate::ViewWanted`].
-            MenuItem::ViewDetails => self.view_request = Some(crate::ViewWanted::Details),
-            MenuItem::ViewClassic => self.view_request = Some(crate::ViewWanted::Classic),
             MenuItem::Lang => {
                 // Flip the interface language; every localized string reads
                 // `self.lang` at draw time, so the next frame is fully in the
