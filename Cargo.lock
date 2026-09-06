@@ -419,7 +419,7 @@ dependencies = [
 
 [[package]]
 name = "cian"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "anyhow",
  "cian-core",
@@ -431,7 +431,7 @@ dependencies = [
 
 [[package]]
 name = "cian-ai"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "anyhow",
  "cian-core",
@@ -443,7 +443,7 @@ dependencies = [
 
 [[package]]
 name = "cian-core"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -468,7 +468,7 @@ dependencies = [
 
 [[package]]
 name = "cian-lua"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "cian-core",
  "mlua",
@@ -477,7 +477,7 @@ dependencies = [
 
 [[package]]
 name = "cian-pty"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "anyhow",
  "cian-core",
@@ -488,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "cian-scp"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "anyhow",
  "filetime",
@@ -500,7 +500,7 @@ dependencies = [
 
 [[package]]
 name = "cian-server"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "anyhow",
  "cian-ai",
@@ -517,7 +517,7 @@ dependencies = [
 
 [[package]]
 name = "cian-tui"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "anyhow",
  "arboard",
