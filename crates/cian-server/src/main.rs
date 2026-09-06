@@ -3093,6 +3093,26 @@ impl Session {
                     ),
                     other => anyhow::bail!("知らない AI 依頼: {other}"),
                 };
+                // The conversation so far, oldest first, as
+                // `[{ "user": true, "text": "…" }, …]`. Absent for every
+                // caller but a chat, which is every caller today — the window
+                // has no chat surface yet, and this is the half of it that
+                // does not depend on one. The terminal build hands the same
+                // list to `cian_ai::chat_with`; a conversation that only one
+                // front end remembers would be two programs again.
+                let prior: Vec<cian_ai::Turn> = req.params["prior"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|t| {
+                                Some(cian_ai::Turn {
+                                    user: t["user"].as_bool()?,
+                                    text: t["text"].as_str()?.to_string(),
+                                })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 // On a worker, and answered by an event.
                 //
                 // `chat` waits on a python subprocess talking to a server on
@@ -3100,7 +3120,7 @@ impl Session {
                 // engine — every keystroke in the listing queued behind a
                 // question about a log file. The first attempt did exactly
                 // that and looked like a freeze.
-                ai_in_background(self.out.clone(), cfg, system.to_string(), user.to_string(), |answer| Ok(serde_json::json!({ "answer": answer })));
+                ai_in_background_with(self.out.clone(), cfg, system.to_string(), prior, user.to_string(), |answer| Ok(serde_json::json!({ "answer": answer })));
                 Ok(serde_json::json!({ "asked": true }))
             }
             // ---- Bookmarks ----
@@ -5545,7 +5565,23 @@ fn ai_in_background(
     user: String,
     wrap: impl FnOnce(String) -> Result<serde_json::Value, String> + Send + 'static,
 ) {
-    std::thread::spawn(move || match cian_ai::chat(&cfg, &system, &user, &[]) {
+    ai_in_background_with(out, cfg, system, Vec::new(), user, wrap)
+}
+
+/// The same, carrying the conversation so far.
+///
+/// Only a chat has one. The other four callers parse what comes back — a
+/// commit message, a rename plan — and an earlier turn in the request is an
+/// earlier turn's shape in the answer.
+fn ai_in_background_with(
+    out: Out,
+    cfg: cian_ai::AiConfig,
+    system: String,
+    prior: Vec<cian_ai::Turn>,
+    user: String,
+    wrap: impl FnOnce(String) -> Result<serde_json::Value, String> + Send + 'static,
+) {
+    std::thread::spawn(move || match cian_ai::chat_with(&cfg, &system, &prior, &user, &[]) {
         Ok(answer) => match wrap(answer) {
             Ok(v) => out.event("ai", v),
             Err(e) => out.event("ai", serde_json::json!({ "error": e })),

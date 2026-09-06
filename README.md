@@ -427,6 +427,8 @@ Off unless `cian.ai{…}` is set, and always in the loop — nothing runs or del
 | `:ailog` | triage the selected log — errors, timeline, likely cause |
 | `S` in F3 | summarise the file being read |
 
+**The conversation carries.** `:ai`'s chat sends what has been said so far, so "the one you just mentioned" means something. When it grows long the oldest turns are dropped **whole** — half a turn is a sentence with no speaker — and the newest one is always sent however heavy it is, because it is what the next question is about. The structured requests (`:airename` and friends) stay one-shot: a machine reads those answers, and an earlier turn in the request is an earlier turn's format in the reply.
+
 **Give it context.** `cian.ai_context("…")` records facts about your setup — the OS, the deployment target, house rules — and cian prepends them to every prompt. Per-server facts go on the host (`notes = "RHEL 8; Oracle 19c; …"`) and are handed over when the shell is logged into it.
 
 cian reaches the model through a small bundled Python helper (Windows broker sign-in). `auth_mode = "mock"` is an offline echo for wiring it up; `api_base_url` points at a local server (Ollama, LM Studio). This is the one place cian is not fully self-contained, which is why it is opt-in. See [`examples/init.en.lua`](examples/init.en.lua).

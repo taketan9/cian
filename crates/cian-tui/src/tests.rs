@@ -7101,6 +7101,76 @@
     }
 
 
+    /// A follow-up carries the conversation it is a follow-up to.
+    ///
+    /// **It did not.** `cian_ai::chat` sent `[system, user]`, so the exchanges
+    /// on screen were unrelated questions to something that had heard none of
+    /// them — a transcript, not a conversation, and indistinguishable from one
+    /// by looking. Checked at the hand-off (`chat_prior`) because the send
+    /// itself needs an endpoint; that the hand-off then reaches the model is
+    /// `cian-ai`'s `the_conversation_so_far_reaches_the_helper`.
+    #[test]
+    fn a_follow_up_takes_the_conversation_with_it() {
+        let (_d, mut app) = app_with(&["a.txt"]);
+        app.start_ai_chat(
+            ChatMode::Ai,
+            vec![
+                ChatMsg { user: true, text: "what is in this folder".into() },
+                ChatMsg { user: false, text: "one text file".into() },
+            ],
+            false,
+        );
+        for c in "and the size?".chars() {
+            app.handle_key(key(c)).unwrap();
+        }
+        app.handle_key(code(KeyCode::Enter)).unwrap();
+        let carried: Vec<&str> = app.chat_prior.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(
+            carried,
+            ["what is in this folder", "one text file"],
+            "both earlier turns went along",
+        );
+        assert!(
+            app.chat_prior.iter().all(|t| t.text != "and the size?"),
+            "and the question itself did not go twice",
+        );
+        assert!(app.chat_prior[0].user, "who said what came too");
+        assert!(!app.chat_prior[1].user);
+
+        // And a new conversation does not inherit the old one's turns. It can
+        // still be sitting there: the send above found no AI configured and
+        // returned before taking it.
+        app.start_ai_chat(ChatMode::Ai, vec![], false);
+        assert!(app.chat_prior.is_empty(), "a fresh chat starts with no memory");
+    }
+
+    /// The structured purposes stay one-shot.
+    ///
+    /// They parse what comes back — a rename plan, a search ranking — and an
+    /// earlier turn in the request is an earlier turn's *format* in the answer.
+    #[test]
+    fn a_structured_request_carries_nothing() {
+        let (_d, mut app) = app_with(&["a.txt"]);
+        app.ai = Some(cian_ai::AiConfig { auth_mode: "mock".into(), ..Default::default() });
+        app.chat_prior = vec![cian_ai::Turn { user: true, text: "left over".into() }];
+        app.ai_request(AiPurpose::Chat, "s".into(), "u".into());
+        assert!(
+            app.chat_prior.is_empty(),
+            "a chat turn takes it",
+        );
+        app.ai_job = None;
+        app.chat_prior = vec![cian_ai::Turn { user: true, text: "left over".into() }];
+        app.ai_request(
+            AiPurpose::SemSearch { hits: Vec::new() },
+            "s".into(),
+            "u".into(),
+        );
+        assert!(
+            app.chat_prior.is_empty(),
+            "and a structured one clears it rather than carrying it into the next chat",
+        );
+    }
+
     /// The retrieval trace is read *about* a conversation, so closing it must
     /// put that conversation back rather than dump the user in the file pane.
     #[test]

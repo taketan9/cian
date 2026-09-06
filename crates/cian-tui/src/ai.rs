@@ -523,9 +523,19 @@ impl App {
         } else {
             Vec::new()
         };
+        // The conversation, for a chat turn only. The structured purposes
+        // parse what comes back, and an earlier turn in the request is an
+        // earlier turn's shape in the answer.
+        let prior = if matches!(purpose, AiPurpose::Chat) {
+            std::mem::take(&mut self.chat_prior)
+        } else {
+            self.chat_prior.clear();
+            Vec::new()
+        };
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let r = cian_ai::chat(&cfg, &system, &user, &images).map_err(|e| e.to_string());
+            let r = cian_ai::chat_with(&cfg, &system, &prior, &user, &images)
+                .map_err(|e| e.to_string());
             let _ = tx.send(r);
         });
         self.ai_job = Some(AiJob { rx, purpose });
@@ -551,9 +561,12 @@ impl App {
         pending: bool,
     ) {
         self.archive_current_ai_chat();
-        // A fresh conversation starts with no attachments: an image pasted for
-        // the old one must not leak into the new one.
+        // A fresh conversation starts with no attachments and no memory: an
+        // image pasted for the old one, or the turns it was made of, must not
+        // leak into this one. `chat_prior` can still be set here — a send that
+        // found no AI configured, or a busy one, leaves it behind.
         self.chat_attachments.clear();
+        self.chat_prior.clear();
         self.open_popup(Popup::AiChat {
             input: String::new(),
             log,
@@ -672,20 +685,27 @@ impl App {
 
     /// Send the typed chat line to the model.
     pub(crate) fn send_ai_message(&mut self) {
-        let (question, mode) =
+        let (question, mode, prior) =
             if let Popup::AiChat { input, log, pending, scroll, mode, .. } = &mut self.popup {
                 let q = input.trim().to_string();
                 if q.is_empty() || *pending {
                     return;
                 }
                 input.clear();
+                // Taken before the new question joins the transcript, so it is
+                // the conversation *so far* — see [`App::chat_prior`].
+                let prior: Vec<cian_ai::Turn> = log
+                    .iter()
+                    .map(|m| cian_ai::Turn { user: m.user, text: m.text.clone() })
+                    .collect();
                 log.push(ChatMsg { user: true, text: q.clone() });
                 *pending = true;
                 *scroll = usize::MAX;
-                (q, *mode)
+                (q, *mode, prior)
             } else {
                 return;
             };
+        self.chat_prior = prior;
         match mode {
             ChatMode::Ai => {
                 let system = "You are a concise assistant embedded in a terminal file \

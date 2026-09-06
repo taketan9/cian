@@ -121,7 +121,14 @@ def main():
         if req.get("auth_mode") == "mock":
             # Offline echo, for wiring up and testing cian without a network.
             last = messages[-1]["content"] if messages else ""
-            emit({"ok": True, "content": f"[mock] {last}"})
+            # …and how many turns came with it. The conversation used to reach
+            # here as `[system, user]` however long the chat on screen was, and
+            # nothing said so: the transcript looked right and every question
+            # was being asked cold. `+n` is the only place that fact is visible
+            # without a network.
+            prior = sum(1 for m in messages if m.get("role") in ("user", "assistant")) - 1
+            mark = f"[mock +{prior}]" if prior > 0 else "[mock]"
+            emit({"ok": True, "content": f"{mark} {last}"})
             return
         # Attach any pasted images to the last user turn (Vision).
         messages = attach_images(messages, req.get("images", []))

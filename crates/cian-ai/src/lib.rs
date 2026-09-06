@@ -74,6 +74,56 @@ struct Message<'a> {
     content: &'a str,
 }
 
+/// One turn of a conversation already had.
+///
+/// **This did not exist, and its absence was invisible.** `chat` sent
+/// `[system, user]` and nothing else, so a chat window that showed six
+/// exchanges was six unrelated questions to a model that had been told none of
+/// them. On screen it looked exactly like a conversation; "as I said above"
+/// was answered by a stranger. Found 2026-09-06 by reading, because the one
+/// thing this cannot be caught by is looking at the transcript.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Turn {
+    /// True for the person's turn, false for the model's.
+    pub user: bool,
+    pub text: String,
+}
+
+/// How much of a conversation is worth carrying, in bytes of UTF-8.
+///
+/// Every turn is re-sent every turn — that is what a memory costs against a
+/// stateless endpoint — so a long afternoon in one window would otherwise grow
+/// each question without limit until the endpoint refused it, and the refusal
+/// would arrive as "the AI stopped working". Oldest turns are dropped first,
+/// and whole: half a turn is a sentence with no speaker.
+///
+/// Bytes rather than tokens because cian cannot count the model's tokens
+/// without the model, and bytes are what it can measure exactly. Twenty-four
+/// thousand is about eight thousand Japanese characters, which leaves room
+/// beside a 1024-token reply.
+const CARRY: usize = 24_000;
+
+/// The turns to actually send: the most recent ones that fit in [`CARRY`].
+///
+/// **The newest turn is kept whatever it weighs.** It is the answer the
+/// question being asked is usually *about* — "fix line 30" after a page of
+/// code — so dropping it for being big turns the follow-up into nonsense. A
+/// request too large for the endpoint is refused and says so; a request that
+/// quietly lost the thing it refers to is answered, wrongly.
+fn carried(prior: &[Turn]) -> &[Turn] {
+    let Some(from_at_most) = prior.len().checked_sub(1) else { return prior };
+    let mut used = prior[from_at_most].text.len();
+    let mut from = from_at_most;
+    for (i, t) in prior[..from_at_most].iter().enumerate().rev() {
+        used += t.text.len();
+        if used > CARRY {
+            break;
+        }
+        from = i;
+    }
+    &prior[from..]
+}
+
 #[derive(Deserialize)]
 struct Reply {
     ok: bool,
@@ -137,10 +187,32 @@ pub fn available(cfg: &AiConfig) -> bool {
 /// Send a chat turn and return the assistant's reply. Blocks on the network, so
 /// callers run it on a worker thread.
 pub fn chat(cfg: &AiConfig, system: &str, user: &str, images: &[String]) -> Result<String> {
+    chat_with(cfg, system, &[], user, images)
+}
+
+/// Ask, with the conversation so far.
+///
+/// `prior` is oldest-first and excludes the question being asked. One-shot
+/// callers — the renamer, the search, the commit-message drafter — pass none
+/// and get exactly what [`chat`] always did: those parse the reply, and a
+/// previous turn in the request is a previous turn's format in the answer.
+pub fn chat_with(
+    cfg: &AiConfig,
+    system: &str,
+    prior: &[Turn],
+    user: &str,
+    images: &[String],
+) -> Result<String> {
     let script = script_path()?;
     let mut messages = Vec::new();
     if !system.is_empty() {
         messages.push(Message { role: "system", content: system });
+    }
+    for t in carried(prior) {
+        messages.push(Message {
+            role: if t.user { "user" } else { "assistant" },
+            content: &t.text,
+        });
     }
     messages.push(Message { role: "user", content: user });
     let req = ChatRequest {
@@ -212,5 +284,72 @@ mod tests {
         assert!(available(&cfg), "mock check passes");
         let reply = chat(&cfg, "you are terse", "hello there", &[]).unwrap();
         assert_eq!(reply, "[mock] hello there", "the helper echoed the last message");
+    }
+
+    /// The conversation reaches the helper, and is counted there.
+    ///
+    /// Asserted at the far end on purpose. Everything between here and the
+    /// model is `Serialize`, and a `prior` that is built correctly and then
+    /// dropped on the way out looks, from the Rust side, exactly like one that
+    /// arrived — which is the shape of the bug this fixes.
+    #[test]
+    fn the_conversation_so_far_reaches_the_helper() {
+        if !have_python() {
+            eprintln!("no python3; skipping");
+            return;
+        }
+        let cfg = AiConfig { python: "python3".into(), auth_mode: "mock".into(), ..Default::default() };
+        let prior = vec![
+            Turn { user: true, text: "what is in this folder".into() },
+            Turn { user: false, text: "three text files".into() },
+        ];
+        let reply = chat_with(&cfg, "you are terse", &prior, "and the biggest?", &[]).unwrap();
+        assert_eq!(
+            reply, "[mock +2] and the biggest?",
+            "both earlier turns went with the question",
+        );
+    }
+
+    /// A conversation longer than [`CARRY`] loses its oldest turns, whole.
+    #[test]
+    fn a_long_conversation_is_trimmed_from_the_front() {
+        // 一手あたり CARRY のおよそ 1/4。6手で足が出る。
+        let big = "あ".repeat(CARRY / 12);
+        let prior: Vec<Turn> = (0..6)
+            .map(|i| Turn { user: i % 2 == 0, text: format!("{i}{big}") })
+            .collect();
+        let kept = carried(&prior);
+        assert!(kept.len() < prior.len(), "something was dropped, got {}", kept.len());
+        assert!(
+            kept.iter().map(|t| t.text.len()).sum::<usize>() <= CARRY,
+            "what is kept fits",
+        );
+        assert_eq!(kept.last(), prior.last(), "the newest turn is always one of them");
+        assert!(
+            kept.first().unwrap().text.starts_with(|c: char| c.is_ascii_digit()),
+            "turns are kept whole — half a turn is a sentence with no speaker",
+        );
+    }
+
+    /// One turn heavier than the whole budget is still sent.
+    ///
+    /// It is what the next question is about. Dropping it leaves a follow-up
+    /// referring to something the model was never shown — answered, and wrong,
+    /// which is worse than a request the endpoint refuses out loud.
+    #[test]
+    fn the_newest_turn_survives_even_when_it_alone_is_too_big() {
+        let prior = vec![
+            Turn { user: true, text: "old".into() },
+            Turn { user: false, text: "x".repeat(CARRY * 2) },
+        ];
+        let kept = carried(&prior);
+        assert_eq!(kept.len(), 1, "the older turn went");
+        assert_eq!(kept[0], prior[1], "the newest stayed");
+    }
+
+    /// Nothing to carry is the one-shot case every structured caller uses.
+    #[test]
+    fn no_prior_turns_is_the_request_it_always_was() {
+        assert!(carried(&[]).is_empty());
     }
 }

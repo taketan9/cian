@@ -2756,6 +2756,17 @@ pub struct App {
     /// Images pasted into the open chat (Ctrl+V), as paths to temp PNGs. Sent
     /// with the next question and cleared then; also cleared on a new chat.
     chat_attachments: Vec<std::path::PathBuf>,
+    /// The conversation so far, handed to the next chat request.
+    ///
+    /// Set where the question is typed and taken where it is sent, the same
+    /// way `chat_attachments` is — `ai_request` cannot read it off the popup
+    /// itself, because by then the new question has already been pushed onto
+    /// the transcript and would be sent twice.
+    ///
+    /// **The transcript used to go nowhere.** `cian_ai::chat` sent `[system,
+    /// user]`, so the six exchanges on screen were six unrelated questions and
+    /// the second one was answered by something that had not heard the first.
+    chat_prior: Vec<cian_ai::Turn>,
     /// The junk-review list body rect, stashed so a click can map to a row.
     junk_rect: Rect,
     /// The structure-review list body rect, for the same reason.
@@ -2972,6 +2983,7 @@ impl App {
             ai_scroll: 0,
             ai_lines: Vec::new(),
             chat_attachments: Vec::new(),
+            chat_prior: Vec::new(),
             sort_rects: Vec::new(),
             crumb_rects: Vec::new(),
             nav_rects: Vec::new(),
