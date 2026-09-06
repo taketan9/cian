@@ -1801,6 +1801,40 @@ struct ChatMsg {
     /// True for the user's turn, false for the assistant's.
     user: bool,
     text: String,
+    /// What that turn really was, when what is shown is a label for it.
+    ///
+    /// The doors that open with something already asked — triage this log,
+    /// summarise this file — show `Triage the log: access.log` and send the
+    /// log. That reads well and, once the conversation started being carried,
+    /// meant a follow-up asked about *the file name*: the model was handed a
+    /// sentence naming a log it had never been shown. Displaying the payload
+    /// instead would make the transcript unreadable, so the turn holds both.
+    ///
+    /// `None` when they are the same, which is every turn that was typed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sent: Option<String>,
+}
+
+impl ChatMsg {
+    /// A turn the person typed: shown and sent alike.
+    fn you(text: impl Into<String>) -> Self {
+        ChatMsg { user: true, text: text.into(), sent: None }
+    }
+
+    /// A turn the person *made* — a label on screen, a payload to the model.
+    fn you_sending(label: impl Into<String>, sent: impl Into<String>) -> Self {
+        ChatMsg { user: true, text: label.into(), sent: Some(sent.into()) }
+    }
+
+    /// A turn the model answered with.
+    fn ai(text: impl Into<String>) -> Self {
+        ChatMsg { user: false, text: text.into(), sent: None }
+    }
+
+    /// What goes into the request for this turn.
+    fn for_model(&self) -> &str {
+        self.sent.as_deref().unwrap_or(&self.text)
+    }
 }
 
 /// Work deferred until a shrink transition finishes.

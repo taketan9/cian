@@ -921,7 +921,18 @@ html, body {
 }
 .sheet .field:focus { outline: none; border-color: var(--accent); }
 
-#view, #report {
+/* The chat. Above both — it can be opened from a report (the AI answers that
+   are lists) and the viewer (summarise this file), and the thing you opened
+   is the thing that should be in front.
+
+   **Its own z-index, not a shared one.** `#view` and `#report` were both 10
+   once, and which one you saw was decided by document order — the sheet
+   opened *behind* the editor and three rounds went into "it says it is open
+   and it is not there". Written as its own number so the question has an
+   answer. */
+#chat { z-index: 12; }
+
+#view, #report, #chat {
   /* They replace the listing, not the whole window: the hint and status bars
      stay visible underneath — the terminal build never covers them, and every
      say() from viewer code used to land on a bar nobody could see. */
@@ -930,7 +941,46 @@ html, body {
   display: flex; flex-direction: column;
   background: var(--pane); color: var(--text);
 }
-#view[hidden], #report[hidden] { display: none; }
+#view[hidden], #report[hidden], #chat[hidden] { display: none; }
+
+/* The transcript scrolls; the turn being typed does not move. */
+.cbody { flex: 1 1 auto; overflow-y: auto; padding: 10px 12px; }
+.cturn { margin: 0 0 12px; max-width: 78ch; }
+.cwho {
+  font-weight: 700; letter-spacing: .02em;
+  display: block; margin-bottom: 2px;
+}
+/* Who is speaking, in two colours that are actually two colours. The first
+   pair were the accent and --k-config, and on 白磁 those are both teal a
+   shade apart — the names were telling them apart in theory. The terminal
+   build separates the turns by *glyph* (▍ / ◆); a window has room to do it
+   by colour, which is read faster. */
+.cturn.you .cwho { color: var(--accent); }
+.cturn.ai  .cwho { color: var(--k-doc); }
+/* The words themselves. `pre-wrap` because an answer arrives with its own
+   line breaks and its own indentation, and a model asked for a command
+   replies with a command — reflowed, that is a command that does not run. */
+.ctext { white-space: pre-wrap; word-break: break-word; }
+.cturn.you .ctext {
+  border-left: 2px solid var(--accent);
+  padding-left: 8px; color: var(--text);
+}
+/* Waiting. One line that says so, rather than an empty screen: an answer that
+   takes twenty seconds and says nothing reads as an answer that is not
+   coming. */
+.cwait { color: var(--dim); font-style: italic; }
+
+.cfoot {
+  flex: 0 0 auto; border-top: 2px solid var(--accent);
+  background: var(--pane-off);
+}
+#c-in {
+  display: block; width: 100%; box-sizing: border-box;
+  border: 0; outline: 0; resize: none;
+  background: transparent; color: var(--text);
+  font: inherit; padding: 6px 10px; max-height: 40vh;
+}
+.chint { padding: 2px 10px 5px; color: var(--dim); font-size: .85em; }
 #report .hits { flex: 1 1 auto; max-height: none; margin: 0; border: 0; }
 /* The narrowing box. Accented like every other place cian is taking text —
    the terminal build gives one look to "I am typing into something". */
@@ -1315,6 +1365,23 @@ html, body {
     <div class="vpic" id="v-pic" hidden></div>
     <div class="vread" id="v-read" hidden></div>
     <div class="vfoot" id="v-foot"></div>
+  </div>
+
+  <!-- The AI chat. A surface, like the viewer: it replaces the listing rather
+       than floating over it, so the status and hint bars stay readable —
+       every say() from in here used to land on a bar that was covered.
+
+       Its own sheet rather than a bent `#report`, because the shapes differ
+       where it matters: a report's input is a *filter* at the top and this
+       one is a *turn* at the bottom. Sharing them would mean an `if` in every
+       key handler, which is how the two grew apart in the first place. -->
+  <div id="chat" hidden>
+    <div class="vhead"><span id="c-name"></span><span id="c-about"></span></div>
+    <div class="cbody" id="c-body"></div>
+    <div class="cfoot">
+      <textarea id="c-in" rows="1" autocomplete="off" spellcheck="false"></textarea>
+      <div class="chint" id="c-hint"></div>
+    </div>
   </div>
 
   <script src="renderer.js"></script>

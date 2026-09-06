@@ -255,7 +255,7 @@ impl App {
         self.start_ai_chat_as(
             ChatMode::Ai,
             ChatSkin::simple(tr(self.lang, "Summarize this file", "このファイルを要約")),
-            vec![ChatMsg { user: true, text: format!("Summarise {}", name) }],
+            vec![ChatMsg::you_sending(format!("Summarise {}", name), body.clone())],
             true,
         );
         self.ai_request(AiPurpose::Chat, system, body);
@@ -291,7 +291,7 @@ impl App {
         self.start_ai_chat_as(
             ChatMode::Ai,
             ChatSkin::simple(tr(self.lang, "Explain the last error", "直近のエラーを説明")),
-            vec![ChatMsg { user: true, text: "Explain the last error".into() }],
+            vec![ChatMsg::you_sending("Explain the last error", body.clone())],
             true,
         );
         self.ai_request(AiPurpose::Chat, system, body);
@@ -322,7 +322,7 @@ impl App {
         self.start_ai_chat_as(
             ChatMode::Ai,
             ChatSkin::simple(tr(self.lang, "Explain this diff", "この差分を説明")),
-            vec![ChatMsg { user: true, text: "Explain this diff".into() }],
+            vec![ChatMsg::you_sending("Explain this diff", body.clone())],
             true,
         );
         self.ai_request(AiPurpose::Chat, system, body);
@@ -358,7 +358,7 @@ impl App {
         self.start_ai_chat_as(
             ChatMode::Ai,
             ChatSkin::simple(tr(self.lang, "Triage this log", "このログを診断")),
-            vec![ChatMsg { user: true, text: format!("Triage the log: {}", name) }],
+            vec![ChatMsg::you_sending(format!("Triage the log: {}", name), tail.clone())],
             true,
         );
         self.ai_request(AiPurpose::Chat, system, tail);
@@ -414,7 +414,7 @@ impl App {
         self.start_ai_chat_as(
             ChatMode::Ai,
             ChatSkin::simple(title),
-            vec![ChatMsg { user: true, text: title.to_string() }],
+            vec![ChatMsg::you_sending(title.to_string(), text.clone())],
             true,
         );
         self.ai_request(AiPurpose::Chat, system.to_string(), text);
@@ -660,7 +660,7 @@ impl App {
         if let Popup::AiChat { log, scroll, .. } = &mut self.popup {
             match log.last_mut() {
                 Some(m) if !m.user => m.text.push_str(text),
-                _ => log.push(ChatMsg { user: false, text: text.to_string() }),
+                _ => log.push(ChatMsg::ai(text.to_string())),
             }
             *scroll = usize::MAX;
         }
@@ -696,9 +696,9 @@ impl App {
                 // the conversation *so far* — see [`App::chat_prior`].
                 let prior: Vec<cian_ai::Turn> = log
                     .iter()
-                    .map(|m| cian_ai::Turn { user: m.user, text: m.text.clone() })
+                    .map(|m| cian_ai::Turn { user: m.user, text: m.for_model().to_string() })
                     .collect();
-                log.push(ChatMsg { user: true, text: q.clone() });
+                log.push(ChatMsg::you(q.clone()));
                 *pending = true;
                 *scroll = usize::MAX;
                 (q, *mode, prior)
@@ -1402,8 +1402,8 @@ impl App {
                     *pending = false;
                     *scroll = usize::MAX;
                     match result {
-                        Ok(text) => log.push(ChatMsg { user: false, text }),
-                        Err(e) => log.push(ChatMsg { user: false, text: format!("[error] {}", e) }),
+                        Ok(text) => log.push(ChatMsg::ai(text)),
+                        Err(e) => log.push(ChatMsg::ai(format!("[error] {}", e))),
                     }
                 }
             }
@@ -1493,8 +1493,8 @@ mod ai_history_tests {
                 ChatMode::Ai,
                 ChatSkin::of(ChatMode::Ai),
                 vec![
-                    ChatMsg { user: true, text: "q1".into() },
-                    ChatMsg { user: false, text: "a1\nline".into() },
+                    ChatMsg::you("q1"),
+                    ChatMsg::ai("a1\nline"),
                 ],
             ),
             // A window with a title of its own — the AI actions that name what
@@ -1502,7 +1502,7 @@ mod ai_history_tests {
             StoredChat::new(
                 ChatMode::Ai,
                 ChatSkin { title: "AI - Rename".into(), simple: true },
-                vec![ChatMsg { user: true, text: "q2".into() }],
+                vec![ChatMsg::you("q2")],
             ),
         ];
         // Serialize exactly as save_ai_history does, then read back as restore does.

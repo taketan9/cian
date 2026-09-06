@@ -98,6 +98,12 @@ const el = {
     rName: document.getElementById('r-name'),
     rAbout: document.getElementById('r-about'),
     rQ: document.getElementById('r-q'),
+    chat: document.getElementById('chat'),
+    cName: document.getElementById('c-name'),
+    cAbout: document.getElementById('c-about'),
+    cBody: document.getElementById('c-body'),
+    cIn: document.getElementById('c-in'),
+    cHint: document.getElementById('c-hint'),
     rRows: document.getElementById('r-rows'),
     rFoot: document.getElementById('r-foot'),
     view: document.getElementById('view'),
@@ -1981,6 +1987,13 @@ let palette = null;
 /// instead. Ordered by how often each is reached for, so a narrow window
 /// drops from the end.
 function hintsNow() {
+    // The chat is in front of the viewer when both are up, so it answers
+    // first. A bar naming the editor's keys over a conversation would be
+    // naming keys that do not fire.
+    if (chat.on) {
+        return [['Enter', tr('send', '送信')], ['Shift+Enter', tr('newline', '改行')],
+                ['Ctrl+V', tr('paste', '貼り付け')], ['Esc', tr('close', '閉じる')]];
+    }
     if (viewer.on) {
         // `STYLES[0]` is notepad and `STYLES[1]` is vim; this asked for 1 and
         // returned the notepad row. It had never been on screen to disagree
@@ -3609,6 +3622,15 @@ function applyKeymaps(list) {
 let keymapErrors = [];
 
 document.addEventListener('keydown', (e) => {
+    // The chat first, because it opens *over* the viewer (summarise the file
+    // you are reading) as well as over the listing.
+    //
+    // Handled here rather than on the textarea, deliberately. A listener on
+    // the node would be a second receiver on the same path, and this program
+    // has lost four rounds to that: `stopPropagation` silences other *nodes*
+    // and not the other handlers on `document`, and a capture listener
+    // silences the bubble phase on the same node. One receiver, one order.
+    if (chat.on) { chatKey(e); return; }
     // Not while a file is open. The editor no longer stops every key on its
     // way past — it cannot, or its own bindings never fire — so the listing's
     // keys have to decline for themselves.
@@ -3832,6 +3854,182 @@ document.addEventListener('keydown', (e) => {
     }
     e.preventDefault();
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// The AI chat.
+//
+// cian-tui's `Popup::AiChat` in a window: the same transcript, the same six
+// doors into it (`:ai`, summarise, explain the error, explain the diff,
+// triage the log, the three over a selection), and the same words on screen —
+// あなた / AI - simple — because `parity.py` counts them and because someone
+// who learned one build must not have to learn a second vocabulary.
+//
+// **The window had no chat at all.** It asked one question, printed the
+// answer into a read-only list, and that was the end of it; "and the bigger
+// one?" meant starting again with the whole context retyped.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// The open conversation. `log` is `[{ user, text, sent? }]`, oldest first.
+///
+/// `text` is what is on screen and `sent` — when they differ — is what went to
+/// the model. They differ for the doors that open with something already
+/// asked: "summarise this file" reads better than the file, but a follow-up
+/// about line 30 needs the file. Showing the payload would make the transcript
+/// unreadable; sending the label would make the follow-up meaningless.
+const chat = { on: false, log: [], pending: false, title: '' };
+
+/// The one door. Everything that opens or closes the chat comes through here.
+///
+/// Written as a door because of what happened to the viewer: state set in
+/// four places, one of which forgot the element, and a sheet that reported
+/// itself open while nothing was drawn. The hint bar reads `chat.on`, so the
+/// flag and the element have to move together or the keys it advertises are
+/// not the keys that work.
+function setChatOn(on) {
+    chat.on = on;
+    el.chat.hidden = !on;
+    if (!on) {
+        chat.log = [];
+        chat.pending = false;
+        el.cIn.value = '';
+        el.cIn.blur();
+    }
+    drawHints();
+}
+
+/// Open a conversation. `seed` is an opening turn already spoken — the log to
+/// triage, the diff to explain — or nothing, for `:ai`.
+///
+/// `sent` is what that turn really was, when the readable version is a label
+/// for something much larger. Left out for the doors the *engine* composes
+/// (`:ailog`, `:aierror`): the window never sees what they sent, so a
+/// follow-up there leans on the answer being in the transcript — which it is,
+/// and which is what a follow-up usually refers to anyway.
+function openChat(title, seed = null, sent = null) {
+    chat.title = title;
+    chat.log = seed ? [{ user: true, text: seed, sent: sent || undefined }] : [];
+    chat.pending = !!seed;
+    setChatOn(true);
+    el.cName.textContent = title;
+    el.cAbout.textContent = tr("the AI's answers — check them before you use them",
+                               'AI の答え — 確かめてから使ってください');
+    el.cHint.textContent = tr('Enter send   Shift+Enter newline   Esc close',
+                              'Enter 送信   Shift+Enter 改行   Esc 閉じる');
+    el.cIn.value = '';
+    drawChat();
+    el.cIn.focus();
+}
+
+function drawChat() {
+    const frag = document.createDocumentFragment();
+    for (const m of chat.log) {
+        const div = document.createElement('div');
+        div.className = 'cturn ' + (m.user ? 'you' : 'ai');
+        const who = document.createElement('span');
+        who.className = 'cwho';
+        // The same two names the terminal build prints. Not "User" and
+        // "Assistant": `parity.py` compares the words, and two builds that
+        // name the speakers differently are two programs.
+        who.textContent = m.user ? tr('you', 'あなた') : 'AI - simple';
+        const body = document.createElement('div');
+        body.className = 'ctext';
+        body.textContent = m.text;
+        div.append(who, body);
+        frag.append(div);
+    }
+    if (chat.pending) {
+        const w = document.createElement('div');
+        w.className = 'cturn ai cwait';
+        w.textContent = tr('thinking…', '考えています…');
+        frag.append(w);
+    }
+    el.cBody.replaceChildren(frag);
+    // The newest turn, always. A transcript that keeps its scroll where it
+    // was is a transcript whose answer arrives off-screen.
+    el.cBody.scrollTop = el.cBody.scrollHeight;
+}
+
+/// Send what is typed, carrying the conversation it belongs to.
+///
+/// `prior` is the log *before* this question — the engine appends the
+/// question itself, and a log that already holds it would send it twice.
+async function sendChat() {
+    const text = el.cIn.value.trim();
+    if (!text || chat.pending) return;
+    el.cIn.value = '';
+    el.cIn.style.height = '';
+    await askChat(text);
+}
+
+async function askChat(text) {
+    const prior = chat.log.map((m) => ({ user: m.user, text: m.sent || m.text }));
+    chat.log.push({ user: true, text });
+    chat.pending = true;
+    drawChat();
+    const r = await ask('ai', {
+        pane: state.focus,
+        what: 'text',
+        system: 'You are a concise assistant embedded in a file manager. '
+              + 'Answer briefly in plain text.',
+        prior,
+        text,
+    });
+    if (!r) { chat.pending = false; drawChat(); return; }
+    answerIntoChat();
+}
+
+/// Hand the next AI answer to the open chat.
+///
+/// The five doors that used to print into a read-only list all end here now.
+/// A list you can only read was the whole of the window's AI: "and the bigger
+/// one?" meant starting again with the context retyped.
+function answerIntoChat() {
+    aiWaiting = (answer) => {
+        chat.pending = false;
+        // Closed while the answer was in flight. The engine has no idea a
+        // window shut, so the reply still arrives; pushed onto a cleared log
+        // it would be a stray turn waiting in the next conversation.
+        if (!chat.on) return;
+        chat.log.push({ user: false, text: String(answer) });
+        drawChat();
+        el.cIn.focus();
+    };
+}
+
+/// The chat's own keys. Everything not claimed here is left to the textarea,
+/// which is what makes typing, selecting and Ctrl+V work without writing any
+/// of it out.
+function chatKey(e) {
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        setChatOn(false);
+        // The viewer may be underneath — the chat can be opened from it. It
+        // was never closed, so revealing it is the whole of putting it back.
+        if (!viewer.on) refresh();
+        return;
+    }
+    // Enter sends; Shift+Enter is a newline, as in the terminal build. A
+    // question is usually one line and a pasted stack trace is not, and the
+    // key that ends the sentence must not be the key that ends the paragraph.
+    if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        sendChat();
+        return;
+    }
+    // Anything else types. Grown after the key lands, so the box is the size
+    // of what is in it rather than the size of what was in it.
+    queueMicrotask(growChatInput);
+}
+
+/// Fit the input to its content, up to the cap the CSS sets.
+///
+/// Reset first: a textarea's `scrollHeight` never shrinks below the height it
+/// already has, so measuring without clearing gives a box that only ever
+/// grows — three lines deleted and the room for them stays.
+function growChatInput() {
+    el.cIn.style.height = 'auto';
+    el.cIn.style.height = `${el.cIn.scrollHeight}px`;
+}
 
 /// Is this family actually here, in a way that can be believed?
 ///
@@ -5592,7 +5790,11 @@ function buildCommands() {
     { name: 'local', about: tr("close the server and come back to this disk", 'サーバを閉じてローカルへ戻る'), run: cmdDisconnect },
     { name: 'aicmd', about: tr("AI: a shell command from a description", 'AI: 説明からシェルコマンドを作る'), arg: tr('what you want', 'やりたいこと'), run: cmdAiCmd },
     { name: 'ailog', alias: ['logtriage', 'triage'], about: tr("AI: triage the selected log", 'AI: 選択したログを診断する'), run: cmdAiLog },
-    { name: 'ai', alias: ['chat'], about: tr("AI - simple: chat with the local model", 'AI - simple: ローカルモデルとチャット'), arg: tr('what to ask', '訊きたいこと'), run: cmdAiAsk },
+    // The argument is optional now that this opens a conversation rather than
+    // asking one question: `:ai` on its own is cian-tui's `new_ai_chat`, an
+    // empty window with the caret in it. It was required, so `:ai` stopped to
+    // demand a question before it would show you the place to type one.
+    { name: 'ai', alias: ['chat'], about: tr("AI - simple: chat with the local model", 'AI - simple: ローカルモデルとチャット'), arg: tr('what to ask', '訊きたいこと'), optional: true, run: cmdAiAsk },
     // Not `explain`: that word is cian-tui's `:aierror` (commands.rs:327), and
     // having it mean "explain the diff" here made one name do two jobs.
     { name: 'aidiff', alias: ['explaindiff'], about: tr("AI: explain the diff on screen", 'AI: 表示中の差分を説明する'), run: cmdAiDiff },
@@ -6124,21 +6326,13 @@ async function cmdAiLog() {
     const name = pane.entries[pane.cursor]?.name || '';
     const r = await ask('ai', { pane: state.focus, what: 'log' });
     if (!r) return;
-    say(tr('reading the log…', 'ログを読んでいます…'));
-    aiWaiting = (answer) => {
-        show(tr(`${name} — triage`, `${name} の診断`), tr('the AI’s answer — check it before you use it', 'AI の答え — 確かめてから使ってください'),
-            answer.split('\n').map((t) => ({ label: t })),
-            { foot: tr('Esc close', 'Esc 閉じる') });
-    };
+    openChat(tr('Triage this log', 'このログを診断'), tr(`Triage the log: ${name}`, `ログを診断: ${name}`));
+    answerIntoChat();
 }
 
 async function cmdAiAsk(question) {
-    const r = await ask('ai', { pane: state.focus, what: 'text', text: question });
-    if (!r) return;
-    say(tr('thinking…', '考えています…'));
-    aiWaiting = (answer) => {
-        show('AI', question, answer.split('\n').map((t) => ({ label: t })), { foot: tr('Esc close', 'Esc 閉じる') });
-    };
+    openChat(tr('Chat', 'チャット'));
+    if (question && question.trim()) await askChat(question.trim());
 }
 
 /// The three things a file open in front of you is usually wanted for —
@@ -6248,11 +6442,12 @@ async function cmdSummary() {
         text: body,
     });
     if (!r) return;
-    say(tr('reading…', '読んでいます…'));
-    aiWaiting = (answer) => {
-        show(tr('Summarise this file', 'このファイルを要約'), tr(`${viewer.name} — the AI’s answer; check it before you use it`, `${viewer.name} — AI の答え、確かめてから使ってください`),
-            answer.split('\n').map((t) => ({ label: t })), { foot: tr('Esc close', 'Esc 閉じる') });
-    };
+    openChat(
+        tr('Summarise this file', 'このファイルを要約'),
+        tr(`Summarise ${viewer.name}`, `${viewer.name} を要約`),
+        body,
+    );
+    answerIntoChat();
 }
 
 async function cmdAiOverText(kind) {
@@ -6274,11 +6469,8 @@ async function cmdAiOverText(kind) {
     }
     const r = await ask('ai', { pane: state.focus, what: 'text', system, text });
     if (!r) return;
-    say(tr('thinking…', '考えています…'));
-    aiWaiting = (answer) => {
-        show(title, tr('the AI’s answer — check it before you use it', 'AI の答え — 確かめてから使ってください'),
-            answer.split('\n').map((t) => ({ label: t })), { foot: tr('Esc close', 'Esc 閉じる') });
-    };
+    openChat(title, `${title} — ${viewer.name}`, text);
+    answerIntoChat();
 }
 
 /// `:aidiff` — explain what is on the comparison screen.
@@ -6299,11 +6491,12 @@ async function cmdAiDiff() {
         text: text.slice(0, 16000),
     });
     if (!r) return;
-    say(tr('reading the diff…', '差分を読んでいます…'));
-    aiWaiting = (answer) => {
-        show(tr('The diff, explained', '差分の説明'), tr('the AI’s answer — check it before you use it', 'AI の答え — 確かめてから使ってください'),
-            answer.split('\n').map((t) => ({ label: t })), { foot: tr('Esc close', 'Esc 閉じる') });
-    };
+    openChat(
+        tr('The diff, explained', '差分の説明'),
+        tr('Explain this diff', 'この差分を説明'),
+        text.slice(0, 16000),
+    );
+    answerIntoChat();
 }
 
 async function cmdOffice(what) {
@@ -9287,11 +9480,11 @@ document.addEventListener('focusout', () => queueMicrotask(syncIme));
 async function cmdAiError() {
     const r = await ask('aierror', {});
     if (!r) return;
-    say(tr('reading the shell…', 'シェルの画面を読んでいます…'));
-    aiWaiting = (answer) => {
-        show(tr('The last error, explained', '直近のエラーの説明'), tr('the AI’s answer — check it before you use it', 'AI の答え — 確かめてから使ってください'),
-            String(answer).split('\n').map((t) => ({ label: t })), { foot: tr('Esc close', 'Esc 閉じる') });
-    };
+    openChat(
+        tr('The last error, explained', '直近のエラーの説明'),
+        tr('Explain the last error', '直近のエラーを説明'),
+    );
+    answerIntoChat();
 }
 
 /// `:revealos` — hand the file to Finder, with it selected.

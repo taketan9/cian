@@ -5581,8 +5581,8 @@
                     "chat" => app.start_ai_chat(
                         ChatMode::Ai,
                         vec![
-                            ChatMsg { user: true, text: "hello".into() },
-                            ChatMsg { user: false, text: "a reply".into() },
+                            ChatMsg::you("hello"),
+                            ChatMsg::ai("a reply"),
                         ],
                         false,
                     ),
@@ -7115,8 +7115,8 @@
         app.start_ai_chat(
             ChatMode::Ai,
             vec![
-                ChatMsg { user: true, text: "what is in this folder".into() },
-                ChatMsg { user: false, text: "one text file".into() },
+                ChatMsg::you("what is in this folder"),
+                ChatMsg::ai("one text file"),
             ],
             false,
         );
@@ -7142,6 +7142,31 @@
         // returned before taking it.
         app.start_ai_chat(ChatMode::Ai, vec![], false);
         assert!(app.chat_prior.is_empty(), "a fresh chat starts with no memory");
+    }
+
+    /// A seeded chat carries what it really sent, not the label on screen.
+    ///
+    /// `:ailog` shows `Triage the log: access.log` and sends the log. Once the
+    /// conversation started being carried, a follow-up was handing the model a
+    /// sentence naming a file it had never been shown — the same bug as before
+    /// in a narrower place, and the transcript looked right in both.
+    #[test]
+    fn a_seeded_chat_carries_the_payload_and_not_its_label() {
+        let (_d, mut app) = app_with(&["a.txt"]);
+        app.start_ai_chat(
+            ChatMode::Ai,
+            vec![ChatMsg::you_sending("Triage the log: access.log", "ERROR 500\nERROR 500\n")],
+            false,
+        );
+        for c in "why twice?".chars() {
+            app.handle_key(key(c)).unwrap();
+        }
+        app.handle_key(code(KeyCode::Enter)).unwrap();
+        assert_eq!(
+            app.chat_prior.iter().map(|t| t.text.as_str()).collect::<Vec<_>>(),
+            ["ERROR 500\nERROR 500\n"],
+            "the log went, not its name",
+        );
     }
 
     /// The structured purposes stay one-shot.
@@ -7176,7 +7201,7 @@
     #[test]
     fn a_report_raised_over_the_chat_gives_the_chat_back() {
         let (_d, mut app) = app_with(&["a.txt"]);
-        app.start_ai_chat(ChatMode::Ai, vec![ChatMsg { user: true, text: "a question".into() }], false);
+        app.start_ai_chat(ChatMode::Ai, vec![ChatMsg::you("a question")], false);
         let chat = std::mem::replace(&mut app.popup, Popup::None);
         app.popup = Popup::Report {
             title: " what RAG retrieved ".into(),
@@ -7249,8 +7274,8 @@
         app.popup = Popup::AiChat {
             input: String::new(),
             log: vec![
-                ChatMsg { user: true, text: "hi".into() },
-                ChatMsg { user: false, text: "the answer\nline two".into() },
+                ChatMsg::you("hi"),
+                ChatMsg::ai("the answer\nline two"),
             ],
             scroll: 0,
             pending: false,
@@ -13211,8 +13236,8 @@
         app.popup = Popup::AiChat {
             input: String::new(),
             log: vec![
-                ChatMsg { user: true, text: "first question".into() },
-                ChatMsg { user: false, text: "an answer".into() },
+                ChatMsg::you("first question"),
+                ChatMsg::ai("an answer"),
             ],
             scroll: 0,
             pending: false,
@@ -13235,7 +13260,7 @@
         // A chat with no answer is not worth archiving.
         app.popup = Popup::AiChat {
             input: String::new(),
-            log: vec![ChatMsg { user: true, text: "unanswered".into() }],
+            log: vec![ChatMsg::you("unanswered")],
             scroll: 0,
             pending: true,
             sel: None,
@@ -15494,7 +15519,7 @@ mod every_popup_behaves {
                 "AiChat",
                 Popup::AiChat {
                     input: String::new(),
-                    log: vec![ChatMsg { user: true, text: "hello".into() }],
+                    log: vec![ChatMsg::you("hello")],
                     scroll: 0,
                     pending: true,
                     sel: None,
