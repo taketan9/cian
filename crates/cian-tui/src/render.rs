@@ -809,10 +809,14 @@ fn draw_desktop_chrome(
     let mut spans = Vec::new();
     let mut x = bar.x;
     app.grid_buttons.clear();
+    // **日本語だけだった。**`cian.set_option("lang", "en")` を書いた人にも
+    // 「戻る」と出ていた ── この3つと、切替と、左の列の見出し（下）で計8か所
+    // （2026-09-06、`scripts/i18n.py` の端末版の目が見つけた）。
+    let lang = app.lang;
     for (label, what) in [
-        ("  ‹ 戻る  ", GridButton::Back),
-        ("  › 進む  ", GridButton::Forward),
-        ("  ↑ 上へ  ", GridButton::Up),
+        (tr(lang, "  ‹ Back  ", "  ‹ 戻る  "), GridButton::Back),
+        (tr(lang, "  › Forward  ", "  › 進む  "), GridButton::Forward),
+        (tr(lang, "  ↑ Up  ", "  ↑ 上へ  "), GridButton::Up),
     ] {
         let w = crate::util::width(label) as u16;
         app.grid_buttons.push((what, Rect::new(x, bar.y, w, 1)));
@@ -912,9 +916,10 @@ pub(crate) fn draw_view_switcher(
     } else {
         crate::ViewWanted::Classic
     };
+    let lang = app.lang;
     let segments = [
-        (" ▤ 詳細 ", crate::ViewWanted::Details),
-        (" ▥ クラシック ", crate::ViewWanted::Classic),
+        (tr(lang, " ▤ Details ", " ▤ 詳細 "), crate::ViewWanted::Details),
+        (tr(lang, " ▥ Classic ", " ▥ クラシック "), crate::ViewWanted::Classic),
     ];
     let total: u16 = segments.iter().map(|(l, _)| crate::util::width(l) as u16).sum();
     // Half the row, at most: a switcher that pushes the address bar off the
@@ -1047,7 +1052,7 @@ fn draw_sidebar(
     };
 
     app.sidebar_add = None;
-    section(&mut lines, &mut y, "よく使う項目");
+    section(&mut lines, &mut y, tr(app.lang, "Places", "よく使う項目"));
     for (icon, name, dir) in standard_places().iter().cloned() {
         place(&mut lines, &mut rows, &mut slots, &mut known, &mut y, icon, &name, dir);
     }
@@ -1062,8 +1067,11 @@ fn draw_sidebar(
         y += 1;
         app.sidebar_add = Some(Rect::new(area.x, y, area.width, 1));
         lines.push(Line::from(vec![
-            Span::styled(" お気に入り", head),
-            Span::styled("        ＋ 追加", Style::default().fg(th.dim)),
+            Span::styled(tr(app.lang, " Favourites", " お気に入り"), head),
+            Span::styled(
+                tr(app.lang, "        ＋ add", "        ＋ 追加"),
+                Style::default().fg(th.dim),
+            ),
         ]));
         y += 1;
         for (name, path) in saved {

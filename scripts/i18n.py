@@ -14,9 +14,15 @@
     python3 scripts/i18n.py --list   # 残っている文字列
     python3 scripts/i18n.py --list 40
 
-端末版も完全ではありません（`tr` 755 箇所に対し、日本語だけの文字列が
-500 以上ある）。ここでの目標は「端末版と同じところまで」ではなく、
-**毎日目に入る面から順に減らす**ことです。
+**端末版も同じ物差しで見ます**（2026-09-06 に足した）。あちらは
+`tr(lang, en, ja)` のほかに `entry(key, action, en, ja)` や
+`(Lang::Ja) => "…"` など**別の書き方で両言語を持っている**ので、`tr(` の外に
+あるかどうかでは数えられません ── 素朴に数えると 586 件出て、その大半が
+相方を持っていました。**近くに英語の相方がいるか**で見ます。
+
+見つかったのは、シェルパネルの案内文が `tr()` の外にあった件と同じ形です。
+`tr()` の外にあると、**句点の検査（`nothing_cian_says_ends_in_a_full_stop`）
+にも掛かりません**。
 """
 
 import re
@@ -144,6 +150,76 @@ def frozen(rel):
     return out
 
 
+# ── 端末版 ────────────────────────────────────────────────────────────
+#
+# あちらは書き方が1つではない。`tr(lang, en, ja)` のほかに:
+#
+#     entry("q", Some(Quit), "quit (confirms)", "終了（確認あり）")
+#     ("General", "基本")
+#     (CloseTarget::ShellTab, Lang::En) => "this shell tab"
+#     let d = move |en, jp| if ja { jp } else { en };
+#
+# どれも両方の言葉を持っている。**`tr(` の外か**で数えると 586 件出て、
+# その大半がこれらだった。だから「**近くに英語の相方がいるか**」で見る ──
+# 前後6行の中に、英字が2つ以上続くリテラルがあれば相方とみなす。
+#
+# **見えないもの（書いておく）。** 訳してある行の**隣**に未訳が1行だけ
+# 混じっている場合、相方が6行以内にいるので通ってしまう。実際、直したあとに
+# `▤ 詳細` の1行だけ元に戻して確かめたら鳴らなかった。
+#
+# 囲んでいる括弧の中だけを見る形も試したが、`format!("… 件")` のように相方が
+# 構造上どこにも無いものと、`msg.contains("中止")`（表示ではなく判定）や
+# `"copying" => "コピー中"` を見分けられず、誤検知が 23 件出た。**賢くすると
+# 別のものを見落とす** ── `audit.py` が一度 `'http://'` を壊した形。
+#
+# 数えているのは「**まるごと日本語のまま残っている面**」で、そこは今日 8 か所
+# 見つかって 0 になった。1行だけの取りこぼしは、`tr()` を書く手が拾う。
+TUI_DIR = ROOT / "crates" / "cian-tui" / "src"
+# 日本語しか言えないまま残っているもの。**増えたら落とす**（減らすのは別の日）。
+TUI_CEILING = 0
+RS_LIT = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
+
+
+def _english_ish(s):
+    return bool(re.search(r"[A-Za-z]{2}", s)) and not JA.search(s)
+
+
+def tui_japanese_only():
+    """端末版のうち、英語の相方が見当たらない日本語。
+
+    テストは見ない ── そこの日本語は画面に出ない。
+    """
+    out = []
+    for path in sorted(TUI_DIR.glob("*.rs")):
+        if path.name == "tests.rs":
+            continue
+        text = path.read_text(encoding="utf-8")
+        # `#[cfg(test)] mod tests { … }` から先も落とす（同じ理由）。
+        cut = text.find("#[cfg(test)]")
+        if cut > 0:
+            text = text[:cut]
+        text = source_without_comments(text)
+        lines = text.split("\n")
+        for m in RS_LIT.finditer(text):
+            v = m.group(1) or ""
+            if not JA.search(v):
+                continue
+            n = text[: m.start()].count("\n")
+            # **`Lang::Ja =>` の腕は相方を持っている。** 同じ `match` の中に
+            # `Lang::En =>` の腕があり、註が長いと3行では届かない。腕そのもの
+            # が「これは日本語側です」と言っているので、それを信じる。
+            if "Lang::Ja" in lines[n] or "Lang::En" in lines[n]:
+                continue
+            # ±6 行。`if lang == Lang::Ja { … } else { … }` の腕は註を挟むと
+            # 4〜5 行離れる（`ConfirmElevate` と空ファイルの案内がそれ）。
+            # 広げすぎると本物を隠すので、実際に離れていた距離に合わせる。
+            near = "\n".join(lines[max(0, n - 6) : n + 7])
+            if any(_english_ish(x.group(1) or "") for x in RS_LIT.finditer(near)):
+                continue
+            out.append((path.name, n + 1, lines[n].strip()))
+    return out
+
+
 def main():
     left = untranslated("gui/renderer.js")
     bad = nested("gui/renderer.js")
@@ -159,6 +235,7 @@ def main():
         if len(left) > cap:
             print(f"  …ほか {len(left) - cap} 件")
         print()
+    tui = tui_japanese_only()
     pct = 100 * done // total if total else 100
     print("=" * 72)
     for n, t in bad:
@@ -168,11 +245,17 @@ def main():
               "  ── 関数にして、描くたびに訊いてください")
     if bad or stuck:
         print()
-    print(f"  両方の言葉で言えるもの {done} / {total}（{pct}%）"
+    print(f"  窓版: 両方の言葉で言えるもの {done} / {total}（{pct}%）"
           f" ── まだ日本語だけ {len(left)} 件"
           + (f"（訳さないと決めたもの {len(KEEP)} 件は除く）" if not left else ""))
+    over = len(tui) > TUI_CEILING
+    print(f"  端末版: 日本語しか言えないもの {len(tui)} 件"
+          + ("（上限 %d を超えています）" % TUI_CEILING if over else f"（上限 {TUI_CEILING}）"))
+    if over or "--list" in sys.argv:
+        for name, n, line in tui:
+            print(f"    {name}:{n}  {line[:88]}")
     print("=" * 72)
-    return 1 if (bad or stuck) else 0
+    return 1 if (bad or stuck or over) else 0
 
 
 if __name__ == "__main__":

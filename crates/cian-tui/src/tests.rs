@@ -16610,13 +16610,22 @@ mod the_view_switcher {
         (d, app)
     }
 
+    /// **両方の言葉で。** ここは 2026-09-06 まで日本語しか出せず、
+    /// `cian.set_option("lang", "en")` を書いた人にも「詳細 / クラシック」と
+    /// 出ていた（`scripts/i18n.py` の端末版の目が見つけた8か所の一部）。
+    /// 言語を決めずに日本語を待つ検査は、直したことに気づけない。
     #[test]
     fn both_views_draw_it() {
         for (icons, finder) in [(false, true), (false, false)] {
             let (_d, mut app) = in_view(icons, finder);
+            app.lang = Lang::Ja;
             let text = painted(&mut app);
             assert!(text.contains("詳細"), "icons={icons} finder={finder}: {text:.200}");
             assert!(text.contains("クラシック"), "icons={icons} finder={finder}");
+            app.lang = Lang::En;
+            let text = painted(&mut app);
+            assert!(text.contains("Details"), "icons={icons} finder={finder}: {text:.200}");
+            assert!(text.contains("Classic"), "icons={icons} finder={finder}");
             assert_eq!(
                 app.grid_buttons.iter().filter(|(b, _)| matches!(b, GridButton::View(_))).count(),
                 2,
