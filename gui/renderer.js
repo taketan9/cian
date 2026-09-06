@@ -812,11 +812,30 @@ const prog = { hidden: false, stalledAt: 0 };
 /// build's `truncate_middle`. Both ends carry: the head says which volume or
 /// project, the tail says which file. Cutting either off answers half the
 /// question the line exists to answer.
+///
+/// **桁で測る、UTF-16 の単位ではなく。** 端末版の `truncate_middle` は
+/// 「全角は2つぶん」で予算を切っていて、こちらは `text.length` で切っていた
+/// ── **同じパスを二つの前端が違う長さに詰めていた**（日本語のフォルダ名が
+/// あると窓版は倍近く残し、箱からはみ出す）。2026-09-06、`scripts/widths.py`。
 function truncateMiddle(text, max = 68) {
-    if (text.length <= max) return text;
+    if (cellWidth(text) <= max) return text;
     const keep = max - 1;
-    const head = Math.ceil(keep / 2);
-    return `${text.slice(0, head)}…${text.slice(text.length - (keep - head))}`;
+    const headBudget = Math.ceil(keep / 2);
+    const tailBudget = keep - headBudget;
+    const take = (chars, budget) => {
+        let out = '';
+        let used = 0;
+        for (const ch of chars) {
+            const w = cellWidth(ch);
+            if (used + w > budget) break;
+            out += ch;
+            used += w;
+        }
+        return out;
+    };
+    const head = take([...text], headBudget);
+    const tail = take([...text].reverse(), tailBudget);
+    return `${head}…${[...tail].reverse().join('')}`;
 }
 
 function drawProg() {

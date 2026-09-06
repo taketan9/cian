@@ -3240,7 +3240,9 @@ pub(crate) fn prompt_style() -> Style {
 fn draw_prompt_line(f: &mut Frame, area: Rect, left: &str, right: &str) {
     let style = prompt_style();
     f.render_widget(Paragraph::new(left).style(style), area);
-    let w = right.chars().count() as u16 + 1;
+    // 桁で。いまの `right` は英数字だけだが、物差しを字数にしておくと
+    // 日本語を1語入れた瞬間に右端がずれる（2026-09-06 に4か所やっている）。
+    let w = crate::util::width(right) as u16 + 1;
     if area.width > w {
         let hint = Rect::new(area.x + area.width - w, area.y, w, 1);
         f.render_widget(
