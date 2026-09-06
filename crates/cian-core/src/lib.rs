@@ -21,6 +21,9 @@ pub mod du;
 pub mod editor;
 pub mod fileclip;
 pub mod fuzzy;
+/// Getting past an ACL with the administrator's backup privileges, without
+/// changing anybody's permissions. The other half of [`elevate`].
+pub mod backup;
 pub mod elevate;
 pub mod git;
 pub mod proc;
@@ -43,7 +46,6 @@ pub mod sharepoint;
 pub mod shellwhere;
 pub mod stamp;
 pub mod substitute;
-pub mod survey;
 pub mod textops;
 pub mod svn;
 pub mod theme;

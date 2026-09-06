@@ -232,7 +232,13 @@ fn run(inner: Arc<Inner>, job: Pending) {
                 // the conflict rule does next, none of it is this copy's to
                 // take back, so there is no step rather than an empty one.
                 made if made.is_empty() => None,
-                made => Some(Undo::Copied { paths: made }),
+                // The sources and where they went ride along, so `Ctrl+R`
+                // can run the same copy again.
+                made => Some(Undo::Copied {
+                    srcs: paths.clone(),
+                    dest: d.clone(),
+                    paths: made,
+                }),
             },
             _ => None,
         };
@@ -304,6 +310,10 @@ fn run(inner: Arc<Inner>, job: Pending) {
                         "kind": if matches!(plan.kind, Kind::Move) { "move" } else { "copy" },
                         "paths": paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
                         "dest": dest.as_ref().map(|d| d.display().to_string()),
+                        // The answer already given rides along: a retry that
+                        // silently overwrote what "skip" had just spared would
+                        // be the one outcome the confirmation exists to stop.
+                        "conflict": if matches!(plan.conflict, Conflict::Skip) { "skip" } else { "overwrite" },
                     })
                 }),
                 // How long it took, so the front end can say so and so that

@@ -102,7 +102,19 @@ impl App {
             None => return,
         };
         if targets.is_empty() { self.message = Some(tr(self.lang, "nothing to operate on", "操作する対象がありません").into()); return; }
-        self.open_popup(Popup::ConfirmTransfer { op, targets, dest });
+        self.confirm_transfer(op, targets, dest);
+    }
+
+    /// The one way a copy/move confirmation is opened.
+    ///
+    /// It exists so the collision list is worked out in exactly one place. Six
+    /// keys and menu items reach this popup (`c`, `m`, `:cp`, `:mv`, a drag
+    /// between panes, a drop from the desktop); a `clashes` field each of them
+    /// filled in for itself would be six chances for one of them to pass an
+    /// empty list and quietly promise "nothing here will be overwritten".
+    pub(crate) fn confirm_transfer(&mut self, op: PendingOp, targets: Vec<PathBuf>, dest: PathBuf) {
+        let popup = transfer_popup(op, targets, dest);
+        self.open_popup(popup);
     }
     pub(crate) fn start_delete(&mut self) {
         if self.in_archive() {
@@ -179,7 +191,7 @@ impl App {
             self.message = Some(tr(self.lang, "the pattern changed no names", "パターンで変わる名前がありません").into());
             return;
         }
-        self.open_popup(Popup::RenameReview { items, cursor: 0, scroll: 0, by_ai: false });
+        self.open_popup(Popup::RenameReview { items, cursor: 0, scroll: 0 });
     }
 
     pub(crate) fn start_new_file(&mut self) {
@@ -560,7 +572,6 @@ impl App {
     /// directory history. Says so when there is nowhere to go, rather than
     /// swallowing the key.
     pub(crate) fn pane_go_back(&mut self) {
-        self.nav_suppressed = true;
         let moved = self.active_pane_mut().map(|p| p.go_back().unwrap_or(false)).unwrap_or(false);
         self.message = Some(if moved {
             let cwd = self.active_pane().map(|p| p.cwd.display().to_string()).unwrap_or_default();
@@ -572,7 +583,6 @@ impl App {
 
     /// `Alt+→` / `Alt+l` — forward again, undoing a back step.
     pub(crate) fn pane_go_forward(&mut self) {
-        self.nav_suppressed = true;
         let moved = self.active_pane_mut().map(|p| p.go_forward().unwrap_or(false)).unwrap_or(false);
         self.message = Some(if moved {
             let cwd = self.active_pane().map(|p| p.cwd.display().to_string()).unwrap_or_default();
@@ -2303,7 +2313,7 @@ impl App {
             done: None,
             to_pane,
         });
-        self.open_popup(Popup::FindResults { hits: Vec::new(), cursor: 0, scroll: 0, by_ai: false });
+        self.open_popup(Popup::FindResults { hits: Vec::new(), cursor: 0, scroll: 0 });
     }
 
     /// Load a set of search hits into the active pane as a flat listing so the
@@ -3163,19 +3173,30 @@ impl App {
                 p.clear_marks();
             }
             self.flash(self.focused);
-            // A permission failure on a copy/move is the one case with a real
-            // way out on Windows: offer to redo it with administrator rights.
-            // On other platforms just fall through to the friendlier report.
-            let elevate = report.permission_denied
-                && cfg!(windows)
-                && self.pending_elevation.is_some();
-            if !report.permission_denied {
+            // A refused copy/move is the one failure on Windows with a real
+            // way out, and there are two of them in sequence.
+            //
+            // **First `robocopy /B`** — the administrator's backup privileges,
+            // which is what an ACL that does not name you actually calls for
+            // and what a cian already started as administrator can spend right
+            // now. **Then, only if that was refused too**, a new elevated
+            // process: the one thing it fixes is cian not being administrator
+            // at all, which is precisely what robocopy will have just said.
+            //
+            // Offered in that order rather than side by side, because a dialog
+            // raised by a failure has one job — say what happened, and offer
+            // the thing most likely to help. A second answer on a letter is a
+            // key only somebody who already knows will press.
+            let refused = report.permission_denied && cfg!(windows);
+            let backup_failed = label == "backup mode" && !report.errors.is_empty();
+            let retry = (refused || backup_failed) && self.pending_elevation.is_some();
+            if !retry {
                 self.pending_elevation = None;
             }
             // A long job that finished while you were reading mail elsewhere is
             // exactly what the bell/desktop notification is for. Not for a
             // cancel, and not while we still need an elevation confirm.
-            if cancelled == Some(false) && !elevate {
+            if cancelled == Some(false) && !retry {
                 let n = report.ok;
                 // `hashing` repurposes `errors` to carry the digests, so it is
                 // never a failure count there.
@@ -3192,9 +3213,12 @@ impl App {
                     "cancelled — {} done before stopping",
                     report.ok
                 ));
-            } else if elevate {
-                let (op, targets, dest) = self.pending_elevation.take().unwrap();
-                self.open_popup(Popup::ConfirmElevate { op, targets, dest });
+            } else if retry {
+                let (op, targets, dest, conflict) = self.pending_elevation.take().unwrap();
+                // The second offer only exists because the first was tried.
+                let how = if backup_failed { RetryHow::Elevate } else { RetryHow::Backup };
+                let why = report.errors.first().cloned().unwrap_or_default();
+                self.open_popup(crate::transfer_retry_popup(op, targets, dest, conflict, how, why));
             } else {
                 self.show_op_report(&report);
                 // A checksum is worth pasting into a verify field, so put the
@@ -3286,22 +3310,14 @@ impl App {
             self.message = Some(tr(self.lang, "nothing to undo", "取り消せる操作はありません").into());
             return;
         };
-        // Undoing is not itself something to undo.
-        self.nav_suppressed = true;
         // What `Ctrl+Y` would put back. A file that was *created* is the one
         // thing that cannot be: undoing it removed it, and nothing here
-        // remembers what was inside.
-        if !matches!(action, UndoAction::Created { .. } | UndoAction::Copied { .. }) {
+        // remembers what was inside. A copy is not in that position — its
+        // sources are untouched — so it goes on like the rest.
+        if !matches!(action, UndoAction::Created { .. }) {
             self.redo_stack.push(action.clone());
         }
         let msg = match action {
-            UndoAction::Navigated { pane, from, to: _ } => {
-                self.focus(pane);
-                match self.active_pane_mut().map(|p| p.jump_to(from.clone())) {
-                    Some(Ok(())) => format!("◀ {}", from.display()),
-                    _ => format!("cannot go back to {}", from.display()),
-                }
-            }
             UndoAction::Rename { from, to } => {
                 if !to.exists() {
                     format!("cannot undo rename: {} is gone", to.display())
@@ -3346,7 +3362,7 @@ impl App {
                     format!("undo: moved {} back, {} could not be undone", ok, fail)
                 }
             }
-            UndoAction::Copied { paths } => {
+            UndoAction::Copied { srcs, dest, paths } => {
                 // Only what is still there: the list was drawn up before the
                 // copy ran, so a file it never managed to write is on it.
                 let here: Vec<_> = paths.into_iter().filter(|p| p.exists()).collect();
@@ -3362,7 +3378,11 @@ impl App {
                     let left: Vec<_> = here.into_iter().filter(|p| p.exists()).collect();
                     let n = left.len();
                     if n > 0 {
-                        self.undo_stack.push(UndoAction::Copied { paths: left });
+                        // Off the redo stack too: half of it is still on disk,
+                        // so "do it again" is no longer a thing with one
+                        // meaning.
+                        self.redo_stack.pop();
+                        self.undo_stack.push(UndoAction::Copied { srcs, dest, paths: left });
                     }
                     format!("undo: {} to the trash, {n} left — {}", r.ok, r.errors[0])
                 }
@@ -3378,19 +3398,11 @@ impl App {
             self.message = Some(tr(self.lang, "nothing to redo", "やり直す操作はありません").into());
             return;
         };
-        self.nav_suppressed = true;
         // Back onto the undo stack, so the two keys walk the same chain in
         // either direction. Not through `record_undo`, which would empty the
         // redo stack it was just taken from.
         self.undo_stack.push(action.clone());
         let msg = match action {
-            UndoAction::Navigated { pane, from: _, to } => {
-                self.focus(pane);
-                match self.active_pane_mut().map(|p| p.jump_to(to.clone())) {
-                    Some(Ok(())) => format!("▶ {}", to.display()),
-                    _ => format!("cannot go on to {}", to.display()),
-                }
-            }
             UndoAction::Rename { from, to } => match std::fs::rename(&from, &to) {
                 Ok(()) => format!("redo: renamed to {}", to.display()),
                 Err(e) => format!("redo failed: {e}"),
@@ -3414,53 +3426,42 @@ impl App {
                     format!("redo: moved {ok} again, {fail} could not be redone")
                 }
             }
+            UndoAction::Copied { srcs, dest, .. } => {
+                // The sources never moved, so doing it again is doing it. Skip
+                // is the conflict rule on purpose: undo took only what this
+                // copy created, so anything wearing one of those names now is
+                // somebody else's and is not this key's to write over.
+                // Worked out **before** the copy, exactly as the first one did.
+                // Afterwards every destination exists and `copy_creates` — which
+                // answers "what is not there yet" — would come back empty, and
+                // the `u` that follows would have nothing to take back.
+                let made = cian_core::ops::copy_creates(&srcs, &dest);
+                let (mut ok, mut fail) = (0usize, 0usize);
+                for src in &srcs {
+                    match cian_core::ops::copy_one(src, &dest, cian_core::ops::Conflict::Skip) {
+                        Ok(_) => ok += 1,
+                        Err(_) => fail += 1,
+                    }
+                }
+                if let Some(UndoAction::Copied { paths, .. }) = self.undo_stack.last_mut() {
+                    *paths = made;
+                }
+                if fail == 0 {
+                    format!("redo: copied {ok} again")
+                } else {
+                    format!("redo: copied {ok} again, {fail} could not be redone")
+                }
+            }
             // Never pushed to the redo stack — see `undo_last`.
-            UndoAction::Created { .. } | UndoAction::Copied { .. } => String::new(),
+            UndoAction::Created { .. } => String::new(),
         };
         self.reload_both();
         self.message = Some(msg);
     }
 
-    /// Where the user is, before a keystroke or a click is handled.
-    pub(crate) fn nav_snapshot(&self) -> Option<(FocusedPane, PathBuf)> {
-        let pane = match self.focused {
-            FocusedPane::Shell => return None,
-            p => p,
-        };
-        self.active_pane().map(|p| (pane, p.cwd.clone()))
-    }
-
-    /// Did that keystroke move a pane somewhere? Then it is undoable.
-    ///
-    /// Asked here rather than at each of the dozen places that can navigate —
-    /// Enter, Backspace, a bookmark, a breadcrumb, the address bar, `:cd`, the
-    /// fuzzy jump, a click in the grid — because the question is about the
-    /// result, and the result is one comparison.
-    pub(crate) fn note_navigation(&mut self, before: Option<(FocusedPane, PathBuf)>) {
-        let suppressed = std::mem::take(&mut self.nav_suppressed);
-        let Some((pane, from)) = before else { return };
-        if suppressed {
-            return;
-        }
-        let Some(now) = self.pane_cwd(pane) else { return };
-        if now != from {
-            self.record_undo(UndoAction::Navigated { pane, from, to: now });
-        }
-    }
-
-    /// This pane's directory, whichever pane has the focus.
-    fn pane_cwd(&self, pane: FocusedPane) -> Option<PathBuf> {
-        let tabs = match pane {
-            FocusedPane::Left => &self.left,
-            FocusedPane::Right => &self.right,
-            FocusedPane::Shell => return None,
-        };
-        Some(tabs.active_ref().cwd.clone())
-    }
-
     pub(crate) fn finish_transfer(&mut self, conflict: Conflict) -> Result<()> {
         let popup = std::mem::replace(&mut self.popup, Popup::None);
-        let Popup::ConfirmTransfer { op, targets, dest } = popup else { return Ok(()) };
+        let Popup::ConfirmTransfer { op, targets, dest, .. } = popup else { return Ok(()) };
         self.remember_dest(&dest);
         let label = match op {
             PendingOp::Copy => "copying",
@@ -3468,7 +3469,7 @@ impl App {
         };
         // Remembered so a permission failure can offer an elevated retry; the
         // op-completion handler clears this unless it actually hit that wall.
-        self.pending_elevation = Some((op, targets.clone(), dest.clone()));
+        self.pending_elevation = Some((op, targets.clone(), dest.clone(), conflict));
         // Both can be undone, and both are worked out before the transfer
         // runs — afterwards the destination looks the same either way. A move
         // ends each target at dest/<name> and undo moves it back; a copy is
@@ -3484,7 +3485,14 @@ impl App {
             // Nothing here is this copy's to take back.
             PendingOp::Copy => match cian_core::ops::copy_creates(&targets, &dest) {
                 made if made.is_empty() => None,
-                made => Some(UndoAction::Copied { paths: made }),
+                // The sources and the destination ride along so `Ctrl+Y` can
+                // run the same copy again; `paths` stays the list of what to
+                // take back.
+                made => Some(UndoAction::Copied {
+                    srcs: targets.clone(),
+                    dest: dest.clone(),
+                    paths: made,
+                }),
             },
         };
         self.start_op(label, move |ctl| match op {
@@ -3497,14 +3505,53 @@ impl App {
         Ok(())
     }
 
+    /// Redo the remembered copy/move using the administrator privileges this
+    /// process **already holds**, reading and writing past the ACL without
+    /// changing it. See [`cian_core::backup`].
+    ///
+    /// The other half of [`Self::run_elevated_transfer`], and the half that
+    /// was missing: starting a second elevated process does nothing for
+    /// somebody who started cian as administrator in the first place — same
+    /// token, same ACL, same refusal. This is the answer to that, and it is
+    /// what Explorer is doing when it asks every time and leaves the folder's
+    /// permissions untouched.
+    ///
+    /// Runs on a worker like any other transfer, but robocopy reports only at
+    /// the end, so the bar has no interior — the same bargain the elevated
+    /// retry makes.
+    pub(crate) fn run_backup_transfer(&mut self) {
+        let popup = std::mem::replace(&mut self.popup, Popup::None);
+        let Popup::ConfirmRetry { op, targets, dest, conflict, .. } = popup else { return };
+        let move_after = op == PendingOp::Move;
+        let items = cian_core::backup::items_for(&targets, &dest);
+        // **Armed again for the offer after this one.** The op-done handler
+        // takes this when it raises a retry, so by the time we get here it is
+        // empty — and without putting it back, a robocopy that is refused too
+        // has nothing to build the elevation offer out of. That second dialog
+        // was unreachable, which is the quietest kind of wrong: code nobody
+        // has seen on screen is code nobody can see is broken.
+        self.pending_elevation = Some((op, targets, dest, conflict));
+        self.message = Some(tr(
+            self.lang,
+            "retrying with the administrator's backup privileges…",
+            "管理者の権限で読み書きしてやり直しています…",
+        ).into());
+        self.start_op("backup mode", move |_ctl| {
+            cian_core::backup::backup_copy(&items, move_after, conflict)
+        });
+    }
+
     /// Redo the remembered copy/move with administrator rights (Windows UAC).
     /// The elevated process runs the transfer itself, so there is no in-app
     /// progress — cian just waits on the worker and reports the outcome.
     pub(crate) fn run_elevated_transfer(&mut self) {
         let popup = std::mem::replace(&mut self.popup, Popup::None);
-        let Popup::ConfirmElevate { op, targets, dest } = popup else { return };
+        let Popup::ConfirmRetry { op, targets, dest, .. } = popup else { return };
         let move_after = op == PendingOp::Move;
         let n = targets.len();
+        // The last offer there is. Left armed, a refused elevation would raise
+        // the same dialog again, for ever.
+        self.pending_elevation = None;
         let items: Vec<cian_core::elevate::CopyItem> = targets
             .into_iter()
             .map(|src| cian_core::elevate::CopyItem { src, dest_dir: dest.clone() })
@@ -3544,9 +3591,16 @@ impl App {
             // says what to do about it.
             if report.permission_denied {
                 lines.push(String::new());
-                lines.push("Permission denied — this location needs administrator rights.".into());
+                lines.push("Permission denied — this location's ACL does not grant you access.".into());
                 if cfg!(windows) {
-                    lines.push("Run cian as administrator, or copy to a writable folder.".into());
+                    // **Not "run as administrator".** That was the advice for
+                    // years and it is empty for the case that actually turns
+                    // up: somebody already running as administrator, on a
+                    // share whose ACL simply does not name them. What being an
+                    // administrator gets you here is the backup privilege, and
+                    // `b` on the retry is how to spend it.
+                    lines.push("Retry with `b` (backup mode) to read and write past it".into());
+                    lines.push("as administrator, without changing any permissions.".into());
                 } else {
                     lines.push("Copy to a folder you can write to, or fix its permissions.".into());
                 }
@@ -3652,14 +3706,6 @@ impl App {
                 self.start_ai_shell_refine(description, rejected, &name);
                 return Ok(());
             }
-            InputKind::AiRename => {
-                self.start_ai_rename(&name);
-                return Ok(());
-            }
-            InputKind::AiSearch => {
-                self.start_ai_search(&name);
-                return Ok(());
-            }
             InputKind::DiffSaveAs { text, html, md } => {
                 let dir = self.cwd();
                 if let Some(dir) = dir {
@@ -3700,8 +3746,7 @@ impl App {
         });
                     return Ok(());
                 }
-                self.popup =
-                    Popup::ConfirmTransfer { op: *op, targets: targets.clone(), dest };
+                self.popup = crate::transfer_popup(*op, targets.clone(), dest);
                 return Ok(());
             }
             InputKind::ZipPassword { dest, sources } => {

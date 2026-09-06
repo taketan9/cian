@@ -203,8 +203,10 @@ impl App {
             // Named for what they do, because `:bulkrename` and `:brename`
             // were three characters apart and did different things. The
             // family now reads together: `:rename` one file, `:renamelist`
-            // edit them all as text, `:renamepattern` by rule, `:airename`
-            // by instruction.
+            // edit them all as text, `:renamepattern` by rule. All three are
+            // deterministic and offline; `:airename` used to sit beside them
+            // proposing names over the network, which is a fourth way to do a
+            // job that already had three better ones.
             "renamelist" => self.start_editor_rename(),
             // Cursor-follow preview in the shell panel's area.
             "preview" => self.toggle_preview(),
@@ -257,19 +259,6 @@ impl App {
             "svnresolve" | "resolve" => self.svn_resolve(),
             "snip" | "snippet" => self.start_snippets(),
             "aicommit" | "commitmsg" => self.start_ai_commit_message(),
-            "aijunk" | "junk" => self.start_ai_junk(),
-            "aiorganize" | "aistructure" | "organize" => self.start_ai_structure(),
-            // Not `:rename` — that is the ordinary one, below. Pointing the
-            // most obvious verb in a file manager at the AI meant a default
-            // install answered "add cian.ai{ endpoint = … } to init.lua" to a
-            // request to rename a file.
-            "airename" => {
-                if rest.is_empty() {
-                    self.start_ai_rename_prompt();
-                } else {
-                    self.start_ai_rename(rest);
-                }
-            }
             // Pattern-based (non-AI) bulk rename. With no argument it prompts;
             // with one it applies the pattern straight to the review checklist.
             "renamepattern" => {
@@ -282,13 +271,6 @@ impl App {
                     } else {
                         self.build_bulk_rename(&targets, rest);
                     }
-                }
-            }
-            "aisearch" | "semsearch" | "ask" => {
-                if rest.is_empty() {
-                    self.start_ai_search_prompt();
-                } else {
-                    self.start_ai_search(rest);
                 }
             }
             "aierror" | "explain" => self.explain_shell_error(),
@@ -533,7 +515,7 @@ impl App {
         }
         let dest = expand_path(arg);
         if dest.is_dir() {
-            self.open_popup(Popup::ConfirmTransfer { op, targets, dest });
+            self.confirm_transfer(op, targets, dest);
             return;
         }
         // Not an existing directory: only meaningful as a rename/copy of a

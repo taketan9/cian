@@ -88,6 +88,8 @@ KEYS = {
     # 修飾つきの矢印。1 + Shift(1) + Alt(2) + Ctrl(4)。
     "C-S-Left": "\x1b[1;6D", "C-S-Right": "\x1b[1;6C",
     "C-S-Up": "\x1b[1;6A", "C-S-Down": "\x1b[1;6B",
+    "S-Left": "\x1b[1;2D", "S-Right": "\x1b[1;2C",
+    "C-c": "\x03",
 }
 
 CORNERS = {"╭", "╮", "╰", "╯", "┌", "┐", "└", "┘", "╔", "╗", "╚", "╝"}
@@ -189,6 +191,20 @@ class Tui:
         if not cols:
             return ""
         return "".join(row[x].data for x in cols).strip()
+
+    def reversed_cells(self) -> int:
+        """反転で塗られているセルの数 ── シェルの選択はそこにしか出ない。
+
+        文字は変わらないので `text()` では見えない。`pyte` は反転を
+        `char.reverse` で持つ。
+        """
+        n = 0
+        for y in range(self.rows):
+            row = self.screen.buffer[y]
+            for x in range(self.cols):
+                if row[x].reverse:
+                    n += 1
+        return n
 
     def close(self):
         for fn in (lambda: os.close(self.fd),
@@ -340,6 +356,46 @@ def check_round(d, bad, show_screen):
     t.close()
 
 
+def check_shell_selection(d, bad):
+    """⑤ シェルの範囲選択 ── **反転したセルの数でしか見えない。**
+
+    Shift+←/→ は画面の文字を一字も変えないので、`text()` を比べる物差し
+    （④ の「動かなかったキー」）では永久に「動かなかった」と出る。選択は色で
+    しか言われていないので、色を読む。
+
+    そして **Esc を2回** 見る。1回目は選択を落として**シェルに留まり**、2回目
+    でファイルへ戻る ── 1回で両方やると、選択をやめるのに必ずどこかへ行く
+    ことになる。
+    """
+    t = start(d)
+    t.pump(3.0)
+    t.send("Esc", 0.5)
+    t.send("J", 1.2)          # シェルへ
+    t.send("Enter", 0.8)      # プロンプトを1行進めて、上に文字を置く
+    base = t.reversed_cells()
+
+    t.send("S-Left", 0.6)
+    one = t.reversed_cells()
+    t.send("S-Left", 0.6)
+    t.send("S-Left", 0.6)
+    three = t.reversed_cells()
+
+    print(f"⑤ シェルの選択  : Shift+← ×1 → {one - base} セル / ×3 → {three - base} セル"
+          + ("  ✓" if one > base and three > one else "  ✗"))
+    if not (one > base and three > one):
+        bad.append("シェルで Shift+← が範囲選択にならない（反転が増えない）")
+
+    t.send("Esc", 0.6)
+    after_esc = t.reversed_cells()
+    still_shell = "シェル" in t.status() or "ファイルへ" in t.status() or "解除" in t.status()
+    ok_esc = after_esc <= base
+    print(f"⑤ Esc で解除    : 反転 {three - base} → {after_esc - base} セル"
+          + ("  ✓" if ok_esc else "  ✗"))
+    if not ok_esc:
+        bad.append("シェルの選択が Esc で消えない")
+    t.close()
+
+
 def main() -> int:
     args = sys.argv[1:]
     show_screen = "--screen" in args
@@ -368,6 +424,7 @@ def main() -> int:
         check_frame(d, bad)
         check_click(d, bad)
         check_round(d, bad, show_screen)
+        check_shell_selection(d, bad)
     finally:
         shutil.rmtree(d, ignore_errors=True)
     print("=" * 72)

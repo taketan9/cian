@@ -247,10 +247,6 @@ impl App {
                     v.push(MenuItem::AiExplainError);
                 } else {
                     v.push(MenuItem::AiTriageLog);
-                    v.push(MenuItem::AiJunk);
-                    v.push(MenuItem::AiStructure);
-                    v.push(MenuItem::AiSearch);
-                    v.push(MenuItem::AiRename);
                     v.push(MenuItem::AiCommit);
                 }
                 v.push(MenuItem::Back);
@@ -569,11 +565,7 @@ impl App {
             MenuItem::AiCommandHelp => self.ai_over_viewer(AiOverText::Command),
             MenuItem::AiCodeFix => self.ai_over_viewer(AiOverText::Code),
             MenuItem::AiCommit => self.start_ai_commit_message(),
-            MenuItem::AiJunk => self.start_ai_junk(),
             MenuItem::AiTriageLog => self.triage_log(),
-            MenuItem::AiStructure => self.start_ai_structure(),
-            MenuItem::AiRename => self.start_ai_rename_prompt(),
-            MenuItem::AiSearch => self.start_ai_search_prompt(),
             // With a `:rag` question behind it this needs no argument, so it
             // runs; otherwise it opens the prompt for one.
             MenuItem::ViewerSummary => {

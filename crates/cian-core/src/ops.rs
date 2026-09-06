@@ -46,6 +46,86 @@ impl OpReport {
     }
 }
 
+/// Give `dst` the modification time `src` has.
+///
+/// **A copy is not a new file.** Every other tool that moves bytes around —
+/// `cp -p`, robocopy, Explorer, Finder, afxw — hands the destination the
+/// source's date, because the date is part of what was being copied: it is how
+/// a backup is read, how "which of these two is current" is answered, and how
+/// a delivery is dated. cian used to stamp every copy with the moment it ran,
+/// which quietly flattened whole trees to "today" and could not be noticed
+/// afterwards — `dirdiff` compares by content, so cian's own comparison is
+/// deliberately blind to exactly this.
+///
+/// Best-effort, like the permission copy beside it: a destination whose time
+/// could not be set is still a good copy of the bytes, and failing the whole
+/// operation over the date would be the worse trade.
+pub fn copy_times(src: &Path, dst: &Path) {
+    if let Ok(t) = fs::symlink_metadata(src).and_then(|m| m.modified()) {
+        set_mtime(dst, t);
+    }
+}
+
+/// Stamp one path — file **or directory** — with a modification time.
+///
+/// Through `filetime` rather than `File::set_modified`, which needs the path
+/// opened for writing: a directory cannot be opened that way on Unix at all,
+/// and a read-only file cannot either, so half the paths that need a date
+/// would silently keep the wrong one. `utimensat` / `SetFileTime` take the
+/// path instead and answer for both.
+pub fn set_mtime(path: &Path, t: std::time::SystemTime) {
+    let _ = filetime::set_file_mtime(path, filetime::FileTime::from_system_time(t));
+}
+
+/// Every path under `root`, with its modification time, as paths relative to
+/// `root`. Taken **before** a transfer, so a move that had to fall back to
+/// copy-and-delete can still be given the dates it destroyed.
+///
+/// Files come first and directories last, deepest first: a directory's own
+/// mtime is reset by the filesystem every time something is written inside it,
+/// so a parent stamped before its children is stamped again by the next child
+/// and the work is thrown away.
+pub fn times_of(root: &Path) -> Vec<(PathBuf, std::time::SystemTime)> {
+    let mut files = Vec::new();
+    let mut dirs = Vec::new();
+    if !root.is_dir() {
+        if let Ok(t) = fs::metadata(root).and_then(|m| m.modified()) {
+            files.push((PathBuf::new(), t));
+        }
+        return files;
+    }
+    let mut queue = vec![PathBuf::new()];
+    let mut at = 0;
+    while at < queue.len() {
+        let rel = queue[at].clone();
+        at += 1;
+        if let Ok(t) = fs::metadata(root.join(&rel)).and_then(|m| m.modified()) {
+            dirs.push((rel.clone(), t));
+        }
+        let Ok(rd) = fs::read_dir(root.join(&rel)) else { continue };
+        for e in rd.flatten() {
+            let child = rel.join(e.file_name());
+            let p = root.join(&child);
+            if p.is_dir() && !p.is_symlink() {
+                queue.push(child);
+            } else if let Ok(t) = fs::symlink_metadata(&p).and_then(|m| m.modified()) {
+                files.push((child, t));
+            }
+        }
+    }
+    dirs.reverse();
+    files.extend(dirs);
+    files
+}
+
+/// Put back what [`times_of`] took, against a destination root.
+pub fn apply_times(dst_root: &Path, times: &[(PathBuf, std::time::SystemTime)]) {
+    for (rel, t) in times {
+        let p = if rel.as_os_str().is_empty() { dst_root.to_path_buf() } else { dst_root.join(rel) };
+        set_mtime(&p, *t);
+    }
+}
+
 /// Are these two paths the same file on disk?
 ///
 /// Compared by what the filesystem says rather than by the text, because the
@@ -95,6 +175,20 @@ pub fn copy_creates(srcs: &[PathBuf], dest_dir: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Which of `srcs` would land on something that is already there.
+///
+/// The other half of [`copy_creates`], and the one the person has to see
+/// *before* deciding: the confirmation offers "skip the duplicates" and
+/// "overwrite", and until this was on screen both were answered blind — there
+/// was no way to tell one collision from thirty, or to know there were none.
+pub fn clashes(srcs: &[PathBuf], dest_dir: &Path) -> Vec<PathBuf> {
+    srcs.iter()
+        .filter(|src| src.file_name().is_some())
+        .filter(|src| dest_for(src, dest_dir).exists())
+        .cloned()
+        .collect()
+}
+
 /// The same, but the source does not survive it.
 pub fn move_one(src: &Path, dest_dir: &Path, on_conflict: Conflict) -> Result<bool> {
     transfer_one(src, dest_dir, on_conflict, true)
@@ -130,6 +224,10 @@ fn transfer_one(
     if target.exists() && on_conflict == Conflict::Skip {
         return Ok(false);
     }
+    // Read before the work, because the work can destroy the answer: a move is
+    // a rename where it can be, and copy-and-delete where it cannot, and in the
+    // second case the source is gone by the time anyone could ask it.
+    let times = times_of(src);
     let verb = if moving { "move" } else { "copy" };
     if src.is_dir() {
         let mut opts = DirCopyOptions::new();
@@ -155,6 +253,7 @@ fn transfer_one(
             format!("{verb} file {} -> {}", src.display(), target.display())
         })?;
     }
+    apply_times(&target, &times);
     Ok(true)
 }
 

@@ -5,12 +5,9 @@ use super::*;
 
 impl App {
     // ------- Mouse -------
-    /// One mouse event, and the same question the keyboard is asked: a click
-    /// on a bookmark, a breadcrumb or a folder moves a pane too.
+    /// One mouse event.
     pub(crate) fn handle_mouse(&mut self, ev: MouseEvent) {
-        let before = self.nav_snapshot();
         self.handle_mouse_inner(ev);
-        self.note_navigation(before);
     }
 
     /// Whether the pointer is over the viewer panel's own frame.
@@ -460,36 +457,16 @@ impl App {
             return;
         }
 
-        // The four review lists all feel the same under the mouse: a click
+        // The review lists all feel the same under the mouse: a click
         // toggles the row's checkbox and moves the cursor to it, the wheel
         // scrolls, and a click off the list closes it without carrying
         // anything out. Approval stays on Enter and the button.
-        if matches!(self.popup, Popup::JunkReview { .. }) {
-            if self.click_dismissed_popup(ev) {
-                return;
-            }
-            let body = self.junk_rect;
-            if let Popup::JunkReview { items, cursor, scroll } = &mut self.popup {
-                review_list_mouse(items, cursor, scroll, body, ev);
-            }
-            return;
-        }
         if matches!(self.popup, Popup::DupeReview { .. }) {
             if self.click_dismissed_popup(ev) {
                 return;
             }
             let body = self.dupe_rect;
             if let Popup::DupeReview { items, cursor, scroll } = &mut self.popup {
-                review_list_mouse(items, cursor, scroll, body, ev);
-            }
-            return;
-        }
-        if matches!(self.popup, Popup::StructureReview { .. }) {
-            if self.click_dismissed_popup(ev) {
-                return;
-            }
-            let body = self.struct_rect;
-            if let Popup::StructureReview { items, cursor, scroll, .. } = &mut self.popup {
                 review_list_mouse(items, cursor, scroll, body, ev);
             }
             return;
@@ -675,12 +652,12 @@ impl App {
                 MouseEventKind::Drag(MouseButton::Left) => {
                     if let Some(sel) = &mut self.shell_sel {
                         sel.end = grid_pos(sel.inner, col, row);
-                        sel.dragged = true;
+                        sel.ready = true;
                     }
                     return;
                 }
                 MouseEventKind::Up(MouseButton::Left) => {
-                    let dragged = self.shell_sel.map(|s| s.dragged).unwrap_or(false);
+                    let dragged = self.shell_sel.map(|s| s.ready).unwrap_or(false);
                     if dragged {
                         self.copy_shell_selection(); // copy-on-select; keep the highlight
                     } else {
@@ -775,7 +752,7 @@ impl App {
                     .find(|(_, _, _, inner)| hit_rect(*inner, col, row))
                     .map(|(tab, leaf, _, inner)| {
                         let a = grid_pos(inner, col, row);
-                        ShellSel { tab, leaf, inner, anchor: a, end: a, dragged: false }
+                        ShellSel { tab, leaf, inner, anchor: a, end: a, ready: false }
                     });
             }
             Some(pane) => {
@@ -1026,7 +1003,7 @@ impl App {
                 } else {
                     PendingOp::Copy
                 };
-                self.open_popup(Popup::ConfirmTransfer { op, targets: drag.paths, dest });
+                self.confirm_transfer(op, drag.paths, dest);
             }
         }
     }

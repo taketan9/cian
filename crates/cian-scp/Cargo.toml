@@ -14,6 +14,10 @@ anyhow = { workspace = true }
 russh = "0.62"
 russh-sftp = "2.3"
 tokio = { version = "1", features = ["rt", "io-util", "net", "macros", "fs"] }
+# A download is a copy, so it keeps the server's date. Setting a time by path
+# (not through an open handle) is what `filetime` is for — same reason as in
+# `cian-core`.
+filetime = "0.2"
 
 [dev-dependencies]
 # The transfer plans are worked out from a real directory tree, so the tests

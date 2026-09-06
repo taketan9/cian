@@ -124,7 +124,36 @@ fn copy_file(src: &Path, dst: &Path, ctl: &mut Ctl, p: &mut Progress) -> Result<
     if let Ok(meta) = fs::metadata(src) {
         let _ = fs::set_permissions(dst, meta.permissions());
     }
+    // The date is part of what was copied, not a record of when the copy ran.
+    // Here rather than in a second pass over the tree, because the loop is
+    // already holding both paths and a walk of its own would cost a stat per
+    // file to learn what this line already knows.
+    crate::ops::copy_times(src, dst);
     Ok(true)
+}
+
+/// Every directory under `root`, relative to it, deepest first — the order the
+/// dates have to go on in, since writing a child resets its parent's mtime.
+/// Empty for a plain file, which has no directory of its own to stamp.
+fn dirs_deepest_first(root: &Path) -> Vec<PathBuf> {
+    if !root.is_dir() {
+        return Vec::new();
+    }
+    let mut out = vec![PathBuf::new()];
+    let mut at = 0;
+    while at < out.len() {
+        let rel = out[at].clone();
+        at += 1;
+        let Ok(rd) = fs::read_dir(root.join(&rel)) else { continue };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() && !p.is_symlink() {
+                out.push(rel.join(e.file_name()));
+            }
+        }
+    }
+    out.reverse();
+    out
 }
 
 /// Copy `srcs` into `dest_dir`, reporting progress and honouring cancellation.
@@ -174,7 +203,14 @@ pub fn copy_many(
                 }
             }
         }
+        // The files carried their own dates across as they were written; the
+        // directories could not, because every file written inside one moves
+        // its mtime again. So they go on last, once nothing more will be
+        // written under this root, deepest first.
         if !failed && !ctl.stopped() {
+            for rel in dirs_deepest_first(src) {
+                crate::ops::copy_times(&src.join(&rel), &root.join(&rel));
+            }
             report.ok += 1;
         }
     }
@@ -269,6 +305,84 @@ mod tests {
 
     fn ctl<'a>(cancel: &'a AtomicBool, f: &'a mut dyn FnMut(&Progress)) -> Ctl<'a> {
         Ctl { cancel, on_progress: f }
+    }
+
+    fn mtime(p: &Path) -> std::time::SystemTime {
+        fs::metadata(p).unwrap().modified().unwrap()
+    }
+
+    /// A copy carries the source's date. Not a detail: `cp -p`, robocopy,
+    /// Explorer and afxw all do it, and cian stamping "now" on every file
+    /// flattened whole trees to the day they were copied — invisibly, because
+    /// `dirdiff` compares by content and is deliberately blind to mtime.
+    ///
+    /// Directories are checked too, and they are the harder half: a directory's
+    /// mtime moves again every time a file is written inside it, so stamping it
+    /// before its contents does nothing at all.
+    #[test]
+    fn a_copy_keeps_the_dates_it_copied() {
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        fs::create_dir_all(src.path().join("d/deeper")).unwrap();
+        fs::write(src.path().join("d/a.txt"), b"a").unwrap();
+        fs::write(src.path().join("d/deeper/b.txt"), b"b").unwrap();
+
+        // Well before now, and each one different, so a test that passes by
+        // accident (everything stamped with the same "now") cannot.
+        let base = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        let want: Vec<(PathBuf, std::time::SystemTime)> = [
+            ("d/deeper/b.txt", 30),
+            ("d/a.txt", 20),
+            ("d/deeper", 10),
+            ("d", 0),
+        ]
+        .iter()
+        .map(|(rel, off)| {
+            let t = base + std::time::Duration::from_secs(*off);
+            crate::ops::set_mtime(&src.path().join(rel), t);
+            (PathBuf::from(rel), t)
+        })
+        .collect();
+
+        let cancel = AtomicBool::new(false);
+        let mut n = nil;
+        let report = copy_many(
+            &[src.path().join("d")],
+            dst.path(),
+            Conflict::Skip,
+            &mut ctl(&cancel, &mut n),
+        );
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+
+        for (rel, t) in &want {
+            let at = dst.path().join(rel);
+            assert_eq!(
+                mtime(&at),
+                *t,
+                "{} came out with the date of the copy, not of the file",
+                rel.display()
+            );
+        }
+    }
+
+    /// `:cp` and the copy-across in the comparison view do not go through
+    /// `copy_many` — they call `ops::copy_one`, which hands the work to
+    /// `fs_extra` and lost the date the same way. Two doors, one rule.
+    #[test]
+    fn the_other_copy_path_keeps_the_dates_too() {
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        fs::create_dir(src.path().join("d")).unwrap();
+        fs::write(src.path().join("d/a.txt"), b"a").unwrap();
+        let base = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_100_000_000);
+        let (tf, td) = (base, base + std::time::Duration::from_secs(5));
+        crate::ops::set_mtime(&src.path().join("d/a.txt"), tf);
+        crate::ops::set_mtime(&src.path().join("d"), td);
+
+        crate::ops::copy_one(&src.path().join("d"), dst.path(), Conflict::Skip).unwrap();
+
+        assert_eq!(mtime(&dst.path().join("d/a.txt")), tf, "the file lost its date");
+        assert_eq!(mtime(&dst.path().join("d")), td, "the directory lost its date");
     }
 
     #[test]

@@ -932,17 +932,45 @@ async function operate(kind) {
     // Local sources only — walking a remote tree to answer a dialog costs a
     // round trip per directory, and the answer would arrive after you had
     // decided.
-    let body = rows.map((r) => r.name).join('\n');
+    // **What the two answers are about.** "Yes" skips the same names and `a`
+    // overwrites them, and the sheet used to list the sources and the
+    // destination and nothing else — so the choice between those two was made
+    // without knowing whether there were any same names, let alone which.
+    // Answered from the destination pane's own listing: it is the directory
+    // being copied into and it is already on screen, so this costs no round
+    // trip and cannot disagree with what the eye can see. Same rule as the
+    // terminal build (`cian_core::ops::clashes`).
+    const already = kind === 'delete'
+        ? new Set()
+        : new Set((dest.entries || []).filter((e) => !e.parent).map((e) => e.name));
+    const clash = rows.filter((r) => already.has(r.name));
+    // Marked rows first: a collision at position twenty is exactly the one the
+    // sheet most needs to show.
+    const ordered = [...clash, ...rows.filter((r) => !already.has(r.name))];
+    const mark = (r) => (already.has(r.name) ? '↑ ' : '   ');
+    let body = ordered.map((r) => mark(r) + r.name).join('\n');
     if (dest.remote && !pane.remote && rows.some((r) => r.is_dir)) {
         const plan = await ask('transferplan', { paths: rows.map((r) => r.path) });
         if (plan) {
-            body = plan.rows.map((r) => (r.is_dir
-                ? tr(`${r.name}/   (${r.files} files, ${human(r.bytes)})`,
-                     `${r.name}/   （${r.files} ファイル・${human(r.bytes)}）`)
-                : r.name)).join('\n')
+            // Ordered and marked like the plain list — the plan answers "how
+            // big", not "what is already over there", and both questions are
+            // being asked at once.
+            const at = new Map(plan.rows.map((r) => [r.name, r]));
+            body = ordered.map((row) => {
+                const r = at.get(row.name) ?? row;
+                return mark(row) + (r.is_dir
+                    ? tr(`${r.name}/   (${r.files} files, ${human(r.bytes)})`,
+                         `${r.name}/   （${r.files} ファイル・${human(r.bytes)}）`)
+                    : r.name);
+            }).join('\n')
                 + tr(`\n\n${plan.files} files in all, ${human(plan.bytes)}`,
                      `\n\n合計 ${plan.files} ファイル・${human(plan.bytes)}`);
         }
+    }
+    // Above the list, so it is read before the names it is about.
+    if (clash.length) {
+        body = tr(`${clash.length} of them are already there (marked ↑)`,
+                  `うち ${clash.length} 件は既に向こうにあります（↑ 印）`) + '\n\n' + body;
     }
     // The terminal build's three answers. The plain yes *skips* what already
     // exists — it used to overwrite, silently, which is the one outcome a
@@ -996,29 +1024,68 @@ async function operate(kind) {
     beginOp(started, kind, verb);
 }
 
-/// Offer to redo a refused transfer with administrator rights.
+/// Offer to try a refused transfer again.
 ///
-/// The elevated process copies on its own, so there is no bar to show — cian
-/// waits on it and says what happened. A declined UAC prompt comes back as an
-/// error, which is the right outcome and is reported as one.
-async function offerElevate(msg, verb) {
+/// **One question, one Yes** — and it names the tool, because `robocopy` is a
+/// word anybody who has met this problem already knows, and a dialog that says
+/// which program it is about to run is one you can decide about.
+///
+/// The order is the point. `robocopy /B` first: it spends the administrator
+/// privileges cian already holds to read and write past the ACL, changing
+/// nothing, which is what a share whose ACL does not name you actually calls
+/// for. Elevation is offered only *after* that has been refused too — the one
+/// thing it fixes is cian not running as administrator at all, and robocopy
+/// will have just said so.
+///
+/// This used to offer both at once on two letters. The useful one was `b`,
+/// which is a key only somebody who already understood the problem would ever
+/// press — the opposite of what a dialog raised by a failure is for.
+async function offerRetry(msg, verb) {
     const what = msg.elevate;
     const names = (what.paths || []).map((p) => p.split(/[\\/]/).pop());
+    const kept = what.conflict === 'overwrite'
+        ? tr('Same names already there are overwritten.', '既にある同名は上書きします。')
+        : tr('Same names already there are skipped.', '既にある同名はスキップします。');
+
+    // First offer: robocopy in backup mode.
+    const why = (msg.errors || []).join('  /  ');
+    const ok = await confirm(
+        tr(`${names.length} could not be ${verb}ed`, `${names.length} 件を${verb}できませんでした`),
+        `${what.dest}\n\n${why}\n\n`
+            + tr('Retry by running robocopy with administrator privileges?\nNo permissions (ACLs) are changed.\n',
+                 '管理者の権限で robocopy を実行してやり直しますか？\n権限（ACL）は変更しません。\n')
+            + kept
+            + tr('\n\nIt runs outside cian, so there is no progress bar.',
+                 '\n\ncian の外で走るので進捗バーは出ません。'));
+    if (!ok) { say(why, true); return; }
+
+    say(tr('running robocopy with administrator privileges…', '管理者の権限で robocopy を実行しています…'));
+    const done = await ask('elevate', { ...what, mode: 'backup' });
+    if (done) {
+        state.left = done.left;
+        state.right = done.right;
+        draw('left');
+        draw('right');
+        say(tr(`${verb} ${done.done} with robocopy`, `robocopy で ${done.done} 件を${verb}しました`));
+        return;
+    }
+
+    // Second offer, and only because the first was tried: a new elevated
+    // process. `ask` has already said why robocopy stopped.
     if (!await confirm(
-        tr('Windows refused it — try again as administrator?', 'Windows に拒否されました — 管理者としてやり直しますか'),
-        names.join('\n') + tr('\n\nWindows will ask for permission. The copy runs outside cian, so there is no progress bar.',
-            '\n\nWindows が確認を出します。コピーは cian の外で走るので進捗バーは出ません。'))) {
-        say(msg.errors.join('  /  '), true);
+        tr('robocopy could not either', 'robocopy でも通りませんでした'),
+        tr('Retry through an elevated process? Windows will ask for permission.\nThis is the answer when cian is not running as administrator.',
+           '昇格してやり直しますか？ Windows が確認を出します。\ncian を管理者として起動していない場合の答えです。'))) {
         return;
     }
     say(tr('waiting for the elevated copy…', '管理者権限のコピーを待っています…'));
-    const done = await ask('elevate', what);
-    if (!done) return;
-    state.left = done.left;
-    state.right = done.right;
+    const up = await ask('elevate', { ...what, mode: 'elevate' });
+    if (!up) return;
+    state.left = up.left;
+    state.right = up.right;
     draw('left');
     draw('right');
-    say(tr(`${verb} ${done.done} as administrator`, `管理者として ${done.done} 件を${verb}しました`));
+    say(tr(`${verb} ${up.done} as administrator`, `管理者として ${up.done} 件を${verb}しました`));
 }
 
 /// Take up an operation the engine has just accepted — running now, or in
@@ -2026,6 +2093,11 @@ function hintsNow() {
         const split = el.sPanes.querySelectorAll('.sgrid').length > 1;
         return [['Esc', tr('files', 'ファイル')],
             hasSel ? ['Ctrl+C', tr('copy the selection', '選択をコピー')] : [tr('drag', 'ドラッグ選択'), tr('select = copy', '= コピー')],
+            // Named as two keys rather than one `Shift+←→` family, so
+            // `scripts/keycover.py` counts each and can say which of them has
+            // never been pressed — a family reads as one claim and hides half
+            // of itself.
+            ['Shift+←', tr('select left', '左へ選択')], ['Shift+→', tr('select right', '右へ選択')],
             ['Ctrl+V', tr('paste', '貼り付け')],
             ...(split ? [['Shift+F1/F2', tr('prev/next pane', '前/次のペイン')]] : []),
             ['F9', tr('new tab', '新規タブ')], ['F10', tr('close tab', 'タブを閉じる')], ['Shift+F8', tr('v-split', '左右分割')],
@@ -2695,10 +2767,6 @@ function aiRows() {
     return [
         { label: tr("Chat", 'チャット'), value: ':ai', run: () => cmdAiAsk('') },
         { label: tr("Triage this log", 'このログを診断'), value: ':ailog', run: cmdAiLog },
-        { label: tr("Detect junk files", 'ゴミファイル検出'), value: ':aijunk', run: () => cmdAiScan('aijunk') },
-        { label: tr("Suggest folder structure", 'ディレクトリ構成を提案'), value: ':organize', run: () => cmdAiScan('aistructure') },
-        { label: tr("Semantic search", 'セマンティック検索'), value: ':ask', run: () => commandLine('aisearch ') },
-        { label: tr("AI rename", 'AIリネーム'), value: ':airename', run: () => commandLine('airename ') },
         { label: tr("Draft commit message", 'コミットメッセージ生成'), value: ':aicommit', run: cmdAiCommit },
     ];
 }
@@ -3078,9 +3146,6 @@ function helpRows() {
     [tr("AI (when init.lua configures it)", 'AI（init.lua で設定したとき）'), [
         [tr(":aicmd <description>", ':aicmd 説明'), tr("a shell command from a description \u2014 it is placed, never run", '説明からシェルコマンド生成 ── 置くだけで、実行はしません')],
         [':ailog', tr("triage the selected log (errors, likely cause, what to check next)", '選択中のログを診断（エラー・原因・次の確認）')],
-        [':aijunk / :aistructure', tr("detect junk / suggest a folder structure (no contents are sent; the plan is shown first)", 'ゴミファイル検出 / ディレクトリ構成を提案（中身は送らない・実行前に全部見せる）')],
-        [tr(":airename <instruction>", ':airename 指示'), tr("rename by instruction (e.g. :airename to snake_case)", '指示でリネーム（例 :airename snake_case に）')],
-        [tr(":aisearch <what>", ':aisearch 探しもの'), tr("semantic search \u2014 find by meaning", 'セマンティック検索 — 意味で探す')],
         [':aierror  、:explain', tr("explain the shell's last error", 'シェルの直近のエラーを説明')],
         [':aicommit', tr("a commit message from the staged diff (Enter signs it)", 'ステージ済み差分からコミットメッセージ（Enter で署名）')],
         [':ime', tr("switch the input method off in vim's normal mode (init.lua's cian.ime)", 'vim のノーマルモードで IME を自動オフ（init.lua の cian.ime）')],
@@ -6008,10 +6073,6 @@ function buildCommands() {
     { name: 'limit', alias: ['speed', 'ratelimit'], about: tr("cap the transfer rate \u2014 :limit 2m / 500k / off", '転送の速さの上限 — :limit 2m / 500k / off'), arg: '2m / 500k / off', optional: true, run: cmdLimit },
     { name: 'summary', alias: ['summarize', 'summarise'], about: tr("AI: summarise the open file", 'AI: 開いているファイルを要約'), run: cmdSummary },
     { name: 'aicommit', alias: ['commitmsg'], about: tr("AI: a commit message from the staged diff", 'AI: ステージ済みの差分からコミットメッセージを作る'), run: cmdAiCommit },
-    { name: 'aijunk', alias: ['junk'], about: tr("AI: detect junk files \u2014 no contents are sent", 'AI: ゴミファイル検出 — 中身は送りません'), run: () => cmdAiScan('aijunk') },
-    { name: 'aistructure', alias: ['organize', 'aiorganize'], about: tr("AI: suggest a folder structure \u2014 the whole plan first", 'AI: ディレクトリ構成を提案 — 実行前に全部見せます'), run: () => cmdAiScan('aistructure') },
-    { name: 'airename', about: tr("AI: rename by instruction (:airename to snake_case)", 'AI: 指示でリネーム（:airename snake_case に）'), arg: tr('how to change them', 'どう変えるか'), run: cmdAiRename },
-    { name: 'aisearch', alias: ['ask', 'semsearch'], about: tr("AI: semantic search (:aisearch last month's invoices)", 'AI: セマンティック検索（:aisearch 先月の請求書）'), arg: tr('what to find', '探しもの'), run: cmdAiSearch },
     { name: 'aierror', alias: ['explain'], about: tr("AI: explain the shell's last error", 'AI: シェルの直近のエラーを説明する'), run: cmdAiError },
     { name: 'ime', alias: ['inputmethod'], about: tr("input method \u2014 off in vim's normal mode (cian.ime)", 'IME 連携 — vim のノーマルモードで自動オフ（cian.ime）'), run: cmdIme },
     { name: 'stat', about: tr("attributes (same as :attr)", '属性（:attr と同じ）'), run: cmdAttr },
@@ -9364,76 +9425,7 @@ function scanShortfall(partial) {
     return tr(` — but ${bits.join('; ')}`, ` ── ただし${bits.join('・')}`);
 }
 
-async function cmdAiScan(what) {
-    const r = await ask(what, { pane: state.focus });
-    if (!r) return;
-    say(what === 'aijunk' ? tr('looking for what might be junk…', '不要そうなものを探しています…') : tr('working out how to tidy it…', '畳み方を考えています…'));
-    aiWaiting = async (payload) => {
-        const rows = payload.rows || [];
-        const short = scanShortfall(payload.partial);
-        if (!rows.length) {
-            say((what === 'aijunk' ? tr('nothing here is obviously junk', '明らかな不要ファイルは見つかりませんでした') : tr('it says this is already tidy', 'もう整っています、と言っています')) + short);
-            return;
-        }
-        if (what === 'aijunk') {
-            show(tr('Possibly junk', '不要かもしれないもの'), tr('the AI’s guess — check before acting', 'AI の見立てです。確かめてから') + short,
-                rows.map((x) => ({ label: x.name, sub: x.reason || '', path: x.path })),
-                {
-                    checks: true,
-                    foot: tr('Space off/on   a all   n none   Enter mark the chosen   Esc cancel', 'Space 外す／戻す   a 全部   n 全部外す   Enter 選んだ分をマーク   Esc 取消'),
-                    pick: async (chosen) => {
-                        if (!chosen.length) { say(tr('no row is chosen', '選ばれている行がありません'), true); return; }
-                        closeReport();
-                        const p = await ask('setmarks', {
-                            pane: state.focus, paths: chosen.map((x) => x.path),
-                        });
-                        if (!p) return;
-                        state[state.focus] = p;
-                        draw(state.focus);
-                        say(tr(`${chosen.length} marked — d deletes them (to the trash)`, `${chosen.length} 件をマークしました — d で削除（ゴミ箱へ）`));
-                    },
-                });
-            return;
-        }
-        show(tr('A suggested folder structure', 'ディレクトリ構成の提案'), tr('it only moves things; nothing is deleted or renamed', '移すだけ。消しも改名もしません') + short,
-            rows.map((x) => ({ n: '→ ' + x.folder, label: x.name, sub: x.reason || '', path: x.path, folder: x.folder })),
-            {
-                checks: true,
-                foot: tr('Space off/on   a all   n none   Enter do it (u undoes)   Esc cancel', 'Space 外す／戻す   a 全部   n 全部外す   Enter 実行（u で戻せます）   Esc 取消'),
-                pick: async (chosen) => {
-                    if (!chosen.length) { say(tr('no row is chosen', '選ばれている行がありません'), true); return; }
-                    closeReport();
-                    if (!await confirm(tr(`Move ${chosen.length} into the folders below`, `${chosen.length} 件を下のディレクトリへ移します`),
-                        chosen.map((x) => `${x.name} → ${x.folder}/`).join('\n'))) { say(tr('stopped', 'やめました')); return; }
-                    const done = await ask('organizeapply', {
-                        pane: state.focus,
-                        rows: chosen.map((x) => ({ path: x.path, folder: x.folder })),
-                    });
-                    if (!done) return;
-                    state[state.focus] = done.pane;
-                    draw(state.focus);
-                    if (done.errors.length) say(done.errors.join('  /  '), true);
-                    else say(tr(`moved ${done.moved} (u undoes it)`, `${done.moved} 件を移しました（u で戻せます）`));
-                },
-            });
-    };
-}
 
-async function cmdAiRename(instruction) {
-    const r = await ask('airename', { pane: state.focus, instruction });
-    if (!r) return;
-    say(tr('working out new names…', 'リネーム案を考えています…'));
-    aiWaiting = (payload) => {
-        const rows = (payload.rows || []).filter((x) => x.new_name && !/[\\/]/.test(x.new_name));
-        if (!rows.length) { say(tr('it proposed no changes', '変える案がありませんでした')); return; }
-        // Through the same plan screen every bulk rename uses: clashes marked,
-        // nothing moves until Enter.
-        showRenamePlanRows(rows.map((x) => ({
-            from: x.name, to: x.new_name, path: x.path,
-            same: x.name === x.new_name, clash: false,
-        })), tr('AI rename', 'AIリネーム'));
-    };
-}
 
 /// The bulk-rename confirmation, callable with rows from anywhere — the
 /// pattern rename builds them from a pattern, the AI from an instruction.
@@ -9465,22 +9457,6 @@ function showRenamePlanRows(rows, title) {
         });
 }
 
-async function cmdAiSearch(query) {
-    const r = await ask('aisearch', { pane: state.focus, query });
-    if (!r) return;
-    say(tr('searching by meaning…', '意味で探しています…'));
-    aiWaiting = (payload) => {
-        const rows = payload.rows || [];
-        const short = scanShortfall(payload.partial);
-        if (!rows.length) { say(tr('nothing looks like it', 'それらしいものは見つかりませんでした') + short); return; }
-        show(tr(`Things like “${query}”`, `「${query}」らしいもの`), tr(`${rows.length} — the AI’s guess`, `${rows.length} 件 — AI の見立てです`) + short,
-            rows.map((x) => ({ label: x.path, sub: x.reason || '', full: x.full })),
-            {
-                foot: tr('Enter go there   Esc close', 'Enter そこへ   Esc 閉じる'),
-                pick: (row) => { closeReport(); revealPath(row.full, false); },
-            });
-    };
-}
 
 /// The three switches cian-tui keeps in `T` and this build did not have at
 /// all. Runtime-only in both, because they answer about *this session*: a
@@ -10256,6 +10232,36 @@ document.addEventListener('mouseup', () => {
     say(tr(`${text.length} characters copied`, `${text.length} 文字をコピー`));
 });
 
+/// Is there a selection standing inside the shell panel?
+function shellHasSelection() {
+    const sel = window.getSelection();
+    return !!(sel && !sel.isCollapsed && el.sPanes.contains(sel.anchorNode));
+}
+
+/// Grow the shell's selection by one character (`Shift+←` / `Shift+→`).
+///
+/// Starts collapsed at the **end** of the focused pane when there is nothing
+/// to grow — that is where the prompt is, so `Shift+←` walks back into the
+/// output rather than into empty space below it.
+function extendShellSelection(forward) {
+    const sel = window.getSelection();
+    if (!sel) return;
+    if (!shellHasSelection()) {
+        const pane = el.sPanes.querySelector('.sgrid.on') || el.sPanes.querySelector('.sgrid');
+        if (!pane) return;
+        const r = document.createRange();
+        r.selectNodeContents(pane);
+        r.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(r);
+    }
+    // `modify` is what a browser runs for Shift+Arrow in editable text; the
+    // panel is not editable, so it has to be asked for by name. It handles the
+    // line wrapping itself.
+    sel.modify('extend', forward ? 'forward' : 'backward', 'character');
+    say(tr('selecting — Ctrl+C copies, Esc clears', '選択中 — Ctrl+C でコピー、Esc で解除'));
+}
+
 /// The selection in the shell, onto the clipboard.
 function shellCopy() {
     const sel = window.getSelection();
@@ -10300,6 +10306,38 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         if (e.key.toLowerCase() === 'v') shellPaste();
         else shellCopy();
+        return;
+    }
+    // **Shift+← / Shift+→ select, from the keyboard.**
+    //
+    // The shell could only be selected by dragging, which is fine when the
+    // hand is already on the mouse and useless when it is not — and what gets
+    // selected out of a shell is usually a path or an error message, which is
+    // to say something you have just been reading with your hands on the keys.
+    //
+    // Here the panel is HTML rather than a grid of cells, so this is the
+    // browser's own selection: `Selection.modify` extends it a character at a
+    // time, and wraps across lines by itself. With nothing selected yet it
+    // starts collapsed at the end of the focused pane — where the prompt is,
+    // and where the eye is — so `Shift+←` walks back through the output, the
+    // same as in the terminal build. `Ctrl+C` copies it, through the same
+    // `shellCopy` a drag uses.
+    if (e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
+        && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.stopPropagation();
+        e.preventDefault();
+        extendShellSelection(e.key === 'ArrowRight');
+        return;
+    }
+    // Esc drops a standing selection first and stays here. Everywhere else in
+    // cian Esc cancels the innermost thing, and leaving the shell *and*
+    // clearing the highlight on one press would leave no way to abandon a
+    // selection except by going somewhere.
+    if (e.key === 'Escape' && shellHasSelection()) {
+        e.stopPropagation();
+        e.preventDefault();
+        window.getSelection().removeAllRanges();
+        say(tr('selection cleared', '選択を解除しました'));
         return;
     }
     // Esc hands the keys back to the files. A shell wants Esc too — vi lives
@@ -10604,7 +10642,7 @@ window.cian.onEvent(async (msg) => {
             // stopped, which on a managed machine is most of what a copy into
             // Program Files ever says. Asked rather than done: a UAC prompt
             // nobody asked for is worse than the error.
-            else if (msg.elevate) { await offerElevate(msg, verb); }
+            else if (msg.elevate) { await offerRetry(msg, verb); }
             // Every failure, named. A count of them tells you something went
             // wrong without telling you what, which is the worst of both.
             else if (msg.errors.length) say(msg.errors.join('  /  '), true);

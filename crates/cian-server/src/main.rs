@@ -698,11 +698,7 @@ impl Session {
                 }
                 let was = pane.cwd.clone();
                 pane.enter_selected()?;
-                // Only if it actually went somewhere: `Enter` on a file will
-                // one day open it, and that is not a step to walk back.
-                if pane.cwd != was {
-                    self.did(Undo::Navigated { pane: which.clone(), from: was });
-                }
+                let _ = was;
                 self.view(&which)
             }
             "parent" => {
@@ -712,11 +708,7 @@ impl Session {
                     let (archive, sub) = (archive.to_path_buf(), sub.to_string());
                     return self.archive_up(&which, &archive, &sub);
                 }
-                let was = pane.cwd.clone();
                 pane.go_parent()?;
-                if pane.cwd != was {
-                    self.did(Undo::Navigated { pane: which.clone(), from: was });
-                }
                 self.view(&which)
             }
             // Marking. `at` is a row; without it the cursor's row is meant.
@@ -4241,7 +4233,30 @@ impl Session {
                     })
                     .collect();
                 let n = items.len();
-                cian_core::elevate::elevated_copy(&items, move_after)?;
+                // **Two answers, one method.** `mode: "backup"` spends the
+                // administrator privileges this process already holds to read
+                // and write past the ACL, changing nothing; anything else
+                // starts a new elevated process. Which is right depends on
+                // whether cian is already running as administrator, and only
+                // the person at the keyboard knows that — so the window asks
+                // and passes the answer through rather than guessing here.
+                if req.params["mode"].as_str() == Some("backup") {
+                    // The refused transfer's own answer, carried back in.
+                    // Defaulting to Skip is the safe half of the guess: a
+                    // retry that leaves an existing file alone can be run
+                    // again, and one that overwrote it cannot be undone.
+                    let conflict = if req.params["conflict"].as_str() == Some("overwrite") {
+                        cian_core::ops::Conflict::Overwrite
+                    } else {
+                        cian_core::ops::Conflict::Skip
+                    };
+                    let report = cian_core::backup::backup_copy(&items, move_after, conflict);
+                    if let Some(first) = report.errors.first() {
+                        anyhow::bail!("{first}");
+                    }
+                } else {
+                    cian_core::elevate::elevated_copy(&items, move_after)?;
+                }
                 self.left.now().reload()?;
                 self.right.now().reload()?;
                 Ok(serde_json::json!({
@@ -4716,156 +4731,6 @@ impl Session {
                 ai_in_background(self.out.clone(), cfg, system.to_string(), body.to_string(), |answer| Ok(serde_json::json!({ "answer": answer })));
                 Ok(serde_json::json!({ "asked": true }))
             }
-            // ---- The AI extension family ----
-            //
-            // Metadata only — names, kinds, sizes. File *contents* never leave
-            // the machine from any of these, which is the terminal build's
-            // rule and the only rule that makes them usable at work. Prompts
-            // are the terminal build's, word for word; the reply is parsed and
-            // validated here, against the real names, before the window sees
-            // it — a model that invents a filename must not reach a delete key.
-            "aijunk" | "aistructure" => {
-                let which = req.params["pane"].as_str().unwrap_or("left").to_string();
-                let cfg = ai_config()?;
-                let dir = self.pane_cwd(&which);
-                // **Not on a remote pane.** `cwd` on one of those is whatever
-                // local directory was there before the connection — so this
-                // would walk *this* machine and label the result as the far
-                // one's contents. Wrong quietly, which is the worst way to be
-                // wrong: every row would look plausible.
-                if self.pane_mut(&which)?.remote_view().is_some() {
-                    anyhow::bail!(
-                        "リモートペインでは使えません（この機能は手元のディスクを読みます）"
-                    );
-                }
-                let junk = req.method == "aijunk";
-                // **Junk nests and tidying does not.** A `node_modules` two
-                // folders down is the commonest thing anybody wants gone, and
-                // the old survey saw one level, so it was invisible. A
-                // structure proposal, on the other hand, only ever moves the
-                // loose entries of *this* directory — going deeper would show
-                // the model files it is not allowed to touch.
-                let limits = if junk {
-                    cian_core::survey::Limits { depth: 4, rows: 800, hidden: false, ..Default::default() }
-                } else {
-                    cian_core::survey::Limits { depth: 1, rows: 600, hidden: false, ..Default::default() }
-                };
-                let (system, what) = if junk {
-                    (cian_core::aiprompt::JUNK, "junk")
-                } else {
-                    (cian_core::aiprompt::STRUCTURE, "structure")
-                };
-                ai_survey_in_background(self.out.clone(), cfg, SurveyAsk {
-                    head: format!("Directory: {}", dir.display()),
-                    dir,
-                    limits,
-                    system,
-                    what,
-                    key: "name",
-                });
-                Ok(serde_json::json!({ "asked": true }))
-            }
-            "airename" => {
-                let which = req.params["pane"].as_str().unwrap_or("left").to_string();
-                let instruction = arg(req, "instruction");
-                if instruction.is_empty() {
-                    anyhow::bail!("どうリネームするかを書いてください");
-                }
-                let cfg = ai_config()?;
-                let paths = self.targets(&which)?;
-                let rows: Vec<(String, String, bool, u64)> = paths
-                    .iter()
-                    .filter(|p| p.is_file())
-                    .map(|p| (
-                        p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
-                        p.display().to_string(),
-                        false,
-                        0,
-                    ))
-                    .collect();
-                if rows.is_empty() {
-                    anyhow::bail!("対象がありません");
-                }
-                let listing: String = rows.iter().take(400).map(|(n, ..)| format!("{n}\n")).collect();
-                let system = cian_core::aiprompt::RENAME
-                    .to_string();
-                let user = format!("Instruction: {instruction}\n\nFiles:\n{listing}");
-                ai_in_background(self.out.clone(), cfg, system.clone(), user.clone(), move |answer| {
-                    let v = parse_ai_reply(&answer, &rows, "name")?;
-                    Ok(serde_json::json!({ "what": "rename", "rows": v }))
-                });
-                Ok(serde_json::json!({ "asked": true }))
-            }
-            "aisearch" => {
-                let which = req.params["pane"].as_str().unwrap_or("left").to_string();
-                let query = arg(req, "query");
-                if query.is_empty() {
-                    anyhow::bail!("何を探すかを書いてください");
-                }
-                if self.pane_mut(&which)?.remote_view().is_some() {
-                    anyhow::bail!(
-                        "リモートペインでは使えません（この機能は手元のディスクを読みます）"
-                    );
-                }
-                let cfg = ai_config()?;
-                let root = self.pane_cwd(&which);
-                // Hidden included: somebody looking for "the eslint config"
-                // means `.eslintrc`, and a search that cannot see dotfiles
-                // fails on exactly the files people cannot remember the name
-                // of. Breadth first, so a cap loses the deepest rather than
-                // everything after the first big folder.
-                let limits =
-                    cian_core::survey::Limits { depth: 6, rows: 2000, hidden: true, ..Default::default() };
-                ai_survey_in_background(self.out.clone(), cfg, SurveyAsk {
-                    dir: root,
-                    limits,
-                    head: format!("Question: {query}"),
-                    system: cian_core::aiprompt::SEARCH,
-                    what: "search",
-                    key: "path",
-                });
-                Ok(serde_json::json!({ "asked": true }))
-            }
-            // Carry out the structure plan the person approved: make the
-            // folders, move the files, remember the moves for `u`.
-            "organizeapply" => {
-                let which = req.params["pane"].as_str().unwrap_or("left").to_string();
-                let cwd = self.pane_cwd(&which);
-                let rows = req.params["rows"].as_array().cloned().unwrap_or_default();
-                let mut moved: Vec<(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
-                let mut errors: Vec<String> = Vec::new();
-                for row in &rows {
-                    let (Some(path), Some(folder)) = (row["path"].as_str(), row["folder"].as_str())
-                    else { continue };
-                    // The model was told "no ..", and the engine checks anyway:
-                    // instructions constrain the honest, not the confused.
-                    if folder.contains("..") || std::path::Path::new(folder).is_absolute() {
-                        errors.push(format!("{folder}: そこへは動かせません"));
-                        continue;
-                    }
-                    let from = std::path::PathBuf::from(path);
-                    let dest = cwd.join(folder);
-                    if let Err(e) = std::fs::create_dir_all(&dest) {
-                        errors.push(format!("{folder}: {e}"));
-                        continue;
-                    }
-                    match cian_core::ops::move_one(&from, &dest, cian_core::ops::Conflict::Skip) {
-                        Ok(_) => {
-                            let name = from.file_name().map(|s| s.to_os_string()).unwrap_or_default();
-                            moved.push((dest.join(name), from.clone()));
-                        }
-                        Err(e) => errors.push(format!("{}: {e}", from.display())),
-                    }
-                }
-                if !moved.is_empty() {
-                    self.did(Undo::Moved { pairs: moved.clone() });
-                }
-                let pane = self.pane_mut(&which)?;
-                pane.reload()?;
-                Ok(serde_json::json!({
-                    "moved": moved.len(), "errors": errors, "pane": self.view(&which)?,
-                }))
-            }
             // The commit message, drafted from the staged diff. The prompt is
             // the terminal build's, word for word.
             "aicommit" => {
@@ -5050,14 +4915,15 @@ impl Session {
                         if req.method == "undo" { "取り消せる" } else { "やり直せる" }
                     );
                 };
-                if req.method == "undo" {
+                let undoing = req.method == "undo";
+                if undoing {
                     if let Some(back) = step.inverted() {
                         self.redo.push(back);
                     }
                 } else if let Some(back) = step.inverted() {
                     self.undo.push(back);
                 }
-                let said = step.describe(req.method == "undo");
+                let said = step.describe(undoing);
                 match &step {
                     Undo::Rename { from, to } => {
                         let name = from
@@ -5087,7 +4953,33 @@ impl Session {
                             }
                         }
                     }
-                    Undo::Copied { paths } => {
+                    // The one step whose two directions are different work:
+                    // undoing a copy deletes what it made, redoing it copies
+                    // again. The others are their own inverse and do not care
+                    // which stack they came off.
+                    Undo::Copied { srcs, dest, .. } if !undoing => {
+                        // Worked out **before** the copy: afterwards every
+                        // destination exists and `copy_creates` — which
+                        // answers "what is not there yet" — comes back empty,
+                        // leaving the `u` that follows with nothing to take.
+                        let made = cian_core::ops::copy_creates(srcs, dest);
+                        for src in srcs {
+                            // Skip, not overwrite: undo took only what this
+                            // copy created, so anything wearing one of those
+                            // names now belongs to somebody else.
+                            cian_core::ops::copy_one(
+                                src,
+                                dest,
+                                cian_core::ops::Conflict::Skip,
+                            )?;
+                        }
+                        self.undo.amend_top(|top| {
+                            if let Undo::Copied { paths, .. } = top {
+                                *paths = made;
+                            }
+                        });
+                    }
+                    Undo::Copied { srcs, dest, paths } => {
                         // Only what is still there. The list was drawn up
                         // before the copy ran, so a file it never managed to
                         // write is on it — and `delete_many` would report a
@@ -5114,14 +5006,18 @@ impl Session {
                             let left: Vec<_> =
                                 here.into_iter().filter(|p| p.exists()).collect();
                             if !left.is_empty() {
-                                self.undo.push(Undo::Copied { paths: left });
+                                // And off the redo stack: half of it is still
+                                // on disk, so "do it again" no longer has one
+                                // meaning.
+                                self.redo.pop();
+                                self.undo.push(Undo::Copied {
+                                    srcs: srcs.clone(),
+                                    dest: dest.clone(),
+                                    paths: left,
+                                });
                             }
                             anyhow::bail!("{first}");
                         }
-                    }
-                    Undo::Navigated { pane, from } => {
-                        let p = self.pane_mut(pane)?;
-                        *p = Pane::new(from.clone())?;
                     }
                 }
                 self.left.now().reload()?;
@@ -5234,9 +5130,7 @@ impl Session {
                         pane.cursor = i;
                     }
                 }
-                if pane.cwd != was {
-                    self.did(Undo::Navigated { pane: which.clone(), from: was });
-                }
+                let _ = was;
                 self.view(&which)
             }
             "cancel" => {
@@ -5540,109 +5434,9 @@ fn paths_of(req: &Request) -> Vec<std::path::PathBuf> {
         .unwrap_or_default()
 }
 
-/// A model's JSON reply, validated against the names that were actually sent.
-///
-/// The model was told to use names exactly as given, and the engine checks
-/// anyway: instructions constrain the honest, not the confused, and an
-/// invented filename must never reach a delete key. Rows that name nothing
-/// real are dropped, not guessed at. `key` is which field carries the name —
-/// the junk and rename prompts answer by `"name"`, the search by `"path"`.
-/// The rows in the shape `parse_ai_reply` matches against: the identifier the
-/// model was shown, then the absolute path the front end will act on.
-fn survey_rows(rows: &[cian_core::survey::Row]) -> Vec<(String, String, bool, u64)> {
-    rows.iter()
-        .map(|r| (r.rel.clone(), r.path.display().to_string(), r.is_dir, r.size))
-        .collect()
-}
 
-fn parse_ai_reply(
-    answer: &str,
-    rows: &[(String, String, bool, u64)],
-    key: &str,
-) -> Result<Vec<serde_json::Value>, String> {
-    let body = answer
-        .trim()
-        .trim_start_matches("```json")
-        .trim_start_matches("```")
-        .trim_end_matches("```")
-        .trim();
-    let parsed: Vec<serde_json::Value> =
-        serde_json::from_str(body).map_err(|e| format!("AI の返事が読めません: {e}"))?;
-    let mut out = Vec::new();
-    for item in parsed {
-        let Some(given) = item[key].as_str() else { continue };
-        let Some((_, full, ..)) = rows.iter().find(|(n, ..)| n == given) else { continue };
-        let mut v = item.clone();
-        // Both spellings ride along so the window never joins names to paths
-        // itself: `path` for the name-keyed answers, `full` for the path-keyed.
-        v["path"] = serde_json::json!(full);
-        v["full"] = serde_json::json!(full);
-        out.push(v);
-    }
-    Ok(out)
-}
 
-/// Survey a tree *and* ask about it, both on a worker.
-///
-/// **The walk belongs out here for the same reason the chat does.** Totalling
-/// subtree sizes over a Rust checkout is a second of `read_dir` — it was in
-/// the request handler, where a second means every keystroke in the listing
-/// queues behind it, which is the exact failure the note on
-/// [`ai_in_background`] was written about. The old code read `pane.entries`
-/// and was instant; making it recursive made it the slowest thing the engine
-/// does synchronously, and nothing about the request said so.
-///
-/// The person is told the request started before any of this happens, which is
-/// also why the "how much did it see" note now arrives with the *answer*
-/// rather than with the acknowledgement: at acknowledgement time nobody has
-/// looked yet.
-struct SurveyAsk {
-    /// Where to look.
-    dir: std::path::PathBuf,
-    limits: cian_core::survey::Limits,
-    /// The first line of the user message — "Directory: …" or "Question: …".
-    head: String,
-    system: &'static str,
-    /// The tag the front end switches on.
-    what: &'static str,
-    /// Which field of each returned object names a row: the tidy-up features
-    /// answer with `name`, the search with `path`.
-    key: &'static str,
-}
 
-fn ai_survey_in_background(out: Out, cfg: cian_ai::AiConfig, ask: SurveyAsk) {
-    let SurveyAsk { dir, limits, head, system, what, key } = ask;
-    std::thread::spawn(move || {
-        let stop = std::sync::atomic::AtomicBool::new(false);
-        let found = cian_core::survey::survey(&dir, limits, &stop);
-        if found.rows.is_empty() {
-            out.event("ai", serde_json::json!({ "error": "スキャンする対象がありません" }));
-            return;
-        }
-        let rows = survey_rows(&found.rows);
-        // To the person, as numbers: the front end says it in their language.
-        // `limit_note` phrases the same fact in English for the model, and the
-        // two must not become one string.
-        let partial = found.partial().then(|| {
-            serde_json::json!({
-                "whole_to": found.whole_to(),
-                "stopped": found.stopped_at.is_some(),
-                "unopened": found.unopened,
-            })
-        });
-        let user = cian_core::aiprompt::survey_user(&head, &found, std::time::SystemTime::now());
-        match cian_ai::chat(&cfg, system, &user, &[]) {
-            Ok(answer) => match parse_ai_reply(&answer, &rows, key) {
-                Ok(v) => out.event(
-                    "ai",
-                    serde_json::json!({ "what": what, "rows": v, "partial": partial }),
-                ),
-                Err(e) => out.event("ai", serde_json::json!({ "error": e })),
-            },
-            Err(e) => out.event("ai", serde_json::json!({ "error": e.to_string() })),
-        }
-    });
-}
 
 /// One AI request, off the main loop, answered by an event.
 ///
@@ -5781,49 +5575,5 @@ mod undo_stack_tests {
         did_step(&undo, &redo, Undo::Created { path: "/c".into() });
         assert!(redo.pop().is_none(), "the undone branch is gone");
         assert!(undo.pop().is_some());
-    }
-}
-
-#[cfg(test)]
-mod ai_reply_tests {
-    use super::*;
-
-    fn rows() -> Vec<(String, String, bool, u64)> {
-        vec![
-            ("a.log".into(), "/tmp/x/a.log".into(), false, 10),
-            ("b.txt".into(), "/tmp/x/b.txt".into(), false, 20),
-        ]
-    }
-
-    #[test]
-    fn a_fenced_reply_still_parses() {
-        // Models fence JSON no matter how firmly they are told not to.
-        let v = parse_ai_reply(
-            "```json\n[{\"name\": \"a.log\", \"reason\": \"log\"}]\n```",
-            &rows(),
-            "name",
-        )
-        .unwrap();
-        assert_eq!(v.len(), 1);
-        assert_eq!(v[0]["path"], "/tmp/x/a.log");
-    }
-
-    #[test]
-    fn an_invented_name_is_dropped_not_guessed() {
-        // The whole point of validating here: a hallucinated filename must
-        // never reach a delete key with a real path attached.
-        let v = parse_ai_reply(
-            "[{\"name\": \"important.doc\", \"reason\": \"junk\"}, {\"name\": \"b.txt\", \"reason\": \"tmp\"}]",
-            &rows(),
-            "name",
-        )
-        .unwrap();
-        assert_eq!(v.len(), 1);
-        assert_eq!(v[0]["name"], "b.txt");
-    }
-
-    #[test]
-    fn prose_instead_of_json_is_an_error_not_a_crash() {
-        assert!(parse_ai_reply("I think a.log is junk.", &rows(), "name").is_err());
     }
 }

@@ -231,7 +231,7 @@ those seven work in vi style too. With no normal mode there is nothing for
 |---|---|
 | **`/`** | filter the listing as you type (Enter keeps it, Esc clears) |
 | **`f`** | jump between matches in this folder |
-| **`Shift+F`** | find by name, anywhere below this folder |
+| **`Shift+F`** (`:find`) | find by name, anywhere below this folder |
 | **`Ctrl+F`** (or `Ctrl+G`, `:grep`) | grep inside files — Enter opens the hit on its line |
 | **`b`** | branch view — flatten the whole subtree into one listing |
 | **`,`** | sort by name / size / date / extension (`n` `s` `d` `e`) |
@@ -341,7 +341,7 @@ A plaintext password is a secret in a file, and cian warns on Unix if that file 
 
 ## The shell panel
 
-The bottom panel is a real shell (your `$SHELL`). **`Shift+J`**, a click or `:shell` focuses it; **Esc** returns to the files. **Output that has scrolled past is kept** — 10,000 lines of it, with its colours: the wheel over the panel scrolls back through it, `Shift+PageUp` / `Shift+PageDown` a page at a time, `Shift+↑` / `Shift+↓` a line, `Shift+Home` / `Shift+End` the two ends. A badge and a bar say how far back you are, and typing anything returns to live output. Each half of a split scrolls on its own. Full-screen programs (vim, less, htop) keep Esc and the function keys for themselves. Drag to select — it copies on release. Right-click for its own menu: SSH connect, paste, session log, SFTP/SCP, text encoding.
+The bottom panel is a real shell (your `$SHELL`). **`Shift+J`**, a click or `:shell` focuses it; **Esc** returns to the files. **Output that has scrolled past is kept** — 10,000 lines of it, with its colours: the wheel over the panel scrolls back through it, `Shift+PageUp` / `Shift+PageDown` a page at a time, `Shift+↑` / `Shift+↓` a line, `Shift+Home` / `Shift+End` the two ends. A badge and a bar say how far back you are, and typing anything returns to live output. Each half of a split scrolls on its own. Full-screen programs (vim, less, htop) keep Esc and the function keys for themselves. Drag to select — it copies on release. **Without a mouse, `Shift+←` / `Shift+→`**: the selection grows a character at a time from the shell's own cursor and wraps across rows, so it reaches the output above the prompt (`Ctrl+C` copies it; `Esc` clears it and stays here). Right-click for its own menu: SSH connect, paste, session log, SFTP/SCP, text encoding.
 
 | Key | Does |
 |---|---|
@@ -418,10 +418,6 @@ Off unless `cian.ai{…}` is set, and always in the loop — nothing runs or del
 | `:ai` | a chat |
 | `:aicmd <what you want>` | a shell command for the shell you are in, local or the server you are SSH'd into — drafted for review, never run for you |
 | `:aicommit` | a commit message from the staged diff |
-| `:aijunk` | a checklist of likely-disposable files → the normal delete confirm |
-| `:aiorganize` | a proposed folder layout → you approve the moves |
-| `:airename` | suggested names → you review `old → new` |
-| `:aisearch <…>` | files most relevant to a description |
 | `:aierror` | explain the last shell error |
 | `:aidiff` | explain the diff on screen (also `x` in the diff view) |
 | `:ailog` | triage the selected log — errors, timeline, likely cause |
@@ -432,7 +428,7 @@ all six doors (`:ai`, summarise, explain the error, explain the diff, triage
 the log, the three over a selection) land in it. `Ctrl+R` reopens a past one,
 `Esc` stops an answer that is taking too long, and an image pastes straight in.
 **The history is one `ai_history.json` for both builds**: finding what you
-asked before should not require remembering which one you were in. It sends what has been said so far, so "the one you just mentioned" means something. When it grows long the oldest turns are dropped **whole** — half a turn is a sentence with no speaker — and the newest one is always sent however heavy it is, because it is what the next question is about. The structured requests (`:airename` and friends) stay one-shot: a machine reads those answers, and an earlier turn in the request is an earlier turn's format in the reply.
+asked before should not require remembering which one you were in. It sends what has been said so far, so "the one you just mentioned" means something. When it grows long the oldest turns are dropped **whole** — half a turn is a sentence with no speaker — and the newest one is always sent however heavy it is, because it is what the next question is about. There used to be structured requests here too — junk candidates, a folder layout, bulk renames, semantic search — and they were dropped on 2026-09-06. Each of them *proposed operations on files*, doing unreliably what `:duplicate`, `:renamepattern` and `:renamelist` already do deterministically and offline. What is left is the half that answers a question.
 
 **Give it context.** `cian.ai_context("…")` records facts about your setup — the OS, the deployment target, house rules — and cian prepends them to every prompt. Per-server facts go on the host (`notes = "RHEL 8; Oracle 19c; …"`) and are handed over when the shell is logged into it.
 
@@ -629,6 +625,13 @@ Open a new terminal and type `cian-tui`. Use a Nerd Font terminal for the file-t
 - **Border corners** default to square in the legacy Windows console and rounded elsewhere. Force it with `cian.set_option("borders", "rounded")` (or `"plain"`).
 - **A key that does nothing?** The terminal may be keeping it — a Mac terminal takes Ctrl+F for its find bar, Ctrl+Q for the system zoom — and a key that never arrives cannot be handled. **`:key`** reports each keystroke as cian received it and names the keyboard mode in effect; `CIAN_LEGACY_KEYS=1` starts without the enhanced-keyboard request. Move the binding somewhere your machine will deliver (`cian.set_keymap("alt+g", "grep_recursive")`), or use the command: the Ctrl-only shortcuts all answer to `:w`, `:q`, `:grep`, `:block`.
 - **Screen scrambled?** `:redraw` repaints from nothing, for when a stray control character leaves text cian never drew.
+- **Copies refused even though cian is running as administrator (shared hosts, UNC).** Being in the Administrators group and being granted access by a folder's ACL are two different things. If the ACL does not name you, elevating again lands the same token against the same wall.
+
+  What an administrator does hold is `SeBackupPrivilege` / `SeRestorePrivilege` — the right to read and write **past** an ACL. When `c` / `m` is refused, cian asks: **"Retry by running robocopy with administrator privileges?"** Answering **yes** runs `robocopy /B`, and **no permissions are changed**: if Explorer asks the same question every time and the folder's permissions are the same afterwards, that is this. Only if robocopy is refused too does a second question appear, offering elevation — the one thing it fixes (cian not running as administrator) is what robocopy will have just told you.
+
+  cian never edits the ACL itself. On a machine other people are signed into, that is a change to *their* access, not only yours.
+
+  **A privilege is local to the machine holding it.** Against `\\other-host\share` the far end decides, from its own ACL and your identity there, so this helps only if you are an administrator there too.
 - **Trouble?** `CIAN_LOG=/tmp/cian.log` captures diagnostics. A panic restores the terminal on the way out, so you are never left needing `reset`.
 
 ---

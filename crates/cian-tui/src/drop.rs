@@ -218,8 +218,7 @@ impl crate::App {
             .into());
             return true;
         }
-        self.popup =
-            crate::Popup::ConfirmTransfer { op: crate::PendingOp::Move, targets: paths, dest };
+        self.popup = crate::transfer_popup(crate::PendingOp::Move, paths, dest);
         true
     }
 }

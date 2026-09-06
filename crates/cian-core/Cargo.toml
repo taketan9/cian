@@ -55,9 +55,10 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 fs4 = "1.1.0"
 regex = "1.13.1"
 unicode-width = "0.2"
+# Timestamps on a path, not on an open handle: `File::set_modified` needs the
+# thing opened for writing, which rules out directories on Unix and read-only
+# files everywhere — and a copy has to carry the source's date onto both.
+filetime = "0.2"
 
 [dev-dependencies]
 tempfile = "3.27.0"
-# Only for a test that forces a directory's mtime, to prove the entry-count
-# fallback in `is_stale` catches an add even when the timestamp does not move.
-filetime = "0.2"

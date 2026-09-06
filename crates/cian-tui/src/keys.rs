@@ -94,15 +94,15 @@ impl App {
     /// there was no way to answer it from inside cian. Reported after the key
     /// has been handled, so it is the last word rather than the first thing
     /// overwritten.
-    /// One keystroke, and the question that follows it: did it move a pane?
+    /// One keystroke.
     ///
-    /// See [`App::note_navigation`] — every route into another directory is
-    /// caught here rather than at each of the dozen places that can take one.
+    /// This used to bracket the body with a before/after reading of the pane's
+    /// directory, so that walking into a folder could go on the undo stack
+    /// beside the file operations. That mixing is gone — `u` is for what
+    /// happened to your files, `Alt+←` for where you have been — and with it
+    /// the bracket.
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
-        let before = self.nav_snapshot();
-        let out = self.handle_key_body(key);
-        self.note_navigation(before);
-        out
+        self.handle_key_body(key)
     }
 
     fn handle_key_body(&mut self, key: KeyEvent) -> Result<()> {
@@ -424,12 +424,10 @@ impl App {
             Popup::Shortcuts { .. } => self.shortcuts_key(key),
             Popup::ConfirmClose { .. } => self.confirm_close_key(key),
             Popup::ConfirmNewTab { .. } => self.confirm_new_tab_key(key),
-            Popup::ConfirmElevate { .. } => self.confirm_elevate_key(key),
+            Popup::ConfirmRetry { .. } => self.confirm_retry_key(key),
             Popup::AiShellConfirm { .. } => self.ai_shell_confirm_key(key),
             Popup::CommitMessage { .. } => self.commit_message_key(key),
-            Popup::JunkReview { .. } => self.junk_review_key(key),
             Popup::DupeReview { .. } => self.dupe_review_key(key),
-            Popup::StructureReview { .. } => self.structure_review_key(key),
             Popup::RenameReview { .. } => self.rename_review_key(key),
             Popup::TextInput { .. } => self.text_input_key(key),
             Popup::Search { .. } => self.search_key(key),
@@ -508,7 +506,7 @@ impl App {
             // A single-item move/copy can be renamed on the way: `r` opens an
             // editable name seeded with the destination filename.
             KeyCode::Char('r') => {
-                if let Popup::ConfirmTransfer { op, targets, dest } = &self.popup {
+                if let Popup::ConfirmTransfer { op, targets, dest, .. } = &self.popup {
                     if targets.len() == 1 {
                         let op = *op;
                         let src = targets[0].clone();
@@ -1346,7 +1344,7 @@ impl App {
                         return Ok(());
                     };
                     if let Some((_, dest)) = self.dest_choices().into_iter().nth(c) {
-                        self.open_popup(Popup::ConfirmTransfer { op, targets, dest });
+                        self.confirm_transfer(op, targets, dest);
                     }
                 }
                 _ => {}
@@ -1767,12 +1765,23 @@ impl App {
         Ok(())
     }
 
-    fn confirm_elevate_key(&mut self, key: KeyEvent) -> Result<()> {
-            match key.code {
-                KeyCode::Char('y') | KeyCode::Enter => self.run_elevated_transfer(),
-                KeyCode::Char('n') | KeyCode::Esc => { self.popup = Popup::None; }
-                _ => {}
-            }
+    /// One question, one Yes.
+    ///
+    /// Which retry `Enter` runs is decided by the popup, not by which letter
+    /// the hand finds: the first offer is `robocopy /B`, and elevation is only
+    /// ever on screen after that has been tried and refused. A dialog raised
+    /// by a failure should need no vocabulary.
+    fn confirm_retry_key(&mut self, key: KeyEvent) -> Result<()> {
+        let Popup::ConfirmRetry { how, .. } = &self.popup else { return Ok(()) };
+        let how = *how;
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => match how {
+                RetryHow::Backup => self.run_backup_transfer(),
+                RetryHow::Elevate => self.run_elevated_transfer(),
+            },
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => self.popup = Popup::None,
+            _ => {}
+        }
         Ok(())
     }
 
@@ -1823,38 +1832,12 @@ impl App {
         Ok(())
     }
 
-    fn junk_review_key(&mut self, key: KeyEvent) -> Result<()> {
-        // Enter/d hands the checked paths to the normal delete confirm.
-        if matches!(key.code, KeyCode::Enter | KeyCode::Char('d')) {
-            self.confirm_review_deletion();
-            return Ok(());
-        }
-        if let Popup::JunkReview { items, cursor, .. } = &mut self.popup {
-            review_list_key(items, cursor, key.code);
-        }
-        self.review_list_exit(key.code);
-        Ok(())
-    }
-
     fn dupe_review_key(&mut self, key: KeyEvent) -> Result<()> {
         if matches!(key.code, KeyCode::Enter | KeyCode::Char('d')) {
             self.confirm_review_deletion();
             return Ok(());
         }
         if let Popup::DupeReview { items, cursor, .. } = &mut self.popup {
-            review_list_key(items, cursor, key.code);
-        }
-        self.review_list_exit(key.code);
-        Ok(())
-    }
-
-    fn structure_review_key(&mut self, key: KeyEvent) -> Result<()> {
-        // Enter/m runs the checked moves (creating folders as needed).
-        if matches!(key.code, KeyCode::Enter | KeyCode::Char('m')) {
-            self.apply_structure_plan();
-            return Ok(());
-        }
-        if let Popup::StructureReview { items, cursor, .. } = &mut self.popup {
             review_list_key(items, cursor, key.code);
         }
         self.review_list_exit(key.code);
@@ -2015,15 +1998,92 @@ impl App {
     }
 
     fn shell_ctrl_c_copies_with(&self, sel: Option<ShellSel>) -> bool {
-        sel.is_some_and(|s| s.dragged)
+        sel.is_some_and(|s| s.ready)
+    }
+
+    /// `Shift+←` / `Shift+→` in the shell: grow the selection by one cell.
+    ///
+    /// **The shell could only be selected with a mouse.** Dragging is fine when
+    /// the hand is already there and useless when it is not — and the thing
+    /// being selected out of a shell is usually a path or an error message,
+    /// which is to say something you have just been reading with your hands on
+    /// the keys.
+    ///
+    /// It starts where the shell's own cursor is, which is where the eye is,
+    /// and **wraps across rows**: `Shift+←` at column 0 goes to the end of the
+    /// row above. That is what the key does in every editor, and it is what
+    /// makes this reach the output at all — the cursor sits at a prompt on the
+    /// bottom row, so a selection that stopped at the left edge could never
+    /// touch the line you wanted. `Shift+↑` / `Shift+↓` are not available for
+    /// the vertical version: they walk the scrollback, which they have done
+    /// since before this existed.
+    ///
+    /// `Ctrl+C` copies what this builds — the same rule as a drag, since
+    /// [`ShellSel::ready`] is what that key asks about and this sets it.
+    fn extend_shell_selection(&mut self, forward: bool) {
+        let tab = self.shell.active;
+        let Some(leaf) = self.shell.active_leaf_id() else { return };
+        // The pane's terminal area on screen, from what the last frame laid
+        // out — the same table a click is resolved against, so keyboard and
+        // mouse selections describe cells the same way.
+        let Some(inner) =
+            self.shell_leaves.iter().find(|(t, l, ..)| *t == tab && *l == leaf).map(|(.., i)| *i)
+        else {
+            return;
+        };
+        if inner.width == 0 || inner.height == 0 {
+            return;
+        }
+        // Where to start when there is nothing to grow: the shell's own
+        // cursor. Read from the live screen, so it is the cell that is
+        // blinking rather than wherever the last click happened to be.
+        let sel = match self.shell_sel {
+            // A different pane's selection is not this one's to extend.
+            Some(s) if s.tab == tab && s.leaf == leaf => s,
+            _ => {
+                let at = self.shell_cursor_cell().unwrap_or((0, 0));
+                let at = (at.0.min(inner.height - 1), at.1.min(inner.width - 1));
+                ShellSel { tab, leaf, inner, anchor: at, end: at, ready: false }
+            }
+        };
+        // The rect is re-read each time: a split or a resize moves it, and a
+        // highlight drawn against a stale one lands on the wrong cells.
+        let mut sel = ShellSel { inner, ..sel };
+        sel.end = next_cell(inner, sel.end, forward);
+        sel.ready = true;
+        self.shell_sel = Some(sel);
+        self.message = Some(tr(
+            self.lang,
+            "selecting — Ctrl+C copies, Esc clears",
+            "選択中 — Ctrl+C でコピー、Esc で解除",
+        ).into());
+    }
+
+    /// The live cursor, as a `(row, col)` inside the pane's grid.
+    fn shell_cursor_cell(&self) -> Option<(u16, u16)> {
+        let session = self.shell.active_session()?;
+        let p = session.parser().lock().ok()?;
+        Some(p.screen().cursor_position())
     }
 
     pub(crate) fn handle_shell_key(&mut self, key: KeyEvent) -> Result<()> {
-        // Any keypress ends a mouse selection's highlight — the screen is about
-        // to change under it anyway. **Taken, not dropped**: Ctrl+C below has to
+        // Any keypress ends the selection's highlight — the screen is about to
+        // change under it anyway. **Taken, not dropped**: Ctrl+C below has to
         // know whether there was one, and this line runs first.
         let selection = self.shell_sel.take();
         let (alt_screen, app_cursor) = self.shell.active_modes();
+        // …except the two keys whose whole job is to build one. Put back what
+        // the line above took and grow it by a cell. Not while a full-screen
+        // program is running: there Shift+arrow belongs to that program, and
+        // the scrollback the highlight would sit on is not what is on screen.
+        if !alt_screen
+            && key.modifiers.contains(KeyModifiers::SHIFT)
+            && matches!(key.code, KeyCode::Left | KeyCode::Right)
+        {
+            self.shell_sel = selection;
+            self.extend_shell_selection(key.code == KeyCode::Right);
+            return Ok(());
+        }
         if self.debug_keys {
             self.message = Some(format!(
                 "key={:?} mods={:?} alt_screen={}",
@@ -2068,7 +2128,17 @@ impl App {
         }
         // Esc returns to the file pane — unless a full-screen app (alternate
         // screen) is running, in which case Esc belongs to that app (e.g. vim).
+        //
+        // With a selection standing, Esc drops that first. Esc cancels the
+        // innermost thing everywhere else in cian, and leaving the shell
+        // *and* clearing the highlight on one press would make the selection
+        // impossible to abandon without also going somewhere.
         if key.code == KeyCode::Esc && !alt_screen {
+            if selection.is_some_and(|s| s.ready) {
+                self.message =
+                    Some(tr(self.lang, "selection cleared", "選択を解除しました").into());
+                return Ok(());
+            }
             self.focus(self.last_file_pane);
             return Ok(());
         }
@@ -2155,7 +2225,7 @@ impl App {
         // killing whatever was running.
         if key.modifiers.contains(KeyModifiers::CONTROL)
             && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C'))
-            && selection.is_some_and(|s| s.dragged)
+            && selection.is_some_and(|s| s.ready)
         {
             debug_assert!(self.shell_ctrl_c_copies_with(selection));
             // Put back what the first line took: the copy reads it from there.
@@ -2736,5 +2806,64 @@ impl App {
             Action::Nop => {}
         }
         Ok(())
+    }
+}
+
+/// One cell along the grid, in reading order, wrapping at the row ends.
+///
+/// The whole of `Shift+←` / `Shift+→` in the shell that can be wrong: the
+/// wrapping. A version that stopped at column 0 compiles, passes any test that
+/// only walks along one row, and is useless in practice — the shell's cursor
+/// sits at a prompt on the bottom row, so a selection that cannot climb can
+/// never reach the output you wanted to copy.
+///
+/// Clamped at both ends of the grid rather than wrapping around it: running
+/// off the bottom-right and reappearing top-left is not what anybody meant.
+fn next_cell(inner: Rect, at: (u16, u16), forward: bool) -> (u16, u16) {
+    let (r, c) = at;
+    if forward {
+        if c + 1 < inner.width {
+            (r, c + 1)
+        } else if r + 1 < inner.height {
+            (r + 1, 0)
+        } else {
+            (r, c)
+        }
+    } else if c > 0 {
+        (r, c - 1)
+    } else if r > 0 {
+        (r - 1, inner.width.saturating_sub(1))
+    } else {
+        (r, c)
+    }
+}
+
+#[cfg(test)]
+mod shell_selection_steps {
+    use super::*;
+
+    fn grid() -> Rect {
+        Rect::new(0, 0, 8, 3)
+    }
+
+    #[test]
+    fn it_walks_along_a_row() {
+        assert_eq!(next_cell(grid(), (1, 2), true), (1, 3));
+        assert_eq!(next_cell(grid(), (1, 2), false), (1, 1));
+    }
+
+    /// The half that matters: the shell's cursor is at a prompt on the bottom
+    /// row, so reaching the output above it means going left past column 0.
+    #[test]
+    fn it_wraps_between_rows() {
+        assert_eq!(next_cell(grid(), (2, 0), false), (1, 7), "left off the row start climbs");
+        assert_eq!(next_cell(grid(), (0, 7), true), (1, 0), "right off the row end descends");
+    }
+
+    /// And stops at the two ends rather than looping around to the other one.
+    #[test]
+    fn it_stops_at_the_corners() {
+        assert_eq!(next_cell(grid(), (0, 0), false), (0, 0));
+        assert_eq!(next_cell(grid(), (2, 7), true), (2, 7));
     }
 }

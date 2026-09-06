@@ -76,13 +76,8 @@ use render::{key_hints, tint_default_cells};
 
 mod ai_parse;
 use ai_parse::{
-    clean_ai_command, clean_ai_commit_message, parse_junk_reply, parse_rename_reply,
-    parse_sem_search_reply, parse_structure_reply, truncate_diff_for_ai, truncate_text_for_ai,
+    clean_ai_command, clean_ai_commit_message, truncate_diff_for_ai, truncate_text_for_ai,
 };
-// `clean_dest_folder` / `clean_filename` are only exercised directly by tests;
-// the library reaches them through the parse_* functions above.
-#[cfg(test)]
-use ai_parse::{clean_dest_folder, clean_filename};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusedPane {
@@ -102,12 +97,10 @@ pub enum Mode {
     Shell,
 }
 
-
 pub struct PaneTabs {
     pub tabs: Vec<Pane>,
     pub active: usize,
 }
-
 
 /// How the panes inside one shell tab are arranged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,7 +138,6 @@ struct ShellTab {
     /// a glance; `shell 2` never can.
     name: String,
 }
-
 
 /// The bottom shell panel: a set of tabs, each holding one or more split panes.
 ///
@@ -209,7 +201,6 @@ enum PendingKind {
     Split { tab: usize, dir: SplitDir, leaf: Option<usize>, ratio: u16 },
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PendingOp {
     Copy,
@@ -227,8 +218,11 @@ struct ShellSel {
     /// Anchor and moving end, as `(grid_row, grid_col)`.
     anchor: (u16, u16),
     end: (u16, u16),
-    /// True once the pointer moved — a bare click just focuses.
-    dragged: bool,
+    /// True once this is a real selection rather than the moment a click
+    /// landed. A bare click only focuses, and `Ctrl+C` has to stay the
+    /// interrupt there — a shell you cannot stop is worse than one you cannot
+    /// copy from. Set by the first drag, and by the first `Shift+←`/`Shift+→`.
+    ready: bool,
 }
 
 /// Which way an SFTP transfer goes.
@@ -329,7 +323,13 @@ enum Popup {
     /// Members about to be deleted from the zip being browsed. `members` is
     /// the expanded list the op works on; `shown` the rows the user picked.
     ConfirmZipDelete { archive: PathBuf, members: Vec<String>, shown: Vec<String> },
-    ConfirmTransfer { op: PendingOp, targets: Vec<PathBuf>, dest: PathBuf },
+    /// A copy or move waiting to be confirmed. `clashes` is the subset of
+    /// `targets` that already exists at `dest` — worked out once, when the
+    /// popup opens, because the two answers on offer ("skip the duplicates" /
+    /// "overwrite") are a choice about exactly those files and were being made
+    /// without them on screen. Built only through [`App::confirm_transfer`], so
+    /// no caller can open this with a stale or missing count.
+    ConfirmTransfer { op: PendingOp, targets: Vec<PathBuf>, dest: PathBuf, clashes: Vec<PathBuf> },
     /// Overwrite confirmation for a copy-across from a comparison view (`<`/`>`
     /// in the file diff or the folder compare). `back` is the comparison popup
     /// to restore whether the copy is confirmed or cancelled.
@@ -612,16 +612,8 @@ enum Popup {
     /// Where to send a copy or move: recent destinations plus a way to type
     /// somewhere new.
     DestPicker { op: PendingOp, targets: Vec<PathBuf>, cursor: usize },
-    /// Results of a recursive search, filling in as they are found. `by_ai` is
-    /// set when the list came from the AI's semantic search (`:ask`) rather than
-    /// a `:find` / `:grep` sweep — the same list, named and coloured for its
-    /// source.
-    FindResults {
-        hits: Vec<cian_core::search::Hit>,
-        cursor: usize,
-        scroll: usize,
-        by_ai: bool,
-    },
+    /// Results of a recursive search, filling in as they are found.
+    FindResults { hits: Vec<cian_core::search::Hit>, cursor: usize, scroll: usize },
     /// Everything a grep-replace would change, before any of it is written.
     /// Boxed because it is only on screen while the user is reading it, and an
     /// unboxed plan would widen every `Popup` in the program.
@@ -694,24 +686,31 @@ enum Popup {
     Toggles { cursor: usize },
     /// A copy/move failed because the destination needs administrator rights.
     /// Offers to redo it elevated (Windows only).
-    ConfirmElevate { op: PendingOp, targets: Vec<PathBuf>, dest: PathBuf },
+    /// A copy or move the OS refused, and the offer to try again another way.
+    ///
+    /// `conflict` is **the answer already given** at [`Popup::ConfirmTransfer`]:
+    /// the retry has to mean the same thing the refused transfer meant, or
+    /// "skip what is already there" quietly becomes "overwrite it" on the
+    /// second attempt. `why` is what the machine said, shown verbatim.
+    ///
+    /// One question, one Yes. It used to offer two answers on two letters, and
+    /// a letter is a key only somebody who already knows about it will press —
+    /// which is the opposite of what a dialog raised by a failure is for.
+    ConfirmRetry {
+        op: PendingOp,
+        targets: Vec<PathBuf>,
+        dest: PathBuf,
+        conflict: Conflict,
+        how: RetryHow,
+        why: String,
+    },
     /// An AI-drafted commit message, shown editable before it is committed.
     /// `dir` is the repo the staged diff came from; `stat` summarises the files;
     /// `editing` toggles between preview and typing into `buffer`.
     CommitMessage { buffer: String, stat: String, dir: PathBuf, editing: bool },
-    /// The AI's junk-file suggestions, each toggleable, before deletion. Nothing
-    /// is deleted from here directly — approving hands the checked paths to the
-    /// normal delete confirmation.
-    JunkReview { items: Vec<JunkItem>, cursor: usize, scroll: usize },
-    /// The AI's proposed folder structure: a set of moves (file → subfolder),
-    /// each toggleable. Approving runs the checked moves, creating folders as
-    /// needed. `dir` is the folder the moves are relative to.
-    StructureReview { items: Vec<MoveItem>, cursor: usize, scroll: usize, dir: PathBuf },
     /// Proposed renames (old → new), each toggleable. Approving renames the
-    /// checked files in place. `by_ai` says which side proposed them — the AI
-    /// (`:airename`) or the `:renamepattern` rule — which is what the window is
-    /// named and coloured for.
-    RenameReview { items: Vec<RenameItem>, cursor: usize, scroll: usize, by_ai: bool },
+    /// checked files in place.
+    RenameReview { items: Vec<RenameItem>, cursor: usize, scroll: usize },
     /// Confirm discarding (reverting) worktree changes to tracked files. This
     /// throws away uncommitted work, so it is gated behind its own dialog.
     ConfirmDiscard { targets: Vec<PathBuf>, dir: PathBuf },
@@ -751,27 +750,6 @@ struct DupeItem {
     selected: bool,
 }
 
-/// One candidate the junk detector flagged: a path, why it thinks so, and
-/// whether it is currently checked for deletion.
-#[derive(Debug, Clone)]
-struct JunkItem {
-    path: PathBuf,
-    reason: String,
-    selected: bool,
-}
-
-/// One proposed move in a structure suggestion: take `path` (its name shown as
-/// `name`) into the sub-folder `dest` (relative to the pane's directory,
-/// created if missing), with the AI's short rationale.
-#[derive(Debug, Clone)]
-struct MoveItem {
-    path: PathBuf,
-    name: String,
-    dest: String,
-    reason: String,
-    selected: bool,
-}
-
 /// One proposed rename: `path` (currently named `old`) becomes `new` (a bare
 /// filename in the same directory).
 #[derive(Debug, Clone)]
@@ -799,7 +777,7 @@ macro_rules! checkable {
         fn path(&self) -> &std::path::Path { &self.path }
     })+};
 }
-checkable!(JunkItem, DupeItem, MoveItem, RenameItem);
+checkable!(DupeItem, RenameItem);
 
 /// The paths a review has checked.
 fn checked_paths<T: Checkable>(items: &[T]) -> Vec<PathBuf> {
@@ -1088,18 +1066,10 @@ enum MenuItem {
     AiCodeFix,
     /// Draft a git commit message from the staged diff.
     AiCommit,
-    /// Detect junk files in the current directory.
-    AiJunk,
     /// Triage the selected file as a log (errors, timeline, likely cause).
     AiTriageLog,
     /// Find duplicate files by content (not AI).
     FindDupes,
-    /// Suggest an organised folder structure for the current directory.
-    AiStructure,
-    /// Bulk-rename the marked files (or the whole listing) by an instruction.
-    AiRename,
-    /// Semantic search over the tree from a natural-language query.
-    AiSearch,
     /// Summarise the file being read (`:summary`).
     ViewerSummary,
     /// Blame gutter — who last changed each line (`:blame`).
@@ -1363,12 +1333,8 @@ impl MenuItem {
             MenuItem::AiCommandHelp => tr(lang, "Explain / write this command", "コマンドを説明・作成"),
             MenuItem::AiCodeFix => tr(lang, "Review and fix this code", "このコードを点検・修正"),
             MenuItem::AiCommit => tr(lang, "Draft commit message  (:aicommit)", "コミットメッセージ生成  (:aicommit)"),
-            MenuItem::AiJunk => tr(lang, "Detect junk files  (:aijunk)", "ゴミファイル検出  (:aijunk)"),
             MenuItem::AiTriageLog => tr(lang, "Triage this log  (:ailog)", "このログを診断  (:ailog)"),
             MenuItem::FindDupes => tr(lang, "Find duplicate files  (:duplicate)", "重複ファイルを検出  (:duplicate)"),
-            MenuItem::AiStructure => tr(lang, "Suggest folder structure  (:organize)", "ディレクトリ構成を提案  (:organize)"),
-            MenuItem::AiRename => tr(lang, "AI rename  (:airename)", "AIリネーム  (:airename)"),
-            MenuItem::AiSearch => tr(lang, "Semantic search  (:ask)", "セマンティック検索  (:ask)"),
             MenuItem::GitMenu => tr(lang, "Git ▸", "Git ▸"),
             MenuItem::GitStage => tr(lang, "Stage  (git add)", "ステージ  (git add)"),
             MenuItem::GitUnstage => tr(lang, "Unstage  (git reset)", "アンステージ  (git reset)"),
@@ -1518,14 +1484,14 @@ pub(crate) enum UndoAction {
     /// earlier, so a copy that landed on an existing name is left off the
     /// stack rather than half-undone — and the removal is to the trash, which
     /// keeps the one deleting step reversible in its turn.
-    Copied { paths: Vec<PathBuf> },
-    /// Undo by taking this pane back to `from`.
     ///
-    /// Walking into the wrong folder is the commonest thing to want back, and
-    /// it was the one thing `u` did not cover: the file operations were on one
-    /// stack and where you *are* was on another (`Alt+←`). One stack now, in
-    /// the order things happened, which is what undo means everywhere else.
-    Navigated { pane: FocusedPane, from: PathBuf, to: PathBuf },
+    /// `srcs` and `dest` are what it was told to do, kept so `Ctrl+Y` can do
+    /// it again. Undoing a copy used to be a one-way door — the redo stack
+    /// refused it, on the grounds that "nothing here remembers what was
+    /// inside". True of [`UndoAction::Created`], whose file is gone with its
+    /// contents; not true of a copy, whose sources are still exactly where
+    /// they were. Redoing one is simply copying again.
+    Copied { srcs: Vec<PathBuf>, dest: PathBuf, paths: Vec<PathBuf> },
 }
 
 enum OpMsg {
@@ -1704,6 +1670,23 @@ enum FindMsg {
     Done(cian_core::search::Outcome),
 }
 
+/// How to try a refused transfer again.
+///
+/// **Backup first, and usually only.** The privileges are already in the token
+/// of a cian started as administrator, so this is the answer that fits the
+/// case that actually turns up: a share whose ACL does not name you. Elevation
+/// is offered only *after* that has been tried and reported back — because the
+/// one thing it can fix (cian not running as administrator at all) is exactly
+/// what robocopy will have just said out loud.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RetryHow {
+    /// `robocopy /B` in this process — the administrator's backup privileges,
+    /// changing no permissions.
+    Backup,
+    /// A new elevated process through UAC.
+    Elevate,
+}
+
 /// What a finished AI reply should be used for, so one job plumbing serves
 /// every AI feature.
 #[derive(Debug, Clone)]
@@ -1716,19 +1699,6 @@ enum AiPurpose {
     /// A git commit message drafted from the staged diff. `dir`/`stat` are
     /// carried through so the editable preview can commit into the right repo.
     CommitMessage { dir: PathBuf, stat: String },
-    /// Junk-file detection over a directory listing. `names` is the name→path
-    /// list the model was shown, so its answer can be validated back to real,
-    /// absolute paths (a hallucinated name simply matches nothing).
-    Junk { names: Vec<(String, PathBuf)> },
-    /// Structure suggestion over a directory listing. `names` validates the
-    /// reply back to real paths; `dir` is the folder moves are relative to.
-    Structure { names: Vec<(String, PathBuf)>, dir: PathBuf },
-    /// Bulk rename over a chosen set of files. `names` validates the reply back
-    /// to real paths.
-    Rename { names: Vec<(String, PathBuf)> },
-    /// Semantic search: the model picks relevant paths from a catalog. `hits`
-    /// is the catalog it was shown, so the reply validates back to real hits.
-    SemSearch { hits: Vec<cian_core::search::Hit> },
 }
 
 /// A pending AI request; the worker sends the assistant's reply (or an error
@@ -1937,10 +1907,6 @@ enum InputKind {
     /// first time and `rejected` is what came back, both sent again so the model
     /// is correcting a draft rather than starting over from a fragment.
     AiShellRefine { description: String, rejected: String },
-    /// A natural-language instruction for how to bulk-rename the chosen files.
-    AiRename,
-    /// A natural-language query for semantic search over the tree.
-    AiSearch,
     /// A filename to save the diff/compare result into. All three renderings are
     /// carried here (the source popup is replaced by the prompt); the format is
     /// picked from the extension the user types — `.html`/`.htm`, `.md`, else
@@ -2004,10 +1970,7 @@ impl InputKind {
     fn is_multiline(&self) -> bool {
         matches!(
             self,
-            InputKind::AiShellCmd
-                | InputKind::AiShellRefine { .. }
-                | InputKind::AiRename
-                | InputKind::AiSearch
+            InputKind::AiShellCmd | InputKind::AiShellRefine { .. }
         )
     }
 }
@@ -2307,7 +2270,6 @@ impl Anim {
     }
 }
 
-
 /// Linear interpolation between two rects at eased position `t`.
 fn lerp_rect(a: Rect, b: Rect, t: f32) -> Rect {
     let f = |x: u16, y: u16| -> u16 {
@@ -2596,7 +2558,7 @@ pub struct App {
     popup_zones: Vec<PopupZone>,
     /// The last copy/move that failed on a permission error, kept so a Windows
     /// user can retry it elevated. `(op, sources, destination dir)`.
-    pending_elevation: Option<(PendingOp, Vec<PathBuf>, PathBuf)>,
+    pending_elevation: Option<(PendingOp, Vec<PathBuf>, PathBuf, Conflict)>,
     /// The active shell pane's slot rect, stashed on pane-zoom so the shrink
     /// back knows where to land (the split rects are gone while zoomed).
     pane_zoom_return: Option<Rect>,
@@ -2787,11 +2749,7 @@ pub struct App {
     /// user]`, so the six exchanges on screen were six unrelated questions and
     /// the second one was answered by something that had not heard the first.
     chat_prior: Vec<cian_ai::Turn>,
-    /// The junk-review list body rect, stashed so a click can map to a row.
-    junk_rect: Rect,
-    /// The structure-review list body rect, for the same reason.
-    struct_rect: Rect,
-    /// The rename-review list body rect, for the same reason.
+    /// The rename-review list body rect, stashed so a click can map to a row.
     rename_rect: Rect,
     /// The dupe-review list body rect, for the same reason.
     dupe_rect: Rect,
@@ -2830,9 +2788,6 @@ pub struct App {
     /// What `Ctrl+Y` / `:redo` would put back. Emptied by any new action, as
     /// a redo chain is everywhere else.
     redo_stack: Vec<UndoAction>,
-    /// Set by the routes that are *already* an undo — back, forward, undo,
-    /// redo — so stepping through history does not itself become history.
-    nav_suppressed: bool,
     pending_g: bool,
     /// When true, only the focused surface is drawn, filling the window.
     pub zoomed: bool,
@@ -2995,8 +2950,6 @@ impl App {
             ime_on: None,
             ai_history: Vec::new(),
             ai_rect: Rect::new(0, 0, 0, 0),
-            junk_rect: Rect::new(0, 0, 0, 0),
-            struct_rect: Rect::new(0, 0, 0, 0),
             rename_rect: Rect::new(0, 0, 0, 0),
             dupe_rect: Rect::new(0, 0, 0, 0),
             dupes_job: None,
@@ -3051,7 +3004,6 @@ impl App {
             pending_edit: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
-            nav_suppressed: false,
             pending_g: false,
             zoomed: false,
             debug_keys: std::env::var("CIAN_DEBUG_KEYS").is_ok(),
@@ -3696,6 +3648,36 @@ fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
+/// The copy/move confirmation, with its collision list already worked out.
+///
+/// A free function rather than a method so the two callers that must assign
+/// `self.popup` directly — they are replacing a popup, not opening one over a
+/// docked viewer — reach the same computation as the four that go through
+/// `App::confirm_transfer`. The point of the single door is the `clashes`
+/// field: it is a promise about what is at the destination, and a caller that
+/// built the popup by hand would be making that promise without checking.
+pub(crate) fn transfer_popup(op: PendingOp, targets: Vec<PathBuf>, dest: PathBuf) -> Popup {
+    let clashes = cian_core::ops::clashes(&targets, &dest);
+    Popup::ConfirmTransfer { op, targets, dest, clashes }
+}
+
+/// The retry offer for a transfer the OS refused.
+///
+/// A free function so the op-done handler and the tests build the same thing —
+/// the fields it carries are promises (which answer was already given, what
+/// the machine said), and a second construction site is a second chance to
+/// promise something that is not true.
+pub(crate) fn transfer_retry_popup(
+    op: PendingOp,
+    targets: Vec<PathBuf>,
+    dest: PathBuf,
+    conflict: Conflict,
+    how: RetryHow,
+    why: String,
+) -> Popup {
+    Popup::ConfirmRetry { op, targets, dest, conflict, how, why }
+}
+
 /// Build a text-input popup with the caret at the end of the seeded text —
 /// where you want it for editing an existing name or path.
 fn text_input(
@@ -4001,7 +3983,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry(":each", None, "run a shell command per marked file — {} = path (:each grep -l foo {})", "マーク各ファイルにコマンド実行 — {} = パス（:each grep -l foo {}）"),
                 entry("F5", None, "refresh now (:refresh)", "今すぐ再読み込み（:refresh）"),
                 entry("f", Some(Search), "search in this folder", "このディレクトリ内を検索"),
-                entry("Shift+F", None, "find by name, whole tree below here", "名前で検索（ここ以下のツリー全体）"),
+                entry("Shift+F", None, "find by name, whole tree below here (:find)", "名前で検索（ここ以下のツリー全体）── :find でも"),
                 entry("Ctrl+F / Ctrl+G", Some(Action::GrepRecursive), "grep inside files, whole tree below here (:grep too)", "ファイル内をgrep（ここ以下のツリー全体）— Ctrl+G（サクラと同じ）や :grep でも可"),
                 entry("  patterns", None, "  bare text = literal; /re/ = regex, /re/i ignores case; grep also reads SJIS", "  裸の文字列=そのまま、/re/=正規表現（/re/i で大小無視）、grep は SJIS も読む"),
                 entry("  p in results", None, "panelize: load the find/grep matches into the pane to mark & operate on", "検索結果を p でペイン化：マークして一括操作できます"),
@@ -4136,6 +4118,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry(":sync", None, "synchronize: type into all panes at once (also right-click)", "同時入力：全ペインへ一括入力（右クリックでも）"),
                 entry("Ctrl+Shift+Enter / :snip", None, "snippet launcher → send a saved command to the shell; works from the shell too (cian.snippets)", "スニペットランチャー → 定型コマンドをシェルへ送信；シェルからも可（cian.snippets）"),
                 entry("drag", None, "select text; it is copied to the clipboard on release", "テキスト選択；離すとクリップボードにコピー"),
+                entry("Shift+← / Shift+→", None, "select from the keyboard, wrapping across rows (Ctrl+C copies, Esc clears)", "キーボードで範囲選択（行をまたぐ）── Ctrl+C でコピー、Esc で解除"),
                 entry("right-click", None, "menu: paste, log, SFTP, text encoding, color", "メニュー：貼り付け、ログ、SFTP、文字コード、色"),
                 entry("Esc", None, "back to files (full-screen apps keep it)", "ファイルに戻る（全画面アプリはEscを保持）"),
             ],

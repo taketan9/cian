@@ -565,13 +565,37 @@ async fn sftp_upload(
         }
     }
     dst.shutdown().await.context("finish remote file")?;
-    // Apply the requested permission bits (e.g. 0o777) to the uploaded file.
-    if let Some(m) = mode {
-        let attrs = russh_sftp::protocol::FileAttributes { permissions: Some(m), ..Default::default() };
+    // Apply the requested permission bits (e.g. 0o777), and carry the local
+    // file's date across — an upload is a copy, and a copy keeps its date (see
+    // `cian_core::ops::copy_times`). Both in one round trip; both best-effort,
+    // since a server may refuse either and the bytes are already there.
+    let mtime = local_mtime_secs(local);
+    if mode.is_some() || mtime.is_some() {
+        let attrs = russh_sftp::protocol::FileAttributes {
+            permissions: mode,
+            // SFTP sets the two together: sending only mtime would zero the
+            // access time on servers that read the pair.
+            atime: mtime,
+            mtime,
+            ..Default::default()
+        };
         let _ = sftp.set_metadata(remote_path, attrs).await;
     }
     let _ = sftp.close().await;
     Ok(())
+}
+
+/// A local file's mtime as SFTP wants it: seconds since the epoch.
+fn local_mtime_secs(path: &Path) -> Option<u32> {
+    let t = std::fs::metadata(path).ok()?.modified().ok()?;
+    let secs = t.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+    u32::try_from(secs).ok()
+}
+
+/// Give a downloaded file the date it has on the server.
+fn set_local_mtime_secs(path: &Path, secs: u32) {
+    let t = filetime::FileTime::from_unix_time(i64::from(secs), 0);
+    let _ = filetime::set_file_mtime(path, t);
 }
 
 async fn sftp_download(
@@ -580,7 +604,11 @@ async fn sftp_download(
     local: &Path,
     ctl: &mut Ctl<'_>,
 ) -> Result<()> {
-    let total = sftp.metadata(remote_path).await.ok().and_then(|m| m.size).unwrap_or(0);
+    let meta = sftp.metadata(remote_path).await.ok();
+    let total = meta.as_ref().and_then(|m| m.size).unwrap_or(0);
+    // Read before the transfer: the same call already answers the size, and
+    // the date has to land on the file after it is written and flushed.
+    let remote_mtime = meta.as_ref().and_then(|m| m.mtime);
     let mut src = sftp
         .open(remote_path)
         .await
@@ -612,6 +640,11 @@ async fn sftp_download(
         }
     }
     dst.flush().await.context("finish local file")?;
+    // After the handle is done with it, or the write would move the date back.
+    drop(dst);
+    if let Some(secs) = remote_mtime {
+        set_local_mtime_secs(local, secs);
+    }
     let _ = sftp.close().await;
     Ok(())
 }

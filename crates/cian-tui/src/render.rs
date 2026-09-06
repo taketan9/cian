@@ -42,20 +42,11 @@ const CIAN: Color = Color::Rgb(22, 203, 225);
 fn is_ai_simple(popup: &Popup) -> bool {
     match popup {
         Popup::AiChat { skin, .. } => skin.simple,
-        Popup::AiShellConfirm { .. }
-        | Popup::CommitMessage { .. }
-        | Popup::JunkReview { .. }
-        | Popup::StructureReview { .. } => true,
-        // `:renamepattern` and `:find` share their result lists with the AI; only the
-        // AI side of each belongs to the family.
-        Popup::RenameReview { by_ai, .. } | Popup::FindResults { by_ai, .. } => *by_ai,
+        Popup::AiShellConfirm { .. } | Popup::CommitMessage { .. } => true,
         // The AI prompts; every other text input is a plain file operation.
         Popup::TextInput { kind, .. } => matches!(
             kind,
-            InputKind::AiShellCmd
-                | InputKind::AiShellRefine { .. }
-                | InputKind::AiRename
-                | InputKind::AiSearch
+            InputKind::AiShellCmd | InputKind::AiShellRefine { .. }
         ),
         _ => false,
     }
@@ -766,9 +757,7 @@ fn draws_its_own_frame(f: &mut Frame, area: Rect, app: &mut App) -> bool {
             }
             match app.popup {
                 Popup::CommitMessage { .. } => draw_commit_message(f, area, app),
-                Popup::JunkReview { .. } => draw_junk_review(f, area, app),
                 Popup::DupeReview { .. } => draw_dupe_review(f, area, app),
-                Popup::StructureReview { .. } => draw_structure_review(f, area, app),
                 Popup::RenameReview { .. } => draw_rename_review(f, area, app),
                 _ => return false,
             }
@@ -793,9 +782,7 @@ fn popup_scroll(popup: &Popup) -> usize {
         | Popup::FindResults { scroll, .. }
         | Popup::DirCompare { scroll, .. }
         | Popup::Archive { scroll, .. }
-        | Popup::JunkReview { scroll, .. }
         | Popup::DupeReview { scroll, .. }
-        | Popup::StructureReview { scroll, .. }
         | Popup::RenameReview { scroll, .. }
         | Popup::RemoteBrowser { scroll, .. }
         | Popup::AiChat { scroll, .. } => *scroll,
@@ -1044,7 +1031,6 @@ fn caret_lines(buffer: &str, cursor: usize, secret: bool, selected: bool) -> Vec
     }
     out
 }
-
 
 fn context_menu_rect(items: &[MenuItem], at: (u16, u16), area: Rect, lang: Lang) -> Rect {
     // marker(2) + name + gap(2, if any hint) + hint + right gutter(2) + borders(2).
@@ -4386,68 +4372,6 @@ for (i, raw) in shown.split('\n').enumerate() {
 f.render_widget(Paragraph::new(lines), inner);
 }
 
-/// The junk-review list: a checkbox per candidate, its name, size and the
-/// reason the AI gave. Nothing is deleted here — Enter hands the checked ones
-/// to the normal delete confirmation.
-fn draw_junk_review(f: &mut Frame, area: Rect, app: &mut App) {
-    let lang = app.lang;
-    let width: u16 = 88u16.min(area.width.saturating_sub(2));
-    let height = area.height.saturating_sub(2).clamp(8, 30);
-    let rect = centered_rect(width, height, area);
-    clear_popup(f, rect);
-    let (n, checked) = if let Popup::JunkReview { items, .. } = &app.popup {
-        (items.len(), items.iter().filter(|i| i.selected).count())
-    } else {
-        (0, 0)
-    };
-    let title = if lang == Lang::Ja {
-        format!(" ゴミファイル検出  {}/{} 選択 ", checked, n)
-    } else {
-        format!(" Detect junk files  {}/{} checked ", checked, n)
-    };
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(border_type())
-        .border_style(Style::default().fg(text_tone(AI_SIMPLE, theme().popup_bg)).add_modifier(Modifier::BOLD))
-        .style(popup_style())
-        .title(title)
-        .title_bottom(tr(lang,
-            " Space/click=toggle  a=all  Enter/d=delete checked  Esc=cancel ",
-            " Space/クリック=切替  a=全て  Enter/d=選択を削除  Esc=取消 "));
-    let inner = rect.inner(Margin { vertical: 1, horizontal: 2 });
-    f.render_widget(block, rect);
-
-    let body_h = inner.height as usize;
-    let body_w = inner.width as usize;
-    let mut rows: Vec<Line> = Vec::new();
-    if let Popup::JunkReview { items, cursor, scroll } = &mut app.popup {
-        // Keep the cursor in view.
-        keep_in_view(*cursor, scroll, body_h);
-        for (i, it) in items.iter().enumerate().skip(*scroll).take(body_h) {
-            let sel = i == *cursor;
-            let checkbox = if it.selected { "[x] " } else { "[ ] " };
-            let box_c = if it.selected { theme().mark_fg } else { Color::Rgb(120, 120, 140) };
-            let name = it.path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-            let name_c = if sel {
-                text_tone(theme().accent, row_bg(sel))
-            } else {
-                readable_on(row_bg(sel))
-            };
-            let reason = if it.reason.is_empty() { String::new() } else { format!("— {}", it.reason) };
-            let base = if sel { Style::default().bg(theme().selected_bg) } else { Style::default() };
-            rows.push(Line::from(vec![
-                Span::styled(checkbox, base.fg(box_c).add_modifier(Modifier::BOLD)),
-                Span::styled(format!("{}  ", pad_to(&truncate_middle(&name, 28), 28)),
-                    base.fg(name_c).add_modifier(Modifier::BOLD)),
-                Span::styled(truncate(&reason, body_w.saturating_sub(36)),
-                    base.fg(muted_on(row_bg(sel)))),
-            ]));
-        }
-        app.junk_rect = Rect::new(inner.x, inner.y, inner.width, body_h.min(items.len().saturating_sub(*scroll)) as u16);
-    }
-    f.render_widget(Paragraph::new(rows), inner);
-}
-
 /// The duplicate-file review: files grouped by identical content, a checkbox
 /// per copy (the keeper of each group left unchecked). Enter deletes the checked.
 fn draw_dupe_review(f: &mut Frame, area: Rect, app: &mut App) {
@@ -4510,67 +4434,6 @@ fn draw_dupe_review(f: &mut Frame, area: Rect, app: &mut App) {
     f.render_widget(Paragraph::new(rows), inner);
 }
 
-/// The structure-suggestion review: a checkbox per proposed move showing
-/// `name → folder/`, with the AI's reason. Enter runs the checked moves.
-fn draw_structure_review(f: &mut Frame, area: Rect, app: &mut App) {
-    let lang = app.lang;
-    let width: u16 = 92u16.min(area.width.saturating_sub(2));
-    let height = area.height.saturating_sub(2).clamp(8, 30);
-    let rect = centered_rect(width, height, area);
-    clear_popup(f, rect);
-    let (n, checked) = if let Popup::StructureReview { items, .. } = &app.popup {
-        (items.len(), items.iter().filter(|i| i.selected).count())
-    } else {
-        (0, 0)
-    };
-    let title = if lang == Lang::Ja {
-        format!(" ディレクトリ構成を提案  {}/{} 選択 ", checked, n)
-    } else {
-        format!(" Suggest folder structure  {}/{} checked ", checked, n)
-    };
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(border_type())
-        .border_style(Style::default().fg(text_tone(AI_SIMPLE, theme().popup_bg)).add_modifier(Modifier::BOLD))
-        .style(popup_style())
-        .title(title)
-        .title_bottom(tr(lang,
-            " Space/click=toggle  a=all  Enter/m=move checked  Esc=cancel ",
-            " Space/クリック=切替  a=全て  Enter/m=選択を移動  Esc=取消 "));
-    let inner = rect.inner(Margin { vertical: 1, horizontal: 2 });
-    f.render_widget(block, rect);
-
-    let body_h = inner.height as usize;
-    let body_w = inner.width as usize;
-    let mut rows: Vec<Line> = Vec::new();
-    if let Popup::StructureReview { items, cursor, scroll, .. } = &mut app.popup {
-        keep_in_view(*cursor, scroll, body_h);
-        for (i, it) in items.iter().enumerate().skip(*scroll).take(body_h) {
-            let sel = i == *cursor;
-            let checkbox = if it.selected { "[x] " } else { "[ ] " };
-            let box_c = if it.selected { theme().mark_fg } else { Color::Rgb(120, 120, 140) };
-            let name_c = if sel {
-                text_tone(theme().accent, row_bg(sel))
-            } else {
-                readable_on(row_bg(sel))
-            };
-            let base = if sel { Style::default().bg(theme().selected_bg) } else { Style::default() };
-            // `name  →  folder/`, then the reason quietly at the end.
-            let arrow = format!("{}  →  {}/", pad_to(&truncate_middle(&it.name, 26), 26), it.dest);
-            let reason = if it.reason.is_empty() { String::new() } else { format!("   — {}", it.reason) };
-            rows.push(Line::from(vec![
-                Span::styled(checkbox, base.fg(box_c).add_modifier(Modifier::BOLD)),
-                Span::styled(truncate(&arrow, body_w.saturating_sub(6)),
-                    base.fg(name_c).add_modifier(Modifier::BOLD)),
-                Span::styled(truncate(&reason, body_w.saturating_sub(4)),
-                    base.fg(muted_on(row_bg(sel)))),
-            ]));
-        }
-        app.struct_rect = Rect::new(inner.x, inner.y, inner.width, body_h.min(items.len().saturating_sub(*scroll)) as u16);
-    }
-    f.render_widget(Paragraph::new(rows), inner);
-}
-
 /// The bulk-rename review: a checkbox per proposed rename showing `old → new`.
 /// Enter renames the checked files in place.
 fn draw_rename_review(f: &mut Frame, area: Rect, app: &mut App) {
@@ -4579,25 +4442,18 @@ fn draw_rename_review(f: &mut Frame, area: Rect, app: &mut App) {
     let height = area.height.saturating_sub(2).clamp(8, 30);
     let rect = centered_rect(width, height, area);
     clear_popup(f, rect);
-    let (n, checked, by_ai) = if let Popup::RenameReview { items, by_ai, .. } = &app.popup {
-        (items.len(), items.iter().filter(|i| i.selected).count(), *by_ai)
+    let (n, checked) = if let Popup::RenameReview { items, .. } = &app.popup {
+        (items.len(), items.iter().filter(|i| i.selected).count())
     } else {
-        (0, 0, false)
+        (0, 0)
     };
-    // Named for whichever side proposed the renames: the AI menu item, or the
-    // `:brename` pattern.
-    let head = match (by_ai, lang) {
-        (true, Lang::Ja) => "AIリネーム",
-        (true, Lang::En) => "AI rename",
-        (false, Lang::Ja) => "リネーム候補",
-        (false, Lang::En) => "proposed renames",
-    };
+    let head = tr(lang, "proposed renames", "リネーム候補");
     let title = if lang == Lang::Ja {
         format!(" {}  {}/{} 選択 ", head, checked, n)
     } else {
         format!(" {}  {}/{} checked ", head, checked, n)
     };
-    let accent = text_tone(if by_ai { AI_SIMPLE } else { theme().accent }, theme().popup_bg);
+    let accent = text_tone(theme().accent, theme().popup_bg);
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(border_type())
@@ -4758,6 +4614,16 @@ fn draw_popup(
     }
 }
 
+/// The directory every one of `paths` is in, when they share one.
+///
+/// `None` as soon as two of them differ — a drop from the desktop can carry
+/// files from anywhere, and there the full path is the only honest label.
+fn common_parent(paths: &[PathBuf]) -> Option<PathBuf> {
+    let mut it = paths.iter().map(|p| p.parent());
+    let first = it.next().flatten()?;
+    it.all(|p| p == Some(first)).then(|| first.to_path_buf())
+}
+
 /// The confirm/notice dialogs, which differ only in their text: each supplies
 /// a title, body lines and a footer hint, and they share one frame, one body
 /// paragraph and one button row.
@@ -4868,7 +4734,7 @@ fn draw_simple_dialog(
             let foot = tr(lang, " y/Enter=delete  n/Esc=cancel ", " y/Enter=削除  n/Esc=取消 ");
             (title, lines, foot.to_string())
         }
-        Popup::ConfirmTransfer { op, targets, dest } => {
+        Popup::ConfirmTransfer { op, targets, dest, clashes } => {
             let title = match (op, lang) {
                 (PendingOp::Copy, Lang::Ja) => " コピー ",
                 (PendingOp::Move, Lang::Ja) => " 移動 ",
@@ -4876,10 +4742,44 @@ fn draw_simple_dialog(
                 (PendingOp::Move, Lang::En) => " move ",
             }.to_string();
             let head = format!("{} {} → {}", targets.len(), tr(lang, "item(s)", "件"), dest.display());
-            let mut lines = vec![head, String::new()];
-            for p in targets.iter().take(8) { lines.push(format!("  {}", p.display())); }
-            if targets.len() > 8 {
-                lines.push(tr_count(lang, targets.len() - 8));
+            let mut lines = vec![head];
+            // What the two answers are actually about. Without this line the
+            // choice between "skip the duplicates" and "overwrite" was made
+            // without knowing whether there were any.
+            if !clashes.is_empty() {
+                lines.push(if lang == Lang::Ja {
+                    format!("うち {} 件は既に向こうにあります（↑ 印）", clashes.len())
+                } else {
+                    format!("{} of them are already there (marked ↑)", clashes.len())
+                });
+            }
+            lines.push(String::new());
+            // The marked rows come first, so the eight that fit are the eight
+            // worth reading — a collision buried at position twenty was the
+            // thing this popup most needed to show.
+            let (mut hit, mut clear): (Vec<&PathBuf>, Vec<&PathBuf>) = (Vec::new(), Vec::new());
+            for p in targets {
+                if clashes.contains(p) { hit.push(p) } else { clear.push(p) }
+            }
+            let room = 8usize.saturating_sub(hit.len().min(8));
+            let shown = hit.len().min(8) + clear.len().min(room);
+            // Named from their common directory down, which for the ordinary
+            // copy — the marked files of one pane — is the bare name. The head
+            // line already says where they are going, and the full path made
+            // each row wrap: the `↑` ended up a row or two above the name it
+            // was marking, which is no mark at all.
+            let root = common_parent(targets);
+            let show = |p: &PathBuf| {
+                root.as_ref()
+                    .and_then(|r| p.strip_prefix(r).ok())
+                    .unwrap_or(p.as_path())
+                    .display()
+                    .to_string()
+            };
+            for p in hit.iter().take(8) { lines.push(format!("↑ {}", show(p))); }
+            for p in clear.iter().take(room) { lines.push(format!("  {}", show(p))); }
+            if targets.len() > shown {
+                lines.push(tr_count(lang, targets.len() - shown));
             }
             let foot = if targets.len() == 1 {
                 tr(lang, " y/Enter=Yes  a=overwrite  r=rename  n/Esc=cancel ",
@@ -5141,31 +5041,61 @@ fn draw_simple_dialog(
                 tr(lang, " y/Enter = send   n/Esc = cancel ", " y/Enter = 送信   n/Esc = 取消 ").to_string(),
             )
         }
-        Popup::ConfirmElevate { op, targets, dest } => {
+        Popup::ConfirmRetry { op, targets, dest, conflict, how, why } => {
             let verb = match (op, lang) {
                 (PendingOp::Copy, Lang::Ja) => "コピー",
                 (PendingOp::Move, Lang::Ja) => "移動",
                 (PendingOp::Copy, Lang::En) => "copy",
                 (PendingOp::Move, Lang::En) => "move",
             };
-            let body = if lang == Lang::Ja {
-                vec![
-                    format!("{} への書き込みには管理者権限が必要です", dest.display()),
-                    String::new(),
-                    format!("{} 件の{}を昇格して再試行しますか？ UACの確認が出ます", targets.len(), verb),
-                ]
-            } else {
-                vec![
-                    format!("{} needs administrator rights to write to", dest.display()),
-                    String::new(),
-                    format!("Retry the {} of {} item(s) elevated? A UAC prompt will appear.", verb, targets.len()),
-                ]
-            };
+            // **What the machine said, first and verbatim.** A dialog raised
+            // by a failure that does not show the failure is asking you to
+            // trust its summary of something you cannot see.
+            let mut body = vec![
+                if lang == Lang::Ja {
+                    format!("{} 件の{}ができませんでした", targets.len(), verb)
+                } else {
+                    format!("{} item(s) could not be {}ed", targets.len(), verb)
+                },
+                format!("  {}", dest.display()),
+                String::new(),
+            ];
+            if !why.is_empty() {
+                body.push(format!("  {}", crate::util::truncate(why, 76)));
+                body.push(String::new());
+            }
+            // One question, and it names the tool. `robocopy` is a word
+            // anybody who has met this problem already knows, and a dialog
+            // that says which program it is about to run is one you can
+            // decide about.
+            match (how, lang) {
+                (RetryHow::Backup, Lang::Ja) => {
+                    body.push("管理者の権限で robocopy を実行してやり直しますか？".into());
+                    body.push("  権限（ACL）は変更しません。".into());
+                }
+                (RetryHow::Backup, Lang::En) => {
+                    body.push("Retry by running robocopy with administrator privileges?".into());
+                    body.push("  No permissions (ACLs) are changed.".into());
+                }
+                (RetryHow::Elevate, Lang::Ja) => {
+                    body.push("robocopy でも通りませんでした。昇格してやり直しますか？".into());
+                    body.push("  Windows が確認を出します。".into());
+                }
+                (RetryHow::Elevate, Lang::En) => {
+                    body.push("robocopy could not either. Retry through an elevated process?".into());
+                    body.push("  Windows will ask for permission.".into());
+                }
+            }
+            body.push(match (conflict, lang) {
+                (Conflict::Skip, Lang::Ja) => "  既にある同名はスキップします。".into(),
+                (Conflict::Skip, Lang::En) => "  Same names already there are skipped.".to_string(),
+                (Conflict::Overwrite, Lang::Ja) => "  既にある同名は上書きします。".into(),
+                (Conflict::Overwrite, Lang::En) => "  Same names already there are overwritten.".to_string(),
+            });
             (
-                tr(lang, " administrator rights ", " 管理者権限 ").to_string(),
+                tr(lang, " could not copy ", " できませんでした ").to_string(),
                 body,
-                tr(lang, " y/Enter = retry as admin   n/Esc = cancel ",
-                    " y/Enter = 管理者として再試行   n/Esc = 取消 ").to_string(),
+                tr(lang, " y/Enter = yes   n/Esc = no ", " y/Enter = はい   n/Esc = いいえ ").to_string(),
             )
         }
         // All handled above, before this match.
@@ -5199,8 +5129,6 @@ fn draw_simple_dialog(
         | Popup::Toggles { .. }
         | Popup::ImageView { .. }
         | Popup::CommitMessage { .. }
-        | Popup::JunkReview { .. }
-        | Popup::StructureReview { .. }
         | Popup::RenameReview { .. }
         | Popup::DupeReview { .. }
         | Popup::OpQueue { .. }
@@ -5288,9 +5216,9 @@ fn draw_simple_dialog(
             (tr(lang, "Yes", "はい"), ZoneKind::Enter),
             (tr(lang, "No", "いいえ"), ZoneKind::Esc),
         ],
-        Popup::ConfirmElevate { .. } => vec![
-            (tr(lang, "Retry as admin", "管理者として再試行"), ZoneKind::Enter),
-            (tr(lang, "Cancel", "取消"), ZoneKind::Esc),
+        Popup::ConfirmRetry { .. } => vec![
+            (tr(lang, "Yes", "はい"), ZoneKind::Enter),
+            (tr(lang, "No", "いいえ"), ZoneKind::Esc),
         ],
         Popup::AiShellConfirm { .. } => vec![
             (tr(lang, "Insert", "入力"), ZoneKind::Enter),
@@ -6303,20 +6231,10 @@ fn draw_find_results(
     lang: Lang,
 ) {
     let accent = popup_accent(popup);
-    let Popup::FindResults { hits, cursor, scroll, by_ai } = popup else { return };
-    let by_ai = *by_ai;
+    let Popup::FindResults { hits, cursor, scroll } = popup else { return };
     let w = 96u16.min(area.width.saturating_sub(2));
     let h = area.height.saturating_sub(4).max(8);
-    // The AI's semantic search lands in this same list; name it for the menu
-    // item that produced it rather than for the `:find` state, which belongs to
-    // whatever sweep ran last.
-    let title = if by_ai {
-        if lang == Lang::Ja {
-            format!(" セマンティック検索 — {} 件 ", hits.len())
-        } else {
-            format!(" Semantic search — {} found ", hits.len())
-        }
-    } else {
+    let title = {
         match find {
             Some((query, root, done, mode)) => {
                 let verb = match mode {
@@ -6714,7 +6632,6 @@ fn dim_of(c: Color) -> Color {
     let mix = |a: u8, b: u8| ((a as u16 * 11 + b as u16 * 9) / 20) as u8;
     text_tone(Color::Rgb(mix(r, br), mix(g, bg_), mix(b, bb)), bg)
 }
-
 
 /// A shade of the current surface, `amount` steps away from it.
 ///

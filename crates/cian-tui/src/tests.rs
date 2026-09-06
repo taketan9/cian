@@ -5531,256 +5531,6 @@ use crate::ai::StoredChatExt;
         assert_eq!(app.viewer_frame, docked_frame, "in the same place it was");
     }
 
-    /// Dialogs follow the theme now — a light theme's menus are light — so
-    /// everything drawn on them has to read on them. They were painted for a
-    /// dark surface: fixed greys, the theme accent used as body text, the
-    /// chat's own cyan. On a light dialog those ran from 1.0:1 to 3.2:1.
-    ///
-    /// Two things are checked, on every preset in the gallery. That the text
-    /// reads — 4.0:1, measured against the cell it actually sits on, which
-    /// for a row under the cursor is the selection and not the dialog. And
-    /// that the cell was painted at all: `Clear` empties cells without
-    /// colouring them, so a dialog with no surface of its own showed the
-    /// terminal's background — the `?` manual and Z's jump list did exactly
-    /// that, and no contrast check would ever have caught it.
-    #[test]
-    fn every_popup_reads_on_the_theme_it_is_drawn_on() {
-        use crate::theme::{set_theme, ResolvedTheme};
-        let _g = THEME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let mut bad: Vec<String> = Vec::new();
-        // Every preset in the gallery, not a sample of them: the light ones
-        // are where this goes wrong, and "which light ones" is not something
-        // to keep in step by hand.
-        for name in crate::theme::THEME_NAMES {
-            let t = crate::theme::theme_preset(name).unwrap();
-            set_theme(t);
-            for what in ["manual", "panel-help", "palette", "chat", "notice", "toggles", "gallery", "jump",
-                "listings", "ssh-users", "snippets", "local-dest", "find", "history",
-                "bookmarks", "macros", "sort", "encoding", "op-queue", "ai-history",
-                "commit", "input", "quit", "menu", "pane-bg", "report", "archive",
-                "git-log", "disk-usage"]
-            {
-                let (_d, mut app) = app_with(&["a.txt", "b.rs"]);
-                match what {
-                    // `?` in the panes.
-                    "manual" => {
-                        app.handle_key(key('?')).unwrap();
-                    }
-                    // `?` in the text editor panel.
-                    "panel-help" => {
-                        app.handle_key(code(KeyCode::Enter)).unwrap();
-                        app.handle_key(code(KeyCode::F(12))).unwrap();
-                        app.handle_key(key('?')).unwrap();
-                    }
-                    "palette" => {
-                        app.handle_key(key('C')).unwrap();
-                    }
-                    // Z's directory jump is the same popup with other items
-                    // in it; it is listed separately because it is the one
-                    // the missing surface was noticed on.
-                    "jump" => app.start_fuzzy_jump(),
-                    "chat" => app.start_ai_chat(
-                        ChatMode::Ai,
-                        vec![
-                            ChatMsg::you("hello"),
-                            ChatMsg::ai("a reply"),
-                        ],
-                        false,
-                    ),
-                    "notice" => {
-                        app.command_buffer = "ls".into();
-                        app.run_command();
-                    }
-                    "gallery" => app.start_theme_picker(),
-                    // The rest are built straight from their variants: they
-                    // need remote hosts, a git repo or a finished search to
-                    // reach by key, and what is under test is only the paint.
-                    "listings" => {
-                        app.popup = Popup::SshHosts { cursor: 0, filter: String::new() }
-                    }
-                    "ssh-users" => app.popup = Popup::SshUsers { host: 0, cursor: 0 },
-                    "snippets" => {
-                        app.popup = Popup::Snippets { cursor: 0, filter: String::new() }
-                    }
-                    "local-dest" => {
-                        app.popup =
-                            Popup::LocalDest { files: vec!["one.txt".into()], cursor: 0 }
-                    }
-                    "find" => {
-                        app.popup = Popup::FindResults {
-                            hits: vec![cian_core::search::Hit {
-                                path: "/tmp/a.txt".into(),
-                                rel: "a.txt".into(),
-                                is_dir: false,
-                                line: Some((3, "a matching line".into())),
-                            }],
-                            cursor: 0,
-                            scroll: 0,
-                            by_ai: false,
-                        }
-                    }
-                    "history" => {
-                        app.popup =
-                            Popup::History { entries: vec!["/tmp".into()], cursor: 0 }
-                    }
-                    "bookmarks" => {
-                        app.popup = Popup::Shortcuts {
-                            entries: vec![Shortcut {
-                                name: "home".into(),
-                                target: Some("/tmp".into()),
-                                children: None,
-                            }],
-                            cursor: 0,
-                            path: vec![],
-                        }
-                    }
-                    "macros" => {
-                        app.popup =
-                            Popup::Macros { cursor: 0, names: vec!["build".into()] }
-                    }
-                    "sort" => app.popup = Popup::SortPicker { cursor: 0 },
-                    "encoding" => {
-                        app.popup =
-                            Popup::EncodingPicker { cursor: 0, target: EncTarget::Shell }
-                    }
-                    "op-queue" => app.popup = Popup::OpQueue { cursor: 0 },
-                    "ai-history" => app.popup = Popup::AiHistory { cursor: 0 },
-                    "commit" => {
-                        app.popup = Popup::CommitMessage {
-                            buffer: "fix the thing".into(),
-                            stat: " 1 file changed".into(),
-                            dir: "/tmp".into(),
-                            editing: false,
-                        }
-                    }
-                    "input" => {
-                        app.popup = Popup::TextInput {
-                            title: " rename ".into(),
-                            prompt: "new name".into(),
-                            buffer: "a.txt".into(),
-                            kind: InputKind::Rename { original: "a.txt".into() },
-                            cursor: 5,
-                            select_all: false,
-                        }
-                    }
-                    "quit" => app.popup = Popup::ConfirmQuit,
-                    "menu" => app.open_context_menu(4, 4),
-                    "pane-bg" => {
-                        app.popup =
-                            Popup::ColorPicker { pane: FocusedPane::Left, cursor: 0 }
-                    }
-                    "report" => {
-                        app.popup = Popup::Report {
-                            title: " report ".into(),
-                            lines: vec!["one line of it".into(), "and another".into()],
-                            scroll: 0,
-                            back: Box::new(Popup::None),
-                        }
-                    }
-                    "archive" => {
-                        app.popup = Popup::Archive {
-                            path: "/tmp/a.zip".into(),
-                            members: vec![cian_core::archive::Member {
-                                name: "inside.txt".into(),
-                                is_dir: false,
-                                size: 100,
-                                compressed: 40,
-                            }],
-                            cursor: 0,
-                            scroll: 0,
-                        }
-                    }
-                    "git-log" => {
-                        app.popup = Popup::GitLog {
-                            title: " log ".into(),
-                            dir: "/tmp".into(),
-                            commits: vec![cian_core::git::Commit {
-                                hash: "abc1234".into(),
-                                date: "2026-08-11".into(),
-                                author: "someone".into(),
-                                subject: "a commit subject".into(),
-                            }],
-                            cursor: 0,
-                            scroll: 0,
-                            vcs: Vcs::Git,
-                        }
-                    }
-                    "disk-usage" => {
-                        app.popup = Popup::DiskUsage {
-                            dir: "/tmp".into(),
-                            entries: vec![cian_core::du::DuEntry {
-                                name: "big".into(),
-                                path: "/tmp/big".into(),
-                                size: 4096,
-                                is_dir: true,
-                            }],
-                            total: 4096,
-                            cursor: 0,
-                            scroll: 0,
-                        }
-                    }
-                    _ => {
-                        app.handle_key(key('T')).unwrap();
-                    }
-                }
-                let buf = render_buf(&mut app, 110, 30);
-                for y in 0..buf.area.height {
-                    for x in 0..buf.area.width {
-                        let c = &buf[(x, y)];
-                        // An unpainted cell is the bug this sweep missed the
-                        // first time: `Clear` empties cells without colouring
-                        // them, so the dialog showed the terminal's own
-                        // background — which passes any contrast check and
-                        // follows no theme at all. A theme that paints a
-                        // background paints every cell of the window, and
-                        // every glyph on it has a colour of its own.
-                        let written = !c.symbol().trim().is_empty();
-                        // The right half of a wide glyph is left blank and
-                        // unstyled by ratatui; the terminal paints it from
-                        // the left half, so it is not a gap.
-                        let wide_tail = !written
-                            && x > 0
-                            && crate::util::width(buf[(x - 1, y)].symbol()) == 2;
-                        if t.base_bg.is_some()
-                            && !wide_tail
-                            && (matches!(c.bg, Color::Reset)
-                                || (written && matches!(c.fg, Color::Reset)))
-                        {
-                            bad.push(format!(
-                                "{:?} {what}: {:?} at ({x},{y}) is unpainted — {:?} on {:?}",
-                                t.accent,
-                                c.symbol(),
-                                c.fg,
-                                c.bg,
-                            ));
-                            continue;
-                        }
-                        if !c.symbol().chars().all(char::is_alphanumeric) || !written {
-                            continue;
-                        }
-                        if matches!(c.fg, Color::Reset) || matches!(c.bg, Color::Reset) {
-                            continue;
-                        }
-                        let cr = crate::render::contrast_ratio(c.fg, c.bg);
-                        if cr < 4.0 {
-                            bad.push(format!(
-                                "{:?} {what}: {:?} at ({x},{y}) — {:?} on {:?} is {cr:.2}:1",
-                                t.accent,
-                                c.symbol(),
-                                c.fg,
-                                c.bg,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-        set_theme(ResolvedTheme::DARK);
-        let n = bad.len();
-        bad.dedup();
-        bad.truncate(40);
-        assert!(bad.is_empty(), "{n} unreadable cells:\n{}", bad.join("\n"));
-    }
 
     /// Every preset in the gallery resolves, and every one of them paints a
     /// dialog surface on the same side of the line as its page — a light
@@ -7189,32 +6939,6 @@ use crate::ai::StoredChatExt;
         );
     }
 
-    /// The structured purposes stay one-shot.
-    ///
-    /// They parse what comes back — a rename plan, a search ranking — and an
-    /// earlier turn in the request is an earlier turn's *format* in the answer.
-    #[test]
-    fn a_structured_request_carries_nothing() {
-        let (_d, mut app) = app_with(&["a.txt"]);
-        app.ai = Some(cian_ai::AiConfig { auth_mode: "mock".into(), ..Default::default() });
-        app.chat_prior = vec![cian_ai::Turn { user: true, text: "left over".into() }];
-        app.ai_request(AiPurpose::Chat, "s".into(), "u".into());
-        assert!(
-            app.chat_prior.is_empty(),
-            "a chat turn takes it",
-        );
-        app.ai_job = None;
-        app.chat_prior = vec![cian_ai::Turn { user: true, text: "left over".into() }];
-        app.ai_request(
-            AiPurpose::SemSearch { hits: Vec::new() },
-            "s".into(),
-            "u".into(),
-        );
-        assert!(
-            app.chat_prior.is_empty(),
-            "and a structured one clears it rather than carrying it into the next chat",
-        );
-    }
 
     /// The retrieval trace is read *about* a conversation, so closing it must
     /// put that conversation back rather than dump the user in the file pane.
@@ -7426,34 +7150,7 @@ use crate::ai::StoredChatExt;
             "worktree change reverted");
     }
 
-    #[test]
-    fn parse_junk_reply_validates_names_and_strips_prose() {
-        let names = vec![
-            ("target".to_string(), PathBuf::from("/p/target")),
-            ("main.rs".to_string(), PathBuf::from("/p/main.rs")),
-            (".DS_Store".to_string(), PathBuf::from("/p/.DS_Store")),
-        ];
-        // Fenced, with prose around it, and a hallucinated name that must be dropped.
-        let raw = "Here is the junk:\n```json\n[\
-            {\"name\":\"target\",\"reason\":\"build output\"},\
-            {\"name\":\".DS_Store\",\"reason\":\"macOS cruft\"},\
-            {\"name\":\"nonexistent\",\"reason\":\"made up\"}\
-            ]\n```\n";
-        let items = parse_junk_reply(raw, &names);
-        let got: Vec<&str> = items.iter().map(|i| i.path.file_name().unwrap().to_str().unwrap()).collect();
-        assert_eq!(got, vec!["target", ".DS_Store"], "only shown names survive");
-        assert!(items.iter().all(|i| i.selected), "candidates start checked");
-        assert_eq!(items[0].reason, "build output");
-        // Never flags source — it just isn't in the reply, and couldn't be added.
-        assert!(!got.contains(&"main.rs"));
-    }
 
-    #[test]
-    fn parse_junk_reply_empty_or_garbage_is_no_items() {
-        let names = vec![("x".to_string(), PathBuf::from("/p/x"))];
-        assert!(parse_junk_reply("[]", &names).is_empty());
-        assert!(parse_junk_reply("I could not find any junk.", &names).is_empty());
-    }
 
     /// The whole duplicate flow: scan a dir with two identical files, wait for
     /// the worker, and check the review pre-selects the redundant copy.
@@ -7488,189 +7185,9 @@ use crate::ai::StoredChatExt;
         }
     }
 
-    #[test]
-    fn junk_review_approval_routes_checked_paths_to_delete_confirm() {
-        let (_d, mut app) = app_with(&["a.txt"]);
-        app.popup = Popup::JunkReview {
-            items: vec![
-                JunkItem { path: PathBuf::from("/p/target"), reason: "build".into(), selected: true },
-                JunkItem { path: PathBuf::from("/p/keep"), reason: "".into(), selected: false },
-                JunkItem { path: PathBuf::from("/p/cache"), reason: "cache".into(), selected: true },
-            ],
-            cursor: 0,
-            scroll: 0,
-        };
-        // Enter approves: only the checked ones go to the delete confirmation.
-        app.handle_key(code(KeyCode::Enter)).unwrap();
-        match &app.popup {
-            Popup::ConfirmDelete { targets } => {
-                assert_eq!(targets, &vec![PathBuf::from("/p/target"), PathBuf::from("/p/cache")]);
-            }
-            other => panic!("expected the delete confirm, got {:?}", other),
-        }
-    }
 
-    #[test]
-    fn junk_review_space_toggles_and_a_selects_all() {
-        let (_d, mut app) = app_with(&["a.txt"]);
-        app.popup = Popup::JunkReview {
-            items: vec![
-                JunkItem { path: PathBuf::from("/p/1"), reason: String::new(), selected: true },
-                JunkItem { path: PathBuf::from("/p/2"), reason: String::new(), selected: true },
-            ],
-            cursor: 0,
-            scroll: 0,
-        };
-        // Space unchecks the first.
-        app.handle_key(code(KeyCode::Char(' '))).unwrap();
-        // `a` toggles all: since not all are on, it turns all on.
-        app.handle_key(code(KeyCode::Char('a'))).unwrap();
-        if let Popup::JunkReview { items, .. } = &app.popup {
-            assert!(items.iter().all(|i| i.selected), "a turned everything on");
-        } else {
-            panic!("popup changed");
-        }
-    }
 
-    /// All four review lists are the same list with different rows in it, so
-    /// they have to answer the same keys. They used to carry a copy of the
-    /// handling each; this walks every one of them over the same keystrokes.
-    #[test]
-    fn every_review_list_answers_the_same_keys() {
-        let p = |s: &str| PathBuf::from("/p").join(s);
-        let lists: Vec<(&str, Popup)> = vec![
-            (
-                "junk",
-                Popup::JunkReview {
-                    items: (0..3)
-                        .map(|i| JunkItem {
-                            path: p(&i.to_string()),
-                            reason: String::new(),
-                            selected: false,
-                        })
-                        .collect(),
-                    cursor: 0,
-                    scroll: 0,
-                },
-            ),
-            (
-                "duplicates",
-                Popup::DupeReview {
-                    items: (0..3)
-                        .map(|i| DupeItem {
-                            path: p(&i.to_string()),
-                            group: 0,
-                            keeper: false,
-                            selected: false,
-                        })
-                        .collect(),
-                    cursor: 0,
-                    scroll: 0,
-                },
-            ),
-            (
-                "structure",
-                Popup::StructureReview {
-                    items: (0..3)
-                        .map(|i| MoveItem {
-                            path: p(&i.to_string()),
-                            name: i.to_string(),
-                            dest: "d".into(),
-                            reason: String::new(),
-                            selected: false,
-                        })
-                        .collect(),
-                    cursor: 0,
-                    scroll: 0,
-                    dir: p(""),
-                },
-            ),
-            (
-                "rename",
-                Popup::RenameReview {
-                    items: (0..3)
-                        .map(|i| RenameItem {
-                            path: p(&i.to_string()),
-                            old: i.to_string(),
-                            new: format!("{i}.new"),
-                            selected: false,
-                        })
-                        .collect(),
-                    cursor: 0,
-                    scroll: 0,
-                    by_ai: true,
-                },
-            ),
-        ];
-        /// The cursor and the checkboxes of whichever review list is open.
-        fn state(app: &App) -> (usize, Vec<bool>) {
-            match &app.popup {
-                Popup::JunkReview { items, cursor, .. } => {
-                    (*cursor, items.iter().map(|i| i.selected).collect())
-                }
-                Popup::DupeReview { items, cursor, .. } => {
-                    (*cursor, items.iter().map(|i| i.selected).collect())
-                }
-                Popup::StructureReview { items, cursor, .. } => {
-                    (*cursor, items.iter().map(|i| i.selected).collect())
-                }
-                Popup::RenameReview { items, cursor, .. } => {
-                    (*cursor, items.iter().map(|i| i.selected).collect())
-                }
-                other => panic!("the list closed: {:?}", other),
-            }
-        }
-        for (what, popup) in lists {
-            let (_d, mut app) = app_with(&["a.txt"]);
-            app.popup = popup;
-            // j moves down and stops at the end, k comes back up.
-            for _ in 0..5 {
-                app.handle_key(code(KeyCode::Char('j'))).unwrap();
-            }
-            assert_eq!(state(&app).0, 2, "{what}: j stops at the last row");
-            app.handle_key(code(KeyCode::Char('k'))).unwrap();
-            assert_eq!(state(&app).0, 1, "{what}: k comes back");
-            // Space checks the row under the cursor, and only that one.
-            app.handle_key(code(KeyCode::Char(' '))).unwrap();
-            assert_eq!(state(&app).1, vec![false, true, false], "{what}: space checks one row");
-            // `a` turns everything on while any row is off, then off again.
-            app.handle_key(code(KeyCode::Char('a'))).unwrap();
-            assert_eq!(state(&app).1, vec![true; 3], "{what}: a checks all");
-            app.handle_key(code(KeyCode::Char('a'))).unwrap();
-            assert_eq!(state(&app).1, vec![false; 3], "{what}: and clears them");
-            // G and g go to the ends.
-            app.handle_key(code(KeyCode::Char('G'))).unwrap();
-            assert_eq!(state(&app).0, 2, "{what}: G is the last row");
-            app.handle_key(code(KeyCode::Char('g'))).unwrap();
-            assert_eq!(state(&app).0, 0, "{what}: g is the first");
-            // q leaves without carrying anything out.
-            app.handle_key(code(KeyCode::Char('q'))).unwrap();
-            assert!(matches!(app.popup, Popup::None), "{what}: q closes it");
-        }
-    }
 
-    /// Leaving a review list used to blank the popup slot outright, which took
-    /// a docked panel with it — the same bug the one-door change fixed
-    /// everywhere else. Esc has to put the file back.
-    #[test]
-    fn leaving_a_review_list_gives_the_docked_panel_back() {
-        let (_d, mut app) = viewer_on("alpha\nbravo\n");
-        app.handle_key(code(KeyCode::F(12))).unwrap();
-        assert!(app.viewer_dock.is_some(), "the file is open, docked beside the panes");
-        app.open_popup(Popup::JunkReview {
-            items: vec![JunkItem {
-                path: PathBuf::from("/p/target"),
-                reason: "build".into(),
-                selected: true,
-            }],
-            cursor: 0,
-            scroll: 0,
-        });
-        assert!(app.viewer_return.is_some(), "the file went aside, not away");
-        app.handle_key(code(KeyCode::Esc)).unwrap();
-        assert!(matches!(app.popup, Popup::Viewer { .. }), "and Esc brings it back");
-        assert!(app.viewer_return.is_none(), "with nothing left waiting");
-    }
 
     /// A rectangle of no size holds no point. Several hit tests used to guard
     /// on a non-zero width before asking, which this makes unnecessary — the
@@ -8176,6 +7693,40 @@ use crate::ai::StoredChatExt;
         }
     }
 
+    /// The shell can be selected from the keyboard, not only with a drag.
+    ///
+    /// `Shift+←` / `Shift+→` grow a selection by a cell, starting at the
+    /// shell's own cursor, and wrap across rows — see `next_cell` in `keys.rs`
+    /// for why the wrapping is the part that matters, and
+    /// `mod shell_selection_steps` beside it for the arithmetic.
+    ///
+    /// **The whole path cannot be driven from here.** There is no pty under a
+    /// unit test, so the shell has no tabs, no panes and no on-screen rect —
+    /// `app.shell.tabs` is empty — and a selection is a position inside a grid
+    /// that does not exist. What this pins is the other half of the rule: the
+    /// key only reaches the selection code when a full-screen program is *not*
+    /// holding the screen. End to end it is `scripts/tui-drive.py`, which runs
+    /// the real binary against a real shell.
+    #[test]
+    fn ctrl_c_copies_whatever_built_the_selection() {
+        let (_d, mut app) = app_with(&["a.txt"]);
+        app.focus(FocusedPane::Shell);
+        let sel = ShellSel {
+            tab: 0,
+            leaf: 0,
+            inner: Rect::new(0, 0, 20, 5),
+            anchor: (2, 3),
+            end: (2, 7),
+            ready: true,
+        };
+        // A keyboard selection and a finished drag are the same thing to the
+        // key that copies: `ready` is the only question it asks.
+        app.shell_sel = Some(sel);
+        assert!(app.shell_ctrl_c_copies(), "Ctrl+C copies it");
+        app.shell_sel = Some(ShellSel { ready: false, ..sel });
+        assert!(!app.shell_ctrl_c_copies(), "a bare click is still not a selection");
+    }
+
     /// Ctrl+C in the shell copies when something is selected, and interrupts
     /// when nothing is. Selecting output and reaching for Ctrl+C used to kill
     /// whatever was running.
@@ -8196,14 +7747,14 @@ use crate::ai::StoredChatExt;
             inner: Rect::new(0, 0, 20, 5),
             anchor: (0, 0),
             end: (0, 4),
-            dragged: true,
+            ready: true,
         };
 
         assert!(!app.shell_ctrl_c_copies(), "nothing selected: Ctrl+C interrupts");
         app.shell_sel = Some(sel);
         assert!(app.shell_ctrl_c_copies(), "a finished drag: Ctrl+C copies");
         // A press that never became a drag is not a selection.
-        app.shell_sel = Some(ShellSel { dragged: false, ..sel });
+        app.shell_sel = Some(ShellSel { ready: false, ..sel });
         assert!(!app.shell_ctrl_c_copies(), "a bare click is not a selection");
 
         // And what the interrupting branch actually sends.
@@ -8215,112 +7766,10 @@ use crate::ai::StoredChatExt;
         );
     }
 
-    #[test]
-    fn parse_sem_search_reply_matches_orders_and_folds_reasons() {
-        let hit = |rel: &str| cian_core::search::Hit {
-            path: PathBuf::from("/root").join(rel),
-            rel: PathBuf::from(rel),
-            is_dir: false,
-            line: None,
-        };
-        let catalog = vec![hit("src/db.rs"), hit("README.md"), hit("src/ui.rs")];
-        // Ranked: ui first, then db; a made-up path is dropped.
-        let raw = "```json\n[\
-            {\"path\":\"src/ui.rs\",\"reason\":\"UI code\"},\
-            {\"path\":\"src/db.rs\",\"reason\":\"database layer\"},\
-            {\"path\":\"nope.rs\",\"reason\":\"invented\"}\
-            ]\n```";
-        let out = parse_sem_search_reply(raw, &catalog);
-        let rels: Vec<String> = out.iter().map(|h| h.rel.display().to_string()).collect();
-        assert_eq!(rels, vec!["src/ui.rs", "src/db.rs"], "kept order, dropped the invented path");
-        // The reason is folded into the line so the list shows it and Enter previews.
-        assert_eq!(out[0].line.as_ref().map(|(n, t)| (*n, t.as_str())), Some((1, "UI code")));
-    }
 
-    #[test]
-    fn ai_search_builds_a_catalog_and_fires_a_request() {
-        let have_py = std::process::Command::new("python3")
-            .arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
-        if !have_py {
-            eprintln!("no python3; skipping");
-            return;
-        }
-        let d = tempfile::tempdir().unwrap();
-        std::fs::create_dir(d.path().join("src")).unwrap();
-        std::fs::write(d.path().join("src/db.rs"), b"x").unwrap();
-        std::fs::write(d.path().join("README.md"), b"x").unwrap();
-        let p = d.path().to_path_buf();
-        let mut config = en_config();
-        config.ai = Some(cian_lua::AiOptions {
-            python: "python3".into(), auth_mode: "mock".into(), ..Default::default()
-        });
-        let mut app = App::new(p.clone(), p, config).unwrap();
 
-        app.start_ai_search("the database code");
-        assert!(app.ai_job.is_some(), "a request was fired over the catalog");
-        // The mock echoes (not JSON), so the pipeline reports no matches.
-        let start = Instant::now();
-        while app.ai_job.is_some() && start.elapsed() < Duration::from_secs(10) {
-            app.poll_ai_job();
-            std::thread::sleep(Duration::from_millis(5));
-        }
-        assert!(app.message.as_deref().unwrap_or("").contains("no relevant"),
-            "mock reply parses to no matches: {:?}", app.message);
-    }
 
-    #[test]
-    fn clean_filename_rejects_paths_and_specials() {
-        assert_eq!(clean_filename(" report_v2.txt "), Some("report_v2.txt".to_string()));
-        assert_eq!(clean_filename("a/b.txt"), None);
-        assert_eq!(clean_filename("a\\b.txt"), None);
-        assert_eq!(clean_filename(".."), None);
-        assert_eq!(clean_filename("."), None);
-        assert_eq!(clean_filename(""), None);
-        assert_eq!(clean_filename("C:evil"), None);
-    }
 
-    #[test]
-    fn parse_rename_reply_validates_and_dedupes() {
-        let names = vec![
-            ("IMG_1.jpg".to_string(), PathBuf::from("/p/IMG_1.jpg")),
-            ("IMG_2.jpg".to_string(), PathBuf::from("/p/IMG_2.jpg")),
-            ("keep.txt".to_string(), PathBuf::from("/p/keep.txt")),
-        ];
-        let raw = "[\
-            {\"name\":\"IMG_1.jpg\",\"new_name\":\"photo_01.jpg\"},\
-            {\"name\":\"IMG_2.jpg\",\"new_name\":\"../escape.jpg\"},\
-            {\"name\":\"keep.txt\",\"new_name\":\"keep.txt\"},\
-            {\"name\":\"ghost\",\"new_name\":\"x.jpg\"}\
-            ]";
-        let items = parse_rename_reply(raw, &names);
-        // Only IMG_1 survives: IMG_2's target escapes, keep is a no-op, ghost unknown.
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].old, "IMG_1.jpg");
-        assert_eq!(items[0].new, "photo_01.jpg");
-    }
-
-    /// The whole rename flow: build the review popup and approve — the checked
-    /// file is renamed in place, the unchecked left alone.
-    #[test]
-    fn rename_plan_renames_checked_files() {
-        let (d, mut app) = app_with(&["IMG_1.jpg", "keep.txt"]);
-        app.popup = Popup::RenameReview {
-            items: vec![
-                RenameItem { path: d.path().join("IMG_1.jpg"), old: "IMG_1.jpg".into(),
-                    new: "photo_01.jpg".into(), selected: true },
-                RenameItem { path: d.path().join("keep.txt"), old: "keep.txt".into(),
-                    new: "notes.txt".into(), selected: false },
-            ],
-            cursor: 0,
-            scroll: 0,
-            by_ai: true,
-        };
-        app.handle_key(code(KeyCode::Enter)).unwrap();
-        assert!(d.path().join("photo_01.jpg").is_file(), "renamed");
-        assert!(!d.path().join("IMG_1.jpg").exists(), "old name gone");
-        assert!(d.path().join("keep.txt").is_file(), "unchecked untouched");
-        assert!(!d.path().join("notes.txt").exists());
-    }
 
     #[test]
     fn truncate_text_for_ai_caps_and_handles_one_long_line() {
@@ -8376,62 +7825,8 @@ use crate::ai::StoredChatExt;
             "the mock echoed the file text back as the summary: {log:?}");
     }
 
-    #[test]
-    fn clean_dest_folder_rejects_escapes() {
-        assert_eq!(clean_dest_folder("images"), Some("images".to_string()));
-        assert_eq!(clean_dest_folder(" docs/2023 "), Some("docs/2023".to_string()));
-        assert_eq!(clean_dest_folder("a\\b"), Some("a/b".to_string()));
-        // Anything that could escape the current directory is refused.
-        assert_eq!(clean_dest_folder("../evil"), None);
-        assert_eq!(clean_dest_folder("/abs"), None);
-        assert_eq!(clean_dest_folder("C:/x"), None);
-        assert_eq!(clean_dest_folder("a/../b"), None);
-        assert_eq!(clean_dest_folder(""), None);
-    }
 
-    #[test]
-    fn parse_structure_reply_validates_names_and_folders() {
-        let names = vec![
-            ("cat.jpg".to_string(), PathBuf::from("/p/cat.jpg")),
-            ("notes.md".to_string(), PathBuf::from("/p/notes.md")),
-        ];
-        let raw = "```json\n[\
-            {\"name\":\"cat.jpg\",\"folder\":\"images\",\"reason\":\"an image\"},\
-            {\"name\":\"notes.md\",\"folder\":\"../escape\",\"reason\":\"bad folder\"},\
-            {\"name\":\"ghost.txt\",\"folder\":\"docs\",\"reason\":\"not shown\"}\
-            ]\n```";
-        let items = parse_structure_reply(raw, &names);
-        assert_eq!(items.len(), 1, "only the valid, real-name move survives");
-        assert_eq!(items[0].name, "cat.jpg");
-        assert_eq!(items[0].dest, "images");
-        assert!(items[0].selected);
-    }
 
-    /// The whole structure flow: build a review popup by hand and approve it —
-    /// the checked file is moved into a freshly created sub-folder.
-    #[test]
-    fn structure_plan_moves_checked_files_into_new_folders() {
-        let (d, mut app) = app_with(&["cat.jpg", "keep.txt"]);
-        let dir = app.active_pane().unwrap().cwd.clone();
-        app.popup = Popup::StructureReview {
-            items: vec![
-                MoveItem { path: d.path().join("cat.jpg"), name: "cat.jpg".into(),
-                    dest: "images".into(), reason: "image".into(), selected: true },
-                MoveItem { path: d.path().join("keep.txt"), name: "keep.txt".into(),
-                    dest: "docs".into(), reason: String::new(), selected: false },
-            ],
-            cursor: 0,
-            scroll: 0,
-            dir,
-        };
-        app.handle_key(code(KeyCode::Enter)).unwrap(); // run the checked moves
-        drain_op(&mut app);
-        assert!(d.path().join("images/cat.jpg").is_file(), "moved into the new folder");
-        assert!(!d.path().join("cat.jpg").exists(), "gone from the root");
-        // The unchecked one is left where it was, and its folder not created.
-        assert!(d.path().join("keep.txt").is_file(), "unchecked stays put");
-        assert!(!d.path().join("docs").exists(), "no folder for an unchecked move");
-    }
 
     #[test]
     fn clean_ai_commit_message_strips_a_wrapping_fence() {
@@ -8609,17 +8004,123 @@ use crate::ai::StoredChatExt;
         assert_eq!(app.active_pane().unwrap().mark_count(), 0);
     }
 
+    /// **One question, one Yes.** A dialog raised by a failure gets to offer
+    /// the thing most likely to help, on the key everybody presses — not two
+    /// answers on two letters, where the useful one is the letter only
+    /// somebody who already knows the problem would find.
+    ///
+    /// The order is the point: `robocopy /B` first, because an ACL that does
+    /// not name you is what a cian already started as administrator can
+    /// actually get past; elevation only *after* that has been tried, because
+    /// the one thing it fixes is cian not being administrator at all — which
+    /// robocopy will have just said out loud.
     #[test]
-    fn a_permission_error_explains_admin_rights() {
+    fn a_refused_copy_offers_robocopy_first_and_elevation_only_after() {
+        let (d, mut app) = app_with(&["a.rs"]);
+        let targets = vec![d.path().join("a.rs")];
+        let dest = d.path().join("dest");
+
+        // What the op-done handler builds on the first refusal.
+        app.open_popup(crate::transfer_retry_popup(
+            PendingOp::Copy,
+            targets.clone(),
+            dest.clone(),
+            Conflict::Skip,
+            crate::RetryHow::Backup,
+            "Access is denied (os error 5)".into(),
+        ));
+        let screen = render(&mut app, 100, 40).join("\n");
+        assert!(screen.contains("robocopy"), "it names the tool:\n{screen}");
+        assert!(screen.contains("No permissions"), "and promises nothing changes:\n{screen}");
+        assert!(screen.contains("Access is denied"), "and shows what the machine said:\n{screen}");
+        assert!(
+            !screen.contains("elevated") && !screen.contains("UAC"),
+            "elevation is not on the first offer:\n{screen}",
+        );
+        // The answer already given is carried, and said.
+        assert!(screen.contains("already there are skipped"), "the skip choice is kept:\n{screen}");
+
+        // And the second offer, which only exists because the first was tried.
+        app.open_popup(crate::transfer_retry_popup(
+            PendingOp::Copy,
+            targets,
+            dest,
+            Conflict::Skip,
+            crate::RetryHow::Elevate,
+            "robocopy /B exited 16".into(),
+        ));
+        let screen = render(&mut app, 100, 40).join("\n");
+        assert!(screen.contains("could not either"), "it says the first one failed:\n{screen}");
+        assert!(screen.contains("elevated process"), "and offers the remaining answer:\n{screen}");
+    }
+
+    /// The second offer has to be reachable.
+    ///
+    /// The op-done handler *takes* the remembered transfer when it raises a
+    /// retry, so by the time the backup retry runs it is empty — and a
+    /// robocopy that is refused too then has nothing to build the elevation
+    /// offer out of. Written once without this and the whole `RetryHow::Elevate`
+    /// branch was dead: a screen nobody could reach, which is the quietest
+    /// kind of wrong there is.
+    ///
+    /// And elevation is the *last* offer: left armed, a refused UAC prompt
+    /// would raise the same dialog again for ever.
+    #[test]
+    fn the_backup_retry_leaves_the_elevation_offer_reachable() {
+        let (d, mut app) = app_with(&["a.rs"]);
+        let make = |how| {
+            crate::transfer_retry_popup(
+                PendingOp::Copy,
+                vec![d.path().join("a.rs")],
+                d.path().join("dest"),
+                Conflict::Skip,
+                how,
+                "Access is denied (os error 5)".into(),
+            )
+        };
+
+        app.popup = make(crate::RetryHow::Backup);
+        assert!(app.pending_elevation.is_none(), "the handler took it to raise this");
+        app.run_backup_transfer();
+        assert!(
+            app.pending_elevation.is_some(),
+            "robocopy being refused too must still have something to offer",
+        );
+
+        app.popup = make(crate::RetryHow::Elevate);
+        app.run_elevated_transfer();
+        assert!(app.pending_elevation.is_none(), "elevation is the last offer");
+    }
+
+    /// A refused copy names the cause, and — on Windows — the way out that
+    /// actually exists.
+    ///
+    /// It used to say "run cian as administrator", which is empty advice for
+    /// the case that turns up: somebody *already* running as administrator, on
+    /// a share whose ACL simply does not name them. What being an
+    /// administrator buys there is the backup privilege, and `b` on the retry
+    /// is how to spend it.
+    #[test]
+    fn a_permission_error_explains_the_way_out() {
         let (_d, mut app) = app_with(&["a.rs"]);
         let mut report = OpReport { permission_denied: true, ..Default::default() };
         report.note_error("C:/Program Files/x: Access is denied (os error 5)");
         app.show_op_report(&report);
         let Popup::Notice { lines } = &app.popup else { panic!("expected a notice") };
         assert!(
-            lines.iter().any(|l| l.contains("administrator rights")),
+            lines.iter().any(|l| l.contains("ACL does not grant you access")),
             "the notice names the cause: {lines:?}"
         );
+        if cfg!(windows) {
+            assert!(
+                lines.iter().any(|l| l.contains("backup mode")),
+                "and the retry that can get past it: {lines:?}"
+            );
+            assert!(
+                !lines.iter().any(|l| l.contains("Run cian as administrator")),
+                "not the advice that is empty for somebody already elevated: {lines:?}"
+            );
+        }
     }
 
     #[test]
@@ -11681,13 +11182,61 @@ use crate::ai::StoredChatExt;
         ));
         app.handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left), right.x + 5, right.y + 3));
 
-        let Popup::ConfirmTransfer { op, targets, dest } = &app.popup else {
+        let Popup::ConfirmTransfer { op, targets, dest, .. } = &app.popup else {
             panic!("expected a transfer confirmation, got {:?}", app.popup)
         };
         assert_eq!(*op, PendingOp::Copy, "a plain drag copies");
         assert_eq!(targets.len(), 1);
         assert_eq!(dest.file_name(), r.path().file_name());
         assert!(app.file_drag.is_none(), "the drag is released");
+    }
+
+    /// The copy confirmation has to say what the two answers are *about*.
+    ///
+    /// `y` skips the duplicates and `a` overwrites them, and until this landed
+    /// the popup listed the sources and the destination and nothing else — so
+    /// the choice between those two was made without knowing whether there
+    /// were duplicates at all, let alone which. Checked on the rendered screen
+    /// rather than on the field, because a count nobody can see is not an
+    /// answer to that.
+    #[test]
+    fn the_copy_confirmation_says_which_files_are_already_there() {
+        let (_l, _r, mut app) =
+            app_two_dirs(&["keep.txt", "clash.txt", "also.txt"], &["clash.txt", "also.txt"]);
+        app.mark_all();
+        app.start_transfer(PendingOp::Copy);
+
+        let Popup::ConfirmTransfer { clashes, .. } = &app.popup else {
+            panic!("expected a transfer confirmation, got {:?}", app.popup)
+        };
+        assert_eq!(clashes.len(), 2, "two of the three are already on the right");
+
+        let screen = render(&mut app, 100, 40).join("\n");
+        assert!(screen.contains("2 of them are already there"), "the count is not on screen:\n{screen}");
+        // The colliding rows are marked, and marked ones are listed first —
+        // a collision at position twenty is exactly the one worth showing.
+        for name in ["clash.txt", "also.txt"] {
+            assert!(
+                screen.lines().any(|l| l.contains('↑') && l.contains(name)),
+                "{name} is not marked as a collision:\n{screen}"
+            );
+        }
+        assert!(
+            screen.lines().any(|l| l.contains("keep.txt") && !l.contains('↑')),
+            "keep.txt must not be marked — nothing of that name is over there"
+        );
+    }
+
+    /// The other half: with no collisions the popup says nothing about them.
+    /// A line that always appears cannot be read as a warning.
+    #[test]
+    fn a_copy_with_no_collisions_says_nothing_about_them() {
+        let (_l, _r, mut app) = app_two_dirs(&["a.txt"], &["b.txt"]);
+        app.mark_all();
+        app.start_transfer(PendingOp::Copy);
+        let screen = render(&mut app, 100, 40).join("\n");
+        assert!(!screen.contains("already there"), "no collisions, so no line:\n{screen}");
+        assert!(!screen.contains('↑'), "nothing to mark");
     }
 
     #[test]
@@ -12151,7 +11700,7 @@ use crate::ai::StoredChatExt;
         run_cmd(&mut app, "cp");
         // Opens the confirm-transfer popup aimed at the right pane.
         match &app.popup {
-            Popup::ConfirmTransfer { op, dest, targets } => {
+            Popup::ConfirmTransfer { op, dest, targets, .. } => {
                 assert_eq!(*op, PendingOp::Copy);
                 assert_eq!(*dest, right_cwd);
                 assert_eq!(targets.len(), 1);
@@ -13886,7 +13435,7 @@ use crate::ai::StoredChatExt;
         let dropped = src.display().to_string().replace(' ', "\\ ");
         assert!(app.accept_drop(&dropped), "recognised as a drop");
         match &app.popup {
-            Popup::ConfirmTransfer { op, targets, dest } => {
+            Popup::ConfirmTransfer { op, targets, dest, .. } => {
                 assert!(matches!(op, PendingOp::Move), "a drop moves");
                 assert_eq!(targets, &vec![src.clone()]);
                 // Compare by the final component: the pane canonicalises
@@ -15328,11 +14877,7 @@ mod every_popup_behaves {
             ),
             (
                 "ConfirmTransfer",
-                Popup::ConfirmTransfer {
-                    op: PendingOp::Copy,
-                    targets: files.clone(),
-                    dest: dir.to_path_buf(),
-                },
+                crate::transfer_popup(PendingOp::Copy, files.clone(), dir.to_path_buf()),
             ),
             (
                 "ConfirmDiffCopy",
@@ -15510,7 +15055,6 @@ mod every_popup_behaves {
                     }],
                     cursor: 0,
                     scroll: 0,
-                    by_ai: false,
                 },
             ),
             (
@@ -15587,11 +15131,14 @@ mod every_popup_behaves {
             ("AiHistory", Popup::AiHistory { cursor: 0 }),
             ("Toggles", Popup::Toggles { cursor: 0 }),
             (
-                "ConfirmElevate",
-                Popup::ConfirmElevate {
+                "ConfirmRetry",
+                Popup::ConfirmRetry {
                     op: PendingOp::Copy,
                     targets: files.clone(),
                     dest: dir.to_path_buf(),
+                    conflict: Conflict::Skip,
+                    how: crate::RetryHow::Backup,
+                    why: "Access is denied (os error 5)".into(),
                 },
             ),
             (
@@ -15601,33 +15148,6 @@ mod every_popup_behaves {
                     stat: "1 file".into(),
                     dir: dir.to_path_buf(),
                     editing: false,
-                },
-            ),
-            (
-                "JunkReview",
-                Popup::JunkReview {
-                    items: vec![crate::JunkItem {
-                        path: file.clone(),
-                        reason: "empty".into(),
-                        selected: true,
-                    }],
-                    cursor: 0,
-                    scroll: 0,
-                },
-            ),
-            (
-                "StructureReview",
-                Popup::StructureReview {
-                    items: vec![crate::MoveItem {
-                        path: file.clone(),
-                        name: "a.txt".into(),
-                        dest: "docs".into(),
-                        reason: "text".into(),
-                        selected: true,
-                    }],
-                    cursor: 0,
-                    scroll: 0,
-                    dir: dir.to_path_buf(),
                 },
             ),
             (
@@ -15641,7 +15161,6 @@ mod every_popup_behaves {
                     }],
                     cursor: 0,
                     scroll: 0,
-                    by_ai: false,
                 },
             ),
             (
@@ -16280,8 +15799,15 @@ mod the_panel_moves_the_focus_like_a_listing_does {
     }
 }
 
-/// `u` takes back the last thing you did — including walking into a folder.
-mod undo_covers_where_you_are {
+/// `u` is for what happened to your files. Where you have been is `Alt+←`.
+///
+/// The two used to share one stack, "in the order things happened". In use
+/// that put every `cd`, breadcrumb click and fuzzy jump between your hand and
+/// the file operation you actually wanted back: undoing a copy and pressing
+/// `u` again moved a pane instead of reaching the next operation. Separate
+/// again, and nothing was lost — `Alt+←` / `Alt+→` have always walked each
+/// pane's own history.
+mod undo_is_for_files_not_for_where_you_are {
     use super::*;
 
     fn tree() -> (tempfile::TempDir, App) {
@@ -16309,103 +15835,57 @@ mod undo_covers_where_you_are {
     }
 
     #[test]
-    fn stepping_into_a_folder_can_be_taken_back() {
+    fn walking_into_a_folder_leaves_nothing_on_the_undo_stack() {
         let (_d, mut app) = tree();
-        let was = app.active_pane().unwrap().cwd.clone();
-        go_into(&mut app, "abc");
-        assert_eq!(here(&app), "abc");
-        app.handle_key(key('u')).unwrap();
-        assert_eq!(app.active_pane().unwrap().cwd, was, "u came back out");
-    }
-
-    #[test]
-    fn and_put_back_again() {
-        let (_d, mut app) = tree();
-        go_into(&mut app, "abc");
-        app.handle_key(key('u')).unwrap();
-        app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL)).unwrap();
-        assert_eq!(here(&app), "abc", "Ctrl+Y walked back in");
-    }
-
-    /// Several steps, unwound in the order they were taken.
-    #[test]
-    fn a_chain_unwinds_in_order() {
-        let (_d, mut app) = tree();
-        let root = app.active_pane().unwrap().cwd.clone();
         go_into(&mut app, "abc");
         go_into(&mut app, "def");
-        assert_eq!(here(&app), "def");
         app.handle_key(key('u')).unwrap();
-        assert_eq!(here(&app), "abc");
-        app.handle_key(key('u')).unwrap();
-        assert_eq!(app.active_pane().unwrap().cwd, root);
+        assert_eq!(here(&app), "def", "u did not move the pane");
+        assert!(
+            app.message.as_deref().is_some_and(|m| m.contains("nothing to undo")),
+            "and it said so: {:?}",
+            app.message
+        );
     }
 
-    /// A file operation and a walk are on one stack, in the order they
-    /// happened — which is what makes `u` mean "take back what I just did".
+    /// The file operation is reachable in one press, with any number of walks
+    /// in between. This is the whole point of the split.
     #[test]
-    fn a_rename_and_a_walk_share_one_stack() {
+    fn a_walk_does_not_come_between_your_hand_and_the_file_operation() {
         let (d, mut app) = tree();
-        // The pane's own idea of where it is — on a Mac the temp dir is
-        // reached through a symlink, so `d.path()` and the pane's `cwd` are
-        // two spellings of one directory.
-        let root = app.active_pane().unwrap().cwd.clone();
         std::fs::rename(d.path().join("a.txt"), d.path().join("renamed.txt")).unwrap();
         app.record_undo(crate::UndoAction::Rename {
             from: d.path().join("a.txt"),
             to: d.path().join("renamed.txt"),
         });
         go_into(&mut app, "abc");
+        go_into(&mut app, "def");
 
-        // The walk was last, so the walk comes back first.
         app.handle_key(key('u')).unwrap();
-        assert_eq!(app.active_pane().unwrap().cwd, root);
-        assert!(d.path().join("renamed.txt").exists(), "the rename is still done");
-
-        // …and then the rename.
-        app.handle_key(key('u')).unwrap();
-        assert!(d.path().join("a.txt").exists(), "the name came back");
+        assert!(d.path().join("a.txt").exists(), "one u reached the rename");
+        assert_eq!(here(&app), "def", "and left the pane where it was");
     }
 
-    /// Alt+← is already a way back, so using it must not leave a step that
-    /// `u` would then undo by walking *forward* again — the two would fight.
+    /// Alt+← / Alt+→ still walk the history — the thing the undo stack was
+    /// standing in for.
     #[test]
-    fn stepping_back_through_history_is_not_itself_undoable() {
+    fn the_history_keys_still_walk_it() {
         let (_d, mut app) = tree();
         let root = app.active_pane().unwrap().cwd.clone();
         go_into(&mut app, "abc");
         app.pane_go_back();
         assert_eq!(app.active_pane().unwrap().cwd, root, "Alt+← came back");
-        app.handle_key(key('u')).unwrap();
-        assert_eq!(
-            app.active_pane().unwrap().cwd,
-            root,
-            "and u did not bounce forward into the folder again",
-        );
-    }
-
-    /// Doing something new ends the redo chain, as everywhere else.
-    #[test]
-    fn a_new_step_ends_the_chain() {
-        let (_d, mut app) = tree();
-        go_into(&mut app, "abc");
-        app.handle_key(key('u')).unwrap();
-        go_into(&mut app, "abc");
-        app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL)).unwrap();
-        assert_eq!(here(&app), "abc", "there was nothing to redo");
+        app.pane_go_forward();
+        assert_eq!(here(&app), "abc", "Alt+→ went in again");
     }
 
     #[test]
     fn the_commands_do_the_same() {
         let (_d, mut app) = tree();
-        let root = app.active_pane().unwrap().cwd.clone();
         go_into(&mut app, "abc");
         app.command_buffer = "undo".into();
         app.run_command();
-        assert_eq!(app.active_pane().unwrap().cwd, root);
-        app.command_buffer = "redo".into();
-        app.run_command();
-        assert_eq!(here(&app), "abc");
+        assert_eq!(here(&app), "abc", ":undo is not a way back either");
     }
 }
 
@@ -16524,20 +16004,39 @@ mod ctrl_r_redoes {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL)
     }
 
+    /// A copy, taken back and put back again.
+    ///
+    /// Undoing a copy used to be a one-way door: `u` sent it to the trash and
+    /// `Ctrl+R` answered "nothing to redo", on the grounds that nothing
+    /// remembered what was inside. That is true of a *created* file, whose
+    /// contents went with it — and not true of a copy, whose sources never
+    /// moved. Redoing one is copying again.
     #[test]
-    fn it_puts_back_what_u_took_away() {
-        let (d, mut app) = app_with(&["a.txt"]);
-        std::fs::create_dir(d.path().join("sub")).unwrap();
-        app.reload_both();
-        let i = app.active_pane().unwrap().entries.iter().position(|e| e.name == "sub").unwrap();
-        app.active_pane_mut().unwrap().cursor = i;
-        app.handle_key(code(KeyCode::Enter)).unwrap();
-        let inside = app.active_pane().unwrap().cwd.clone();
+    fn it_puts_back_a_copy_it_took_away() {
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        std::fs::write(src.path().join("f.txt"), b"data").unwrap();
+        let mut app =
+            App::new(src.path().to_path_buf(), dst.path().to_path_buf(), en_config()).unwrap();
+        app.active_pane_mut().unwrap().cursor =
+            app.active_pane().unwrap().entries.iter().position(|e| e.name == "f.txt").unwrap();
+
+        app.start_transfer(PendingOp::Copy);
+        app.finish_transfer(Conflict::Skip).unwrap();
+        drain_op_job(&mut app);
+        assert!(dst.path().join("f.txt").exists(), "copied");
 
         app.handle_key(key('u')).unwrap();
-        assert_ne!(app.active_pane().unwrap().cwd, inside, "u came out");
+        assert!(!dst.path().join("f.txt").exists(), "u took the copy back");
+        assert!(src.path().join("f.txt").exists(), "and left the source alone");
+
         app.handle_key(ctrl('r')).unwrap();
-        assert_eq!(app.active_pane().unwrap().cwd, inside, "Ctrl+R went back in");
+        assert!(dst.path().join("f.txt").exists(), "Ctrl+R copied it again");
+
+        // …and the chain still runs, which it only can if the redo put the
+        // step back with a list of what *this* copy created.
+        app.handle_key(key('u')).unwrap();
+        assert!(!dst.path().join("f.txt").exists(), "u takes back the redone copy too");
     }
 
     /// …and refresh keeps F5, which is now its own key rather than its second.

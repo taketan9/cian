@@ -737,23 +737,74 @@ async function main() {
         // 作ったものは無い」と正しく答え、取り消しは何もしない ── 通った
         // のに何も確かめていない一周になる。空の `to/undo` を作って、
         // そこへ一本だけ写す。
+        // **シェルの範囲選択（Shift+←）。** 画面の字は一字も変わらないので、
+        // 「動かなかったキー」の物差しでは永久に黙って見える ── 選択の
+        // 長さを直接読む。窓版の選択はブラウザのもの（`Selection.modify`）。
+        ['Shift+J', 'シェルへ'], ['wait:1200', ''],
+        // **大文字の J で。** 小文字だとシェルに入らず、選択が 0 文字のまま
+        // 「窓版では効かない」と読んだ。入れたことを先に確かめる。
+        ['read:\'シェルに居る: \' + term.focused', ''],
+        ['Enter', 'プロンプトを一行進める'], ['wait:900', ''],
+        ['Shift+ArrowLeft', '一文字えらぶ'], ['wait:400', ''],
+        ['Shift+ArrowLeft', 'もう一文字'], ['wait:400', ''],
+        ['Shift+ArrowLeft', 'もう一文字'], ['wait:400', ''],
+        ['Shift+ArrowRight', '一文字戻す ── 反対向きも同じ扉'], ['wait:400', ''],
+        ['read:\'シェルの選択: \' + (window.getSelection().toString().length) + \' 文字\'', ''],
+        ['Escape', '解除 ── シェルには留まる'], ['wait:500', ''],
+        ['read:\'Esc のあと: \' + (window.getSelection().toString().length) + \' 文字 / シェルに居る=\' + term.focused', ''],
+        ['Escape', 'ファイルへ戻る'], ['wait:600', ''],
+
+        // 上書き確認は「うち何件が既に向こうにあるか」を言う。`to/` には
+        // `from/` と同じ名前が幾つも入れてあるので、マークしてコピーを出せば
+        // 必ず衝突する。**数だけでなく ↑ 印まで見る** ── 数を出しておいて
+        // どれが当たるのか言わないなら、y と a のどちらを押すかは結局
+        // 決められない。
         ['Tab', '右へ'],
         ['z', 'パスで移動'], [`type:${sand}/to`, ''], ['Enter', 'to へ'], ['wait:800', ''],
+        ['Tab', '左へ'], ['z', 'パスで移動'], [`type:${sand}/from`, ''], ['Enter', 'from へ'], ['wait:800', ''],
+        ['Ctrl+a', '全部マーク'], ['wait:400', ''],
+        ['c', '反対ペインへコピー'], ['wait:700', ''],
+        ['read:\'衝突の一行: \' + ((document.querySelector(\'#ask .body\').textContent.match(/^うち (\\d+) 件は既に/) || [])[1] || \'無し\')', ''],
+        ['read:\'↑ 印の行: \' + document.querySelector(\'#ask .body\').textContent.split(\'\\n\').filter(l=>l.startsWith(\'↑ \')).length', ''],
+        ['Esc', 'やめる'], ['wait:500', ''],
+        ['Esc', 'マークを外す'], ['wait:400', ''],
+        // **左ペインを砂場の根に戻してから次へ渡す。** 下の一連は「左は根に
+        // いて、land:from で from の行を選ぶ」前提で書かれている。ここで
+        // from の中に立ったまま渡すと land が外れ、Enter が別のものを開いて、
+        // コピーの検査が黙って 0 行を数える ── 実際に一度そうした。
+        ['z', 'パスで移動'], [`type:${sand}`, ''], ['Enter', '根へ戻る'], ['wait:800', ''],
+
+        ['Tab', '右へ'],
         ['A', 'ディレクトリを作る'], ['type:undo'], ['Enter', ''], ['wait:900', ''],
         ['land:undo', 'そこへ'], ['Enter', '入る'], ['wait:900', ''],
         ['Tab', '左へ'], ['land:from', 'from へ'], ['Enter', '入る'], ['wait:900', ''],
         ['land:k.rs', 'k.rs の行へ'], ['Space', 'マーク'],
         ['c', '反対ペインへコピー'], ['wait:700', ''], ['Enter', 'はい'], ['wait:2000', ''],
-        ['read:\'コピー後の行き先 → \' + (state.right.entries||[]).filter(e=>!e.parent).length + \' 行\'', ''],
+        ['read:\'コピー後の行き先 → \' + (state.right.entries||[]).filter(e=>!e.parent && !e.name.startsWith(String.fromCharCode(46))).length + \' 行\'', ''],
         ['Mod+z', 'コピーを取り消す'], ['wait:2000', ''],
-        ['read:\'Ctrl+z のあと → \' + (state.right.entries||[]).filter(e=>!e.parent).length + \' 行\'', ''],
-        // コピーはやり直せない（元の場所を覚えていない）。断られるのが
-        // 正しい ── ここで確かめているのはキーが届くことの方。
-        ['Mod+Shift+z', 'やり直し'], ['wait:900', ''],
+        ['read:\'Ctrl+z のあと → \' + (state.right.entries||[]).filter(e=>!e.parent && !e.name.startsWith(String.fromCharCode(46))).length + \' 行\'', ''],
+        // **コピーはやり直せる。** 元は動いていないので、もう一度写すだけ。
+        // 長いあいだ「元の場所を覚えていない」を理由に断っていたが、覚えて
+        // いないのは作った側の話で、元は最初からそこに在る。
+        ['Mod+Shift+z', 'コピーをやり直す'], ['wait:2000', ''],
+        ['read:\'Ctrl+Shift+z のあと → \' + (state.right.entries||[]).filter(e=>!e.parent && !e.name.startsWith(String.fromCharCode(46))).length + \' 行\'', ''],
+        // そしてもう一度取り消せる ── やり直しが「この回が作ったもの」の
+        // 一覧を置き直していなければ、ここで 1 行のまま残る。
+        ['Mod+z', 'もう一度取り消す'], ['wait:2000', ''],
+        ['read:\'もう一度 Ctrl+z → \' + (state.right.entries||[]).filter(e=>!e.parent && !e.name.startsWith(String.fromCharCode(46))).length + \' 行\'', ''],
 
-        // 取り消し・やり直し（一周の最後に、砂場を元へ）
-        ['u', '取り消し'], ['wait:600', ''],
-        ['Ctrl+r', 'やり直し'], ['wait:600', ''],
+        // やり直しはもう一つの鍵にも乗っている（vi の Ctrl+R）。同じ扉に
+        // 着くことを押して確かめる ── keycover.py は「押されていない鍵は
+        // 動く証拠が無い」と数える。
+        ['Mod+Shift+z', 'もう一度やり直す'], ['wait:1500', ''],
+        ['Ctrl+r', 'Ctrl+R も同じやり直し'], ['wait:1500', ''],
+        ['read:\'Ctrl+R のあと → \' + (state.right.entries||[]).filter(e=>!e.parent && !e.name.startsWith(String.fromCharCode(46))).length + \' 行\'', ''],
+        ['Mod+z', '片付け'], ['wait:1500', ''],
+
+        // **点で始まる行は数えない。** ゴミ箱へ送ると Finder がその
+        // ディレクトリに `.DS_Store` を落とす。cian は既定で隠しファイルも
+        // 出すので、素で数えると「取り消したのに 1 行ある」と読める ──
+        // 実際にそう読んで、自分の直したところを疑いに行った。
     ];
 
     // Its own config directory, inside the sandbox.

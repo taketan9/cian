@@ -13,9 +13,10 @@
 //! **A delete is not undone** — it went to the trash, which is the system's
 //! own undo and already has a window for it.
 //!
-//! Where you *are* is on the same stack as what you did, in the order things
-//! happened. Walking into the wrong folder is the commonest thing to want
-//! back, and keeping it on a second stack meant `u` did not cover it.
+//! **Where you are is not on this stack.** It was, once, "in the order things
+//! happened" — and in use that put every walk into a folder between your hand
+//! and the file operation you wanted back. `u` is for what happened to your
+//! files; the breadcrumb arrows walk the history.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -31,11 +32,14 @@ pub enum Undo {
     /// Move each `.0` (where it is now) back to `.1` (where it was).
     Moved { pairs: Vec<(PathBuf, PathBuf)> },
     /// Send these to the trash: they are what a copy brought into being, and
-    /// nothing else. **Not redoable** — the sources are not remembered here,
-    /// and re-deriving them from the destination would be a guess.
-    Copied { paths: Vec<PathBuf> },
-    /// Take this pane back to `from`.
-    Navigated { pane: String, from: PathBuf },
+    /// nothing else.
+    ///
+    /// `srcs` and `dest` are what the copy was told to do, kept so it can be
+    /// done again. This used not to be redoable, on the grounds that the
+    /// sources were not remembered — so they are remembered. Unlike
+    /// [`Undo::Created`], nothing was destroyed: the sources are where they
+    /// always were, and redoing is copying.
+    Copied { srcs: Vec<PathBuf>, dest: PathBuf, paths: Vec<PathBuf> },
 }
 
 impl Undo {
@@ -56,10 +60,13 @@ impl Undo {
             // Named as a trip to the trash rather than as a deletion, because
             // that is where they went and it is the difference that matters
             // to somebody who pressed the key by mistake.
-            Undo::Copied { paths } => {
-                format!("{} 件のコピーを取り消しました（ゴミ箱へ）", paths.len())
+            Undo::Copied { srcs, paths, .. } => {
+                if undoing {
+                    format!("{} 件のコピーを取り消しました（ゴミ箱へ）", paths.len())
+                } else {
+                    format!("{} 件をもう一度コピーしました", srcs.len())
+                }
             }
-            Undo::Navigated { from, .. } => format!("{} に{}", from.display(), verb),
         }
     }
 }
@@ -94,6 +101,17 @@ impl Stack {
         self.0.lock().unwrap().pop()
     }
 
+    /// Rewrite the step on top, if it is one.
+    ///
+    /// For the one case that needs it: a redone copy has to leave behind a
+    /// fresh list of what *this* run created, and that is only knowable once
+    /// the copy is under way — after the step has already been pushed.
+    pub fn amend_top(&self, f: impl FnOnce(&mut Undo)) {
+        if let Some(top) = self.0.lock().unwrap().last_mut() {
+            f(top);
+        }
+    }
+
     /// Empty it. The redo stack is cleared whenever something *new* lands on
     /// the undo stack: once you have done something else, the branch you
     /// undid is gone, and replaying it would put files back on top of work
@@ -120,10 +138,15 @@ impl Undo {
             Undo::Moved { pairs } => Some(Undo::Moved {
                 pairs: pairs.iter().map(|(now, was)| (was.clone(), now.clone())).collect(),
             }),
-            Undo::Navigated { pane, from } => {
-                Some(Undo::Navigated { pane: pane.clone(), from: from.clone() })
-            }
-            Undo::Created { .. } | Undo::Copied { .. } => None,
+            // Its own inverse: the step carries both what to take back and
+            // what to do again, and which of the two runs is decided by the
+            // stack it is sitting on.
+            Undo::Copied { srcs, dest, paths } => Some(Undo::Copied {
+                srcs: srcs.clone(),
+                dest: dest.clone(),
+                paths: paths.clone(),
+            }),
+            Undo::Created { .. } => None,
         }
     }
 }
