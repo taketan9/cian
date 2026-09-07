@@ -14,7 +14,6 @@
 //! was never the same code. So it is this code now, for both.
 
 use std::path::Path;
-#[cfg(feature = "desktop")]
 use std::process::Stdio;
 
 use anyhow::Result;
@@ -22,12 +21,6 @@ use anyhow::Result;
 /// Reveal `path` in the OS file manager, selecting it where the platform's
 /// manager supports it. Windows Explorer and macOS Finder select the file
 /// itself; Linux has no portable "select", so its parent folder is opened.
-#[cfg(not(feature = "desktop"))]
-pub fn reveal(_path: &Path) -> Result<()> {
-    anyhow::bail!("この版に「場所を開く」はありません")
-}
-
-#[cfg(feature = "desktop")]
 pub fn reveal(path: &Path) -> Result<()> {
     #[cfg(target_os = "macos")]
     let mut cmd = {
@@ -95,12 +88,6 @@ pub const fn open_with_supported() -> bool {
 /// PowerShell (best-effort — the verb name can be localized). Linux has no
 /// portable equivalent.
 #[allow(unused_variables)]
-#[cfg(not(feature = "desktop"))]
-pub fn properties(_path: &Path) -> Result<()> {
-    anyhow::bail!("この版に「情報を見る」はありません")
-}
-
-#[cfg(feature = "desktop")]
 pub fn properties(path: &Path) -> Result<()> {
     #[cfg(target_os = "macos")]
     {

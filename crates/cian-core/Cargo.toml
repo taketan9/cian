@@ -6,19 +6,6 @@ rust-version.workspace = true
 license.workspace = true
 description = "Domain logic for cian: file operations, marks, history, bookmarks, masks, search"
 
-[features]
-# On by default, so every desktop build is unchanged by this existing.
-#
-# **iOS has no trash.** `trash` targets Windows, macOS and Linux, and there is
-# no `NSFileManager trashItemAtURL` on a phone — so a core that always depends
-# on it cannot be built for one, and the notes half of cian is exactly what
-# ought to travel there. Off, `DeleteMode::Trash` refuses instead of deleting.
-#
-# Checked the only way it can be from a Mac with no iOS toolchain:
-# `cargo build -p cian-core --no-default-features` has to pass.
-default = ["desktop"]
-desktop = ["dep:trash"]
-
 [dependencies]
 serde_json = { workspace = true }
 anyhow   = { workspace = true }
@@ -34,7 +21,7 @@ sha2 = { version = "0.11", default-features = false, features = ["alloc"] }
 # without one of its coinit_* features, and the Shell file APIs it calls want an
 # apartment-threaded COM runtime. Default features are otherwise off because the
 # `chrono` one only powers trash's listing/restore API, which cian does not use.
-trash = { version = "5.2.3", default-features = false, features = ["coinit_apartmentthreaded"], optional = true }
+trash = { version = "5.2.3", default-features = false, features = ["coinit_apartmentthreaded"] }
 # `aes-crypto` powers password-protected zip creation. The traditional
 # ZipCrypto cipher would be openable by Explorer's built-in unzip but is
 # cryptographically broken and not exposed by the crate's public API, so AES
