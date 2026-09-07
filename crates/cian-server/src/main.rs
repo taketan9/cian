@@ -5241,9 +5241,15 @@ fn b64(bytes: &[u8]) -> String {
 ///
 /// The row's `path` holds the *remote* absolute path, which is what every
 /// remote operation needs and what nothing on this disk should ever be asked
-/// to open. The `..` row is synthetic; navigation intercepts it.
+/// to open. The `..` row is synthetic; navigation intercepts it. As on a
+/// local pane, the root has no way up — `/` is its own parent, and a `..`
+/// there is a row that does nothing.
 fn remote_rows(dir: &str, entries: &[cian_scp::RemoteEntry]) -> Vec<cian_core::Entry> {
-    let mut rows = vec![cian_core::Entry::remote("..", dir.to_string(), true, 0, true)];
+    let mut rows = Vec::with_capacity(entries.len() + 1);
+    let parent = cian_scp::remote_parent(dir);
+    if parent != dir {
+        rows.push(cian_core::Entry::remote("..", parent, true, 0, true));
+    }
     for e in entries {
         rows.push(cian_core::Entry::remote(
             e.name.clone(),
@@ -5557,6 +5563,20 @@ mod markall_tests {
         mark_all(&mut pane);
         assert_eq!(pane.mark_count(), 3);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The server's root has no way up. Everywhere else the `..` row is the
+    /// first thing in the listing — that is what a local pane does, and a
+    /// home full of dot-directories is where it went missing.
+    #[test]
+    fn remote_rows_carry_an_up_row_everywhere_but_the_root() {
+        let entries = vec![cian_scp::RemoteEntry { name: ".cache".into(), is_dir: true, size: 0, link: false }];
+        let home = remote_rows("/home/u", &entries);
+        assert!(home[0].is_parent, "`..` leads");
+        assert_eq!(home[0].path.to_string_lossy(), "/home", "and points one level up");
+        let root = remote_rows("/", &entries);
+        assert!(root.iter().all(|e| !e.is_parent), "no `..` at `/`");
+        assert_eq!(root.len(), 1);
     }
 }
 

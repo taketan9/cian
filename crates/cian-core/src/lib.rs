@@ -598,9 +598,18 @@ impl Pane {
     fn apply_filter(&mut self) {
         let needle = self.filter.to_lowercase();
         let show_hidden = self.show_hidden;
+        // The synthetic `..` a remote or archive listing carries is pulled
+        // out first: it is navigation, not a listed file, so neither the
+        // hidden-file rule (its name *does* start with a dot) nor the filter
+        // nor the sort has any say over it. Left in the run, it sorted among
+        // the directories — under `..` on a name sort, at the bottom in
+        // reverse, gone with hidden files off — and a server's home with
+        // thirty dot-directories showed no way up at all.
+        let up = self.all_entries.iter().find(|e| e.is_parent).cloned();
         let mut entries: Vec<Entry> = self
             .all_entries
             .iter()
+            .filter(|e| !e.is_parent)
             .filter(|e| show_hidden || !e.name.starts_with('.'))
             .filter(|e| {
                 // **An OR of ANDs** (`query::terms`): `仕事 週報` wants both,
@@ -625,6 +634,8 @@ impl Pane {
             if let Some(parent) = self.cwd.parent().map(|p| p.to_path_buf()) {
                 entries.insert(0, Entry::parent_row(parent));
             }
+        } else if let Some(up) = up {
+            entries.insert(0, up);
         }
         self.entries = entries;
         if self.cursor >= self.entries.len() {
@@ -737,6 +748,7 @@ impl Pane {
         self.cursor = 0;
         self.apply_sort();
         self.apply_filter();
+        self.cursor_to_first_real();
     }
 
     /// Replace the listing with a flat set of rows — a flattened subtree (branch
@@ -1127,6 +1139,37 @@ mod tests {
         assert!(names(&pane).contains(&"local.txt".to_string()));
         assert!(pane.entries.iter().any(|e| e.is_parent), "the local up-row is back");
         let _ = dir;
+    }
+
+    /// A remote listing's `..` is a row the TUI hands in, and it has to
+    /// behave like the local one: first, whatever the sort says, and shown
+    /// with hidden files off even though its name starts with a dot. It
+    /// used to be sorted with the directories and dropped with the dotfiles.
+    #[test]
+    fn a_remote_up_row_stays_first_under_any_sort_and_with_hidden_files_off() {
+        let (_dir, mut pane) = pane_with(&["local.txt"]);
+        let rows = vec![
+            Entry::remote("-early", "/srv/-early", true, 0, false),
+            Entry::remote(".dot", "/srv/.dot", true, 0, false),
+            Entry::remote("zed", "/srv/zed", true, 0, false),
+            Entry::remote("..", "/", true, 0, true),
+            Entry::remote("f.txt", "/srv/f.txt", false, 1, false),
+        ];
+        pane.enter_remote("root@web1", "/srv", rows);
+        assert!(pane.entries[0].is_parent, "`..` leads on a name sort");
+        assert!(!pane.selected().unwrap().is_parent, "the cursor starts past it");
+
+        pane.set_sort(Sort { key: SortKey::Name, reverse: true });
+        assert!(pane.entries[0].is_parent, "and in reverse");
+        pane.set_sort(Sort { key: SortKey::Modified, reverse: true });
+        assert!(pane.entries[0].is_parent, "and newest-first");
+
+        pane.set_show_hidden(false);
+        assert!(pane.entries[0].is_parent, "and with dotfiles hidden");
+        assert!(!names(&pane).contains(&".dot".to_string()));
+        pane.set_filter("zed");
+        assert_eq!(names(&pane), vec!["zed"]);
+        assert!(pane.entries[0].is_parent, "a filter keeps the way out");
     }
 
     #[test]

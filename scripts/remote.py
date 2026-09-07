@@ -274,6 +274,25 @@ def main():
               sorted(x["name"] for x in r["pane"]["entries"] if not x.get("parent")),
               ["one.txt", "sub"])
 
+        # `..` is navigation, not a row: first whatever the order, shown
+        # with dotfiles off, absent only at `/`. It used to sort among the
+        # directories — at the bottom in reverse — so a home with thirty
+        # dot-directories showed no way up, and a shallow one did.
+        print("`..` は常に先頭")
+        check("繋いだ直後に `..` が先頭", r["pane"]["entries"][0].get("parent"), True)
+        check("カーソルは `..` の次", r["pane"]["cursor"], 1)
+        e.call("sort", pane="right", key="name", reverse=True)
+        v = e.call("remotelist", pane="right", path=root)
+        check("逆順でも先頭", v["pane"]["entries"][0].get("parent"), True)
+        e.call("sort", pane="right", key="name", reverse=False)
+        e.call("hidden", pane="right")
+        v = e.call("remotelist", pane="right", path=root)
+        check("隠しファイルを消しても残る", v["pane"]["entries"][0].get("parent"), True)
+        e.call("hidden", pane="right")
+        v = e.call("remotelist", pane="right", path="/")
+        check("`/` には無い", any(x.get("parent") for x in v["pane"]["entries"]), False)
+        e.call("remotelist", pane="right", path=root)
+
         print("ローカル → サーバ")
         e.call("copy", pane="left", paths=[os.path.join(local, "up.txt")])
         done = e.wait_done()
@@ -396,13 +415,9 @@ def main():
         e.call("setmarks", pane="right", paths=[os.path.join(root, "made")])
         e.call("remoteop", pane="right", what="delete")
         check("中身ごと消えた", os.path.exists(os.path.join(root, "made")), False)
-
-        print("AI の走査はリモートで断る")
-        try:
-            e.call("aijunk", pane="right")
-            check("断った", "呼べてしまった", "断るはず")
-        except RuntimeError as ex:
-            check("断った", "リモートペインでは使えません" in str(ex), True)
+        # `:aijunk` was cut with the rest of the file-operating AI (request
+        # 180); the check that it refused a remote pane outlived it here and
+        # kept this run red for a command that no longer exists.
     finally:
         e.close()
         if keep:
