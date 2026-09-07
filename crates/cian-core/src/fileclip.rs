@@ -9,27 +9,14 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-#[cfg(feature = "desktop")]
 use std::process::Stdio;
+
 /// Files currently on the OS clipboard, e.g. copied in Explorer or Finder.
 ///
 /// Every candidate is checked against the filesystem before being returned:
 /// the platform queries happily hand back plain clipboard *text* interpreted
 /// as a path (copying the word "hello" yields `/hello` on macOS), and acting
 /// on that would be at best a confusing error.
-#[cfg(not(feature = "desktop"))]
-pub fn put_files(_paths: &[PathBuf]) -> Result<()> {
-    anyhow::bail!("この版にファイルのクリップボードはありません")
-}
-
-#[cfg(not(feature = "desktop"))]
-pub fn files() -> Vec<PathBuf> {
-    // A phone has no clipboard of *files* — what it has is a clipboard of
-    // text and images, which is a different thing and not this one.
-    Vec::new()
-}
-
-#[cfg(feature = "desktop")]
 pub fn files() -> Vec<PathBuf> {
     keep_existing(files_raw())
 }
@@ -40,7 +27,6 @@ pub fn keep_existing(paths: Vec<PathBuf>) -> Vec<PathBuf> {
 }
 
 #[cfg(target_os = "macos")]
-#[cfg(feature = "desktop")]
 fn files_raw() -> Vec<PathBuf> {
     // `the clipboard as «class furl»` only ever yields one file; coercing to a
     // list handles both the single- and multi-file cases.
@@ -65,7 +51,6 @@ return out"#;
 }
 
 #[cfg(target_os = "macos")]
-#[cfg(feature = "desktop")]
 pub fn put_files(paths: &[PathBuf]) -> Result<()> {
     let escape = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let parts: Vec<String> = paths
@@ -90,7 +75,6 @@ pub fn put_files(paths: &[PathBuf]) -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-#[cfg(feature = "desktop")]
 fn files_raw() -> Vec<PathBuf> {
     let read = |cmd: &str, args: &[&str]| -> Option<String> {
         let o = crate::proc::quiet(cmd).args(args).output().ok()?;
@@ -128,7 +112,6 @@ fn percent_decode(s: &str) -> String {
 }
 
 #[cfg(target_os = "linux")]
-#[cfg(feature = "desktop")]
 pub fn put_files(paths: &[PathBuf]) -> Result<()> {
     use std::io::Write;
     let uris = paths
@@ -163,7 +146,6 @@ pub fn put_files(paths: &[PathBuf]) -> Result<()> {
 }
 
 #[cfg(target_os = "windows")]
-#[cfg(feature = "desktop")]
 fn files_raw() -> Vec<PathBuf> {
     let out = crate::proc::quiet("powershell")
         .args([
@@ -185,7 +167,6 @@ fn files_raw() -> Vec<PathBuf> {
 }
 
 #[cfg(target_os = "windows")]
-#[cfg(feature = "desktop")]
 pub fn put_files(paths: &[PathBuf]) -> Result<()> {
     // Was a stub that always failed, so Shift+P did nothing on the platform
     // where Explorer interop matters most.

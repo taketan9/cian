@@ -54,19 +54,6 @@ pub fn hide(cmd: &mut Command) {
 /// Down here rather than in a front end because there are two of them now, and
 /// the three-way `open` / `xdg-open` / `cmd /C start ""` split is the sort of
 /// thing that gets copied with one platform quietly missing.
-/// A build with no desktop under it (a phone). Hands back the same kind of
-/// error a missing helper would, rather than a body that will not compile:
-/// iOS matches none of the three `cfg`s above, so without this the whole
-/// crate stops at "cannot find value `cmd`".
-#[cfg(not(feature = "desktop"))]
-pub fn open_with_desktop(_target: impl AsRef<OsStr>) -> std::io::Result<()> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "この版に「OS で開く」はありません",
-    ))
-}
-
-#[cfg(feature = "desktop")]
 pub fn open_with_desktop(target: impl AsRef<OsStr>) -> std::io::Result<()> {
     #[cfg(target_os = "macos")]
     let mut cmd = quiet("open");

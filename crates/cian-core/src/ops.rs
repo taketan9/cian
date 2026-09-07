@@ -270,17 +270,8 @@ pub enum DeleteMode {
 
 pub fn delete_one(src: &Path, mode: DeleteMode) -> Result<()> {
     match mode {
-        #[cfg(feature = "desktop")]
         DeleteMode::Trash => trash::delete(src)
             .with_context(|| format!("move to trash: {}", src.display()))?,
-        // A build without a desktop under it. Refusing is the only honest
-        // answer: the caller asked for the recoverable delete, and doing the
-        // permanent one instead would be the opposite of what was asked.
-        #[cfg(not(feature = "desktop"))]
-        DeleteMode::Trash => anyhow::bail!(
-            "この版にゴミ箱はありません（完全削除なら Permanent）: {}",
-            src.display()
-        ),
         DeleteMode::Permanent => {
             if src.is_dir() {
                 fs::remove_dir_all(src).with_context(|| format!("rm -r {}", src.display()))?;
