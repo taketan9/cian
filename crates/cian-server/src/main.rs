@@ -2308,11 +2308,8 @@ impl Session {
                         "name": h.name,
                         "host": h.host,
                         "port": h.port.unwrap_or(22),
-                        "users": h.users.iter().enumerate().map(|(j, u)| serde_json::json!({
-                            "at": j,
-                            "name": u.name,
-                            "stored": u.password.is_some() || u.password_cmd.is_some(),
-                        })).collect::<Vec<_>>(),
+                        "users": h.users.iter().enumerate()
+                            .map(|(j, u)| ssh_user_row(j, u)).collect::<Vec<_>>(),
                     })).collect::<Vec<_>>(),
                 }))
             }
@@ -2331,6 +2328,10 @@ impl Session {
                         .users
                         .get(req.params["preset_user"].as_u64().unwrap_or(0) as usize)
                         .ok_or_else(|| anyhow::anyhow!("そのユーザはありません"))?;
+                    // A key-only login has no password here, and that is not
+                    // a hole to be filled by asking: `cian_scp::connect` offers
+                    // the key first. Whatever the window did send (a retry
+                    // after the key was refused) is used as the fallback.
                     let password = match (&u.password, &u.password_cmd) {
                         (Some(p), _) => p.clone(),
                         (None, Some(cmd)) => {
@@ -2366,8 +2367,27 @@ impl Session {
                     anyhow::bail!("ホストとユーザが要ります");
                 }
                 let start = req.params["path"].as_str().unwrap_or(".").to_string();
-                let (resolved, entries) = cian_scp::list_dir(&target, &start)?;
                 let label = format!("{}@{}", target.user, target.host);
+                let (resolved, entries) = match cian_scp::list_dir(&target, &start) {
+                    Ok(got) => got,
+                    Err(e) => {
+                        // The one failure worth answering with a question
+                        // instead of a message: the key is configured but this
+                        // server has never been given it. Say so, name the key,
+                        // and let the caller come back with a password.
+                        let refused = cian_scp::key_refused(&e).map(|k| k.key.clone());
+                        match refused {
+                            Some(key) => {
+                                return Ok(serde_json::json!({
+                                    "need_password": true,
+                                    "who": label,
+                                    "key": key.display().to_string(),
+                                }));
+                            }
+                            None => return Err(e),
+                        }
+                    }
+                };
                 self.remotes.insert(which.clone(), target);
                 let rows = remote_rows(&resolved, &entries);
                 let pane = self.pane_mut(&which)?;
@@ -5530,6 +5550,59 @@ fn did_step(undo: &crate::undo::Stack, redo: &crate::undo::Stack, step: Undo) {
 fn mark_all(pane: &mut Pane) {
     for i in 0..pane.entries.len() {
         pane.set_mark_at(i);
+    }
+}
+
+/// One `cian.ssh` login, as the window sees it.
+///
+/// `stored` is not "a password is stored" but **"there is something here to
+/// log in with"**, because that is the only question the window asks it: it
+/// decides whether to put a password box in front of you. A key counts — the
+/// engine offers the key first — and while it did not, a key-only login was
+/// asked for a password it then did not use.
+fn ssh_user_row(at: usize, u: &cian_lua::SshUser) -> serde_json::Value {
+    serde_json::json!({
+        "at": at,
+        "name": u.name,
+        "stored": u.has_secret(),
+        // Which credential it is. For the label only — the picker used to
+        // print 鍵あり ("has a key") for a stored *password*.
+        "keyed": u.key_path().is_some(),
+    })
+}
+
+#[cfg(test)]
+mod ssh_row_tests {
+    use super::*;
+
+    #[test]
+    fn a_key_is_something_to_log_in_with() {
+        let mut u = cian_lua::SshUser::plain("u");
+        u.key = Some("~/.ssh/id_ed25519".into());
+        let row = ssh_user_row(0, &u);
+        assert_eq!(row["stored"], serde_json::json!(true), "no password box for a key");
+        assert_eq!(row["keyed"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn a_stored_password_is_not_a_key() {
+        let mut u = cian_lua::SshUser::plain("u");
+        u.password = Some("s3cret".into());
+        let row = ssh_user_row(1, &u);
+        assert_eq!(row["stored"], serde_json::json!(true));
+        assert_eq!(row["keyed"], serde_json::json!(false), "the badge must not claim a key");
+        // And the secret itself never rides along.
+        assert_eq!(row.as_object().unwrap().len(), 4);
+        assert!(!row.to_string().contains("s3cret"));
+    }
+
+    #[test]
+    fn a_bare_name_is_asked_for_a_password() {
+        let row = ssh_user_row(2, &cian_lua::SshUser::plain("root"));
+        assert_eq!(row["stored"], serde_json::json!(false));
+        assert_eq!(row["keyed"], serde_json::json!(false));
+        assert_eq!(row["name"], serde_json::json!("root"));
+        assert_eq!(row["at"], serde_json::json!(2));
     }
 }
 

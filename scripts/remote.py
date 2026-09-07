@@ -144,14 +144,19 @@ class Engine:
     **道具の報告が観測を隠した。** エンジンを直しにいくところだった。
     """
 
-    def __init__(self):
+    def __init__(self, config_dir=None):
         import queue
         import threading
         exe = os.path.join(HERE, "target", "debug", "cian-server")
         if not os.path.exists(exe):
             raise SystemExit("先に `cargo build -p cian-server` を")
+        env = dict(os.environ)
+        if config_dir:
+            # `init.lua` の道は本物と同じもの（`CIAN_CONFIG_DIR`）。設定から
+            # 引いた接続を確かめるのに、設定を読まない道を作ってはいけない。
+            env["CIAN_CONFIG_DIR"] = config_dir
         self.p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                  text=True, bufsize=1, cwd=HERE)
+                                  text=True, bufsize=1, cwd=HERE, env=env)
         self.n = 0
         self.events = []
         self.replies = {}
@@ -247,7 +252,29 @@ def main():
 
     server = Server(home)
     server.start()
-    e = Engine()
+
+    # `init.lua` から引いた接続 ── 窓の `:remote` が使う道。手で打つ形
+    # （`host=`/`key=` をそのまま渡す）だけを通していたので、**設定に鍵を書いた
+    # ユーザ**という一番普通の形が一度も走っていなかった。
+    who = os.environ.get("USER") or os.environ.get("LOGNAME")
+    conf = os.path.join(home, "config")
+    os.makedirs(conf)
+    other = os.path.join(home, "notmine")
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-f", other, "-N", "", "-C", "nope"],
+                   check=True, capture_output=True)
+    with open(os.path.join(conf, "init.lua"), "w") as f:
+        f.write(f"""cian.ssh({{
+  hosts = {{
+    {{ name = "loop", host = "127.0.0.1", port = {PORT}, users = {{
+        {{ name = "{who}", key = "{server.key}" }},
+        {{ name = "{who}", key = "{other}" }},
+        "{who}",
+    }} }},
+  }},
+}})
+""")
+
+    e = Engine(config_dir=conf)
     bad = []
 
     def check(name, got, want):
@@ -273,6 +300,27 @@ def main():
         check("接続してディレクトリが読める",
               sorted(x["name"] for x in r["pane"]["entries"] if not x.get("parent")),
               ["one.txt", "sub"])
+
+        print("設定に書いた鍵で入る（窓の :remote の道）")
+        hosts = e.call("sshhosts")["hosts"]
+        users = hosts[0]["users"]
+        check("鍵のユーザは「入る物がある」", [u["stored"] for u in users], [True, True, False])
+        check("鍵と保存パスワードを取り違えない", [u["keyed"] for u in users], [True, True, False])
+        # パスワードを **渡さずに** 繋ぐ。窓は欄を出さないので、これが窓の送る形。
+        # **`r` を潰さないこと** ── 上の接続の返事を後の検査がまだ読んでいる。
+        keyed = e.call("connect", pane="right", preset_host=0, preset_user=0, path=root)
+        check("パスワード無しで繋がる", keyed.get("need_password"), None)
+        check("繋いだ先が読める",
+              sorted(x["name"] for x in keyed["pane"]["entries"] if not x.get("parent")),
+              ["one.txt", "sub"])
+
+        print("鍵が断られたときだけパスワードを聞く")
+        nope = e.call("connect", pane="right", preset_host=0, preset_user=1, path=root)
+        check("断られたら need_password", nope.get("need_password"), True)
+        check("どの鍵かを言う", nope.get("key"), other)
+        check("繋いだことにはしない", nope.get("pane"), None)
+        # 足場を戻す ── 下の検査は右が繋がっている前提に乗っている。
+        connect("right", root)
 
         print("ローカル → サーバ")
         e.call("copy", pane="left", paths=[os.path.join(local, "up.txt")])

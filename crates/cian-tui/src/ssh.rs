@@ -99,12 +99,21 @@ impl App {
     pub(crate) fn scp_after_pick(&mut self, host_idx: usize, user: &str) {
         let Some(h) = self.config.ssh_hosts.get(host_idx) else { return };
         let Some(u) = h.users.iter().find(|u| u.name == user) else { return };
-        let Some(password) = u.secret() else {
-            self.message = Some(format!(
-                "no password set for {}@{} — a transfer needs one in init.lua",
-                u.name, h.name
-            ));
-            return;
+        // A key is a login. This wanted a password and nothing else, so a
+        // `key = "~/.ssh/id_ed25519"` user could not transfer at all — while
+        // `cian_scp::connect` offers the key *before* any password and would
+        // never have asked. The empty string is "there is no password to fall
+        // back to", which is exactly what it means down there.
+        let password = match u.secret() {
+            Some(p) => p,
+            None if u.key_path().is_some() => String::new(),
+            None => {
+                self.message = Some(format!(
+                    "no password or key set for {}@{} — a transfer needs one in init.lua",
+                    u.name, h.name
+                ));
+                return;
+            }
         };
         let target = cian_scp::Target {
             host: h.host.clone(),

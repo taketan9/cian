@@ -6806,12 +6806,16 @@ function sshRows(hosts) {
     for (const h of hosts) {
         for (const u of h.users) {
             rows.push({
-                n: u.stored ? tr('key', '鍵あり') : '',
+                // Which credential is configured, not merely that one is.
+                // This said 鍵あり ("has a key") for a *password* — the one
+                // word it could not mean.
+                n: u.keyed ? tr('key', '鍵') : (u.stored ? tr('saved', '保存') : ''),
                 label: `${u.name}@${h.name}`,
                 sub: `${h.host}:${h.port}`,
                 host: h.at,
                 user: u.at,
                 stored: u.stored,
+                keyed: u.keyed,
                 who: `${u.name}@${h.host}`,
             });
         }
@@ -6854,6 +6858,55 @@ async function cmdSshPicker() {
     });
 }
 
+/// Connect `pane` to a picked host row, and hand back what `connect` answered.
+///
+/// **The password box came up for a login that did not need one.** A user with
+/// `key = "~/.ssh/id_ed25519"` was asked anyway, because the window counted
+/// only `password` / `password_cmd` as "something to log in with"; you pressed
+/// Enter on an empty box and the key let you in. A box you learn to dismiss is
+/// worse than no box — it teaches you to type past questions.
+///
+/// So: nothing configured, ask first. A key configured, do not — the engine
+/// offers it before any password, which is what the README says and what `ssh`
+/// itself does. The one moment the question is worth asking is *after* the key
+/// comes back refused, and the engine says so in as many words rather than
+/// failing, because the commonest reason is that this particular server has
+/// never been given that key.
+///
+/// Both callers wanted this and had a copy each, one of which is how the retry
+/// would have gone missing from the other.
+async function connectPreset(pane, row) {
+    const go = async (password) => {
+        say(tr(`connecting to ${row.who}…`, `${row.who} に繋いでいます…`));
+        return ask('connect', {
+            pane, preset_host: row.host, preset_user: row.user, password,
+        });
+    };
+    const askPass = () => askFor(
+        tr(`password for ${row.who}`, `${row.who} のパスワード`), '', { secret: true });
+    let password;
+    if (!row.stored) {
+        password = await askPass();
+        if (password === null) return null;
+    }
+    let c = await go(password);
+    if (!c || !c.need_password) return c;
+    // Named, because *which* key was turned down is the thing you need in
+    // order to fix it, and it is the only part of a key that is safe to show.
+    say(tr(`the key ${c.key} was refused by ${c.who}`, `鍵 ${c.key} が ${c.who} に断られました`), true);
+    password = await askPass();
+    if (password === null) return null;
+    c = await go(password);
+    if (c && c.need_password) {
+        // An empty box, twice. Say what the state is rather than leaving the
+        // pane where it was with nothing said.
+        say(tr(`no password given — ${row.who} is not connected`,
+            `パスワードが空です — ${row.who} には繋いでいません`), true);
+        return null;
+    }
+    return c;
+}
+
 /// `:sftp` / `:remote` — **a server's files, in this pane.**
 ///
 /// Offers what `init.lua` holds first. It went straight to a `user@host` box,
@@ -6875,15 +6928,7 @@ async function cmdSftpPicker() {
         act: { F2: () => { closeReport(); cmdConnect(); } },
         pick: async (row) => {
             closeReport();
-            let password;
-            if (!row.stored) {
-                password = await askFor(tr(`password for ${row.who}`, `${row.who} のパスワード`), '', { secret: true });
-                if (password === null) return;
-            }
-            say(tr(`connecting to ${row.who}…`, `${row.who} に繋いでいます…`));
-            const c = await ask('connect', {
-                pane: state.focus, preset_host: row.host, preset_user: row.user, password,
-            });
+            const c = await connectPreset(state.focus, row);
             if (!c) return;
             state[state.focus] = c.pane;
             draw(state.focus);
@@ -6928,15 +6973,7 @@ async function cmdSend(dir) {
             foot: tr('type to narrow   Enter connect   Esc close', '打って絞る   Enter 接続   Esc 閉じる'),
             pick: async (row) => {
                 closeReport();
-                let password;
-                if (!row.stored) {
-                    password = await askFor(tr(`password for ${row.who}`, `${row.who} のパスワード`), '', { secret: true });
-                    if (password === null) return;
-                }
-                say(tr(`connecting to ${row.who}…`, `${row.who} に繋いでいます…`));
-                const c = await ask('connect', {
-                    pane: other, preset_host: row.host, preset_user: row.user, password,
-                });
+                const c = await connectPreset(other, row);
                 if (!c) return;
                 state[other] = c.pane;
                 draw(other);
