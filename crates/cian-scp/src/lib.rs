@@ -46,6 +46,34 @@ pub struct Target {
     pub key_pass: Option<String>,
 }
 
+/// The configured key was refused, and there was no password to fall through to.
+///
+/// A *type* rather than a sentence, because the only useful thing a UI can do
+/// with this one failure is ask for a password and try again — and it cannot
+/// tell "the key is not on this server" from "the host is down" by reading an
+/// error string. Everything else stays an ordinary `anyhow` error.
+#[derive(Debug, Clone)]
+pub struct KeyRefused {
+    /// The key that was offered. Safe to show; the passphrase never is.
+    pub key: std::path::PathBuf,
+}
+
+impl std::fmt::Display for KeyRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "the key {} was refused, and there is no password to try", self.key.display())
+    }
+}
+
+impl std::error::Error for KeyRefused {}
+
+/// Was this failure [`KeyRefused`] — i.e. is asking for a password worth it?
+///
+/// Walks the chain, so a caller may add its own `.context()` on the way up
+/// without the answer changing.
+pub fn key_refused(err: &anyhow::Error) -> Option<&KeyRefused> {
+    err.chain().find_map(|e| e.downcast_ref::<KeyRefused>())
+}
+
 /// Cancellation and progress, mirroring `cian_core::progress::Ctl`.
 pub struct Ctl<'a> {
     pub cancel: &'a AtomicBool,
@@ -898,10 +926,7 @@ async fn connect(target: &Target) -> Result<client::Handle<BlindClient>> {
             return Ok(handle);
         }
         if target.password.is_empty() {
-            return Err(anyhow!(
-                "the key {} was refused, and there is no password to try",
-                path.display()
-            ));
+            return Err(anyhow::Error::new(KeyRefused { key: path.clone() }));
         }
     }
     match handle
@@ -935,6 +960,22 @@ mod tests {
 
     fn no_cancel() -> AtomicBool {
         AtomicBool::new(false)
+    }
+
+    #[test]
+    fn a_refused_key_stays_recognisable_under_a_context_layer() {
+        // The window asks for a password only when it hears *this* failure, so
+        // it has to survive the `.context()` a caller adds on the way up. An
+        // ordinary failure must not look like it: asking for a password
+        // because a host is down would be its own kind of wrong.
+        let refused = anyhow::Error::new(KeyRefused { key: "/home/u/.ssh/id_ed25519".into() })
+            .context("connect example.com:22");
+        assert_eq!(
+            key_refused(&refused).map(|k| k.key.clone()),
+            Some(std::path::PathBuf::from("/home/u/.ssh/id_ed25519")),
+        );
+        assert!(key_refused(&anyhow!("connection refused")).is_none());
+        assert!(refused.to_string().contains("connect example.com:22"));
     }
 
     #[test]

@@ -332,6 +332,8 @@ users = {
 }
 ```
 
+**The key goes first.** A user with a `key` — or a `password` / `password_cmd` — connects without being asked for anything, which is `ssh`'s own order. The box appears only when that user has nothing configured, or when the key comes back refused by that server, and then it names the key that was turned down.
+
 A plaintext password is a secret in a file, and cian warns on Unix if that file is world-readable. It is never logged, never shown, and never answered to a host-key prompt.
 
 **Bandwidth.** A copy to a server is a copy over somebody else's network. `:limit 2M` holds transfers to two megabytes a second (`500k`, `1.5MB/s`, `off`), `cian.set_option("transfer_limit", "2M")` sets it every launch, and the progress bar says `≤2.0M/s` while it applies so a deliberate crawl never looks like a broken one.
