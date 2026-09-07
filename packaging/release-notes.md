@@ -4,8 +4,15 @@
 |---|---|
 | **Windows で窓版（Electron）** | **`cian-gui-win-x64.zip`** — Electron 本体だけ別途必要 |
 | **Mac で窓版（Electron）** | **`cian-gui-macos.zip`** — 同上。エンジンは Intel と Apple Silicon の両方入り |
-| エンジンだけ差し替えたい | `cian-server-win-x64.exe`（9MB）／`cian-server-macos.bin` |
+| エンジンだけ差し替えたい | `cian-server-win-x64.exe`（10MB）／`cian-server-macos.bin` |
+| **`.exe` が社内の網に止められる** | **`cian-server-win-x64.exe.zip`**（4MB）／`cian-server-macos.bin.zip` — 中身は同じものが1つだけ |
 | 壊れずに届いたかの確認 | `SHA256SUMS` — `sha256sum -c SHA256SUMS` / `Get-FileHash` |
+
+**zip 版のエンジンは、中身も名前も生のものと同じです。** 会社の運用端末で
+`.exe` の直接ダウンロードが止められることがあり、実際に止まったので置いています。
+展開すると `cian-server-win-x64.exe` がそのまま出てきます（フォルダは挟みません）。
+落とせるなら生の `.exe` のままで構いません。crmaine の `gui/pack.js` はどちらでも
+受け取ります。
 
 **いまは窓版（Windows と Mac）を出しています。** 端末版・Mac の `.app`・
 Linux・オフラインビルド用のソース一式は、必要になったら Actions から

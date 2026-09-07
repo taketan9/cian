@@ -170,11 +170,21 @@ jobs:
       - name: Stage the engine on its own
         run: cp target/release/cian-server cian-server-macos.bin
 
+      # Zipped as well, for the same reason as the Windows engine above: so
+      # that a machine behind a filter that refuses bare binaries is fetched
+      # from with the same steps as any other. `-X` keeps macOS's extended
+      # attributes and `__MACOSX` out, so the zip holds one file and nothing
+      # else.
+      - name: Wrap the engine for networks that refuse a bare binary
+        run: zip -X -q cian-server-macos.bin.zip cian-server-macos.bin
+
       - name: Upload the engine
         uses: actions/upload-artifact@v6
         with:
           name: cian-server-macos
-          path: cian-server-macos.bin
+          path: |
+            cian-server-macos.bin
+            cian-server-macos.bin.zip
 
       # The window front end for macOS — the same contents as the Windows
       # one, with the universal engine beside it. Everything except Electron
@@ -290,11 +300,26 @@ jobs:
         shell: pwsh
         run: Copy-Item target/release/cian-server.exe cian-server-win-x64.exe
 
+      # **And the same file inside a zip.** A corporate network can refuse a
+      # bare `.exe` download outright, and one did: crmaine's deployment target
+      # could not fetch the engine from this release at all, and somebody had
+      # to wrap it by hand on the far side to get past the filter. A zip goes
+      # through. Both are published — whoever can take the `.exe` still should,
+      # and `crmaine`'s `gui/pack.js` accepts either.
+      #
+      # One entry, at the root, under its own name: the zip is a wrapper, not a
+      # layout, and anything else means the far side has to know where to look.
+      - name: Wrap the engine for networks that refuse a bare exe
+        shell: pwsh
+        run: Compress-Archive -Path cian-server-win-x64.exe -DestinationPath cian-server-win-x64.exe.zip
+
       - name: Upload the engine
         uses: actions/upload-artifact@v6
         with:
           name: cian-server-win-x64
-          path: cian-server-win-x64.exe
+          path: |
+            cian-server-win-x64.exe
+            cian-server-win-x64.exe.zip
 
       # The window front end, ready to run. cian-windows-x64.zip carries the
       # three exes and nothing of `gui/`, so until now the only way to get the

@@ -344,8 +344,25 @@ function size(row) {
 /// Which surface the keys are actually in, said on `#work` so the stylesheet
 /// can tell "this is the current pane" from "this is where you are typing".
 /// The file pane wore the accent frame while the shell had the keyboard.
+/// Whether one surface is filling the window (`F12`).
+///
+/// **A bool, not a name.** *Which* surface it is is not a second thing to
+/// remember — it is whichever has the keys, asked at the moment of painting.
+/// This used to store the answer instead (`'files'` / `'shell'`), decided when
+/// F12 was pressed and never revisited: zoom the listing, press `Shift+J`, and
+/// the keys went to the shell while the screen went on showing the listing.
+/// You were typing into a surface that was `display: none`.
+let zoomOn = false;
+
+/// Where the keys are, on the element the CSS reads.
+///
+/// The zoom target rides along because it is the same question: one surface
+/// fills the window, and it is the focused one. Written here so it cannot be
+/// set from somewhere that does not also know the focus has moved.
 function markFocus() {
-    el.work.dataset.focus = term.on && term.focused ? 'shell' : 'files';
+    const where = term.on && term.focused ? 'shell' : 'files';
+    el.work.dataset.focus = where;
+    el.work.dataset.zoom = zoomOn ? where : '';
 }
 
 /// The one owner of "the keys are in the shell now".
@@ -365,6 +382,9 @@ function setShellFocus(on) {
         else { preview.at = null; showPreview(); }
     }
     markFocus();
+    // While zoomed, moving the keys moves which surface fills the window — so
+    // the one that just appeared has to be told how big it now is.
+    if (zoomOn) afterZoom();
 }
 
 /// Above this many entries a listing draws only what is on screen. Below it,
@@ -9692,18 +9712,24 @@ async function cmdFullscreen() {
 }
 
 function zoomFocused() {
-    const now = el.work.dataset.zoom;
-    if (now) {
-        el.work.dataset.zoom = '';
+    zoomOn = !zoomOn;
+    // `markFocus` decides which surface that means, now and every time the
+    // focus moves afterwards.
+    markFocus();
+    if (!zoomOn) {
         say(tr('back', '戻しました'));
     } else if (term.on && term.focused) {
-        el.work.dataset.zoom = 'shell';
         say(tr('the shell is zoomed (F12 comes back)', 'シェルを広げました（F12 で戻る）'));
     } else {
-        el.work.dataset.zoom = 'files';
         say(tr(`the ${state.focus === 'left' ? 'left' : 'right'} pane is zoomed (F12 comes back)`, `${state.focus === 'left' ? '左' : '右'}ペインを広げました（F12 で戻る）`));
     }
-    // Whatever just changed shape, the shell's idea of its own size is stale.
+    afterZoom();
+}
+
+/// The shell's box just changed, so its idea of its own size is stale — and
+/// the foot bar has a different amount of room. Called by everything that can
+/// change which surface is filling the window, which is now the focus keys too.
+function afterZoom() {
     if (term.on) ask('shellresize', shellSize());
     measureFoot();
 }

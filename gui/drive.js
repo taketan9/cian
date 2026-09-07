@@ -749,10 +749,30 @@ async function main() {
         ['Shift+ArrowLeft', 'もう一文字'], ['wait:400', ''],
         ['Shift+ArrowLeft', 'もう一文字'], ['wait:400', ''],
         ['Shift+ArrowRight', '一文字戻す ── 反対向きも同じ扉'], ['wait:400', ''],
-        ['read:\'シェルの選択: \' + (window.getSelection().toString().length) + \' 文字\'', ''],
+        ['must:window.getSelection().toString().length === 2', 'Shift+← ×3 と → ×1 で 2 文字'],
         ['Escape', '解除 ── シェルには留まる'], ['wait:500', ''],
         ['read:\'Esc のあと: \' + (window.getSelection().toString().length) + \' 文字 / シェルに居る=\' + term.focused', ''],
         ['Escape', 'ファイルへ戻る'], ['wait:600', ''],
+
+        // **F12 で広げた面は、キーと一緒に動く。**
+        //
+        // 広げるのは「どの面か」ではなく「いま鍵のある面」── 端末版の
+        // `draw_zoomed` が毎フレーム `focused` を見るのと同じ規則。窓版は
+        // F12 を押した瞬間の面を凍らせていたので、一覧を広げてから Shift+J
+        // すると **キーはシェルに入るのに画面は一覧のまま**だった。
+        // `display:none` の面に打ち込んでいる状態で、状態行にも出ない。
+        //
+        // 見えるかどうかは計算後の style でしか言えない ── `hidden` でも
+        // クラスでもなく CSS の `display` で消しているので、状態を読んでも
+        // 「出ている」と答えてしまう（記憶の 8 番の型）。
+        ['F12', '一覧を広げる'], ['wait:700', ''],
+        ['must:el.work.dataset.zoom === \'files\' && getComputedStyle(el.shell).display === \'none\'', '広げた直後は一覧だけ'],
+        ['Shift+J', '★ 広げたままシェルへ'], ['wait:900', ''],
+        ['must:el.work.dataset.zoom === \'shell\' && getComputedStyle(el.shell).display !== \'none\' && getComputedStyle(el.panes).display === \'none\'', '★ キーを移したらシェルが見える'],
+        ['Escape', 'ファイルへ戻す ── 逆向きも追う'], ['wait:900', ''],
+        ['must:el.work.dataset.zoom === \'files\' && getComputedStyle(el.panes).display !== \'none\'', '戻したら一覧が見える'],
+        ['F12', 'ズームを解く'], ['wait:700', ''],
+        ['must:!el.work.dataset.zoom && getComputedStyle(el.shell).display !== \'none\' && getComputedStyle(el.panes).display !== \'none\'', 'F12 で解けば両方戻る'],
 
         // 上書き確認は「うち何件が既に向こうにあるか」を言う。`to/` には
         // `from/` と同じ名前が幾つも入れてあるので、マークしてコピーを出せば
@@ -764,8 +784,7 @@ async function main() {
         ['Tab', '左へ'], ['z', 'パスで移動'], [`type:${sand}/from`, ''], ['Enter', 'from へ'], ['wait:800', ''],
         ['Ctrl+a', '全部マーク'], ['wait:400', ''],
         ['c', '反対ペインへコピー'], ['wait:700', ''],
-        ['read:\'衝突の一行: \' + ((document.querySelector(\'#ask .body\').textContent.match(/^うち (\\d+) 件は既に/) || [])[1] || \'無し\')', ''],
-        ['read:\'↑ 印の行: \' + document.querySelector(\'#ask .body\').textContent.split(\'\\n\').filter(l=>l.startsWith(\'↑ \')).length', ''],
+        ['must:(() => { const t = document.querySelector(\'#ask .body\').textContent; const n = (t.match(/^うち (\\d+) 件は既に/) || [])[1]; const marks = t.split(\'\\n\').filter(l => l.startsWith(\'↑ \')).length; return Number(n) > 0 && Number(n) === marks; })()', '衝突の件数と ↑ 印の行数が一致'],
         ['Esc', 'やめる'], ['wait:500', ''],
         ['Esc', 'マークを外す'], ['wait:400', ''],
         // **左ペインを砂場の根に戻してから次へ渡す。** 下の一連は「左は根に
@@ -787,11 +806,11 @@ async function main() {
         // 長いあいだ「元の場所を覚えていない」を理由に断っていたが、覚えて
         // いないのは作った側の話で、元は最初からそこに在る。
         ['Mod+Shift+z', 'コピーをやり直す'], ['wait:2000', ''],
-        ['read:\'Ctrl+Shift+z のあと → \' + (state.right.entries||[]).filter(e=>!e.parent && !e.name.startsWith(String.fromCharCode(46))).length + \' 行\'', ''],
+        ['must:(state.right.entries||[]).filter(e=>!e.parent && !e.name.startsWith(String.fromCharCode(46))).length === 1', 'やり直しでコピーが戻る'],
         // そしてもう一度取り消せる ── やり直しが「この回が作ったもの」の
         // 一覧を置き直していなければ、ここで 1 行のまま残る。
         ['Mod+z', 'もう一度取り消す'], ['wait:2000', ''],
-        ['read:\'もう一度 Ctrl+z → \' + (state.right.entries||[]).filter(e=>!e.parent && !e.name.startsWith(String.fromCharCode(46))).length + \' 行\'', ''],
+        ['must:(state.right.entries||[]).filter(e=>!e.parent && !e.name.startsWith(String.fromCharCode(46))).length === 0', 'やり直した分もまた取り消せる'],
 
         // やり直しはもう一つの鍵にも乗っている（vi の Ctrl+R）。同じ扉に
         // 着くことを押して確かめる ── keycover.py は「押されていない鍵は
@@ -1035,6 +1054,30 @@ async function main() {
                     out = `例外: ${err.message}`;
                 }
                 console.log(`  read    ${what || key.slice(5)} = ${JSON.stringify(out)}`);
+                continue;
+            }
+            // `must:<式>` — **真でなければ落ちる。**
+            //
+            // `read:` は値を印刷するだけで、間違った値でも `例外 0 件` のまま
+            // 通る。それは記録であって検査ではない ── 一覧を広げたまま
+            // Shift+J したときにシェルが `display:none` のままだったのを
+            // `read:` で見ていて、値は毎回画面に出ていたのに緑だった。
+            //
+            // `bad`（動かなかったキー）には混ぜない。あれは「押しても何も
+            // 起きないことがある」を承知の上の報告で、落とさないと決めて
+            // あるものだから ── ここは落ちるべきものなので `crashes` へ。
+            if (key.startsWith('must:')) {
+                const expr = key.slice(5);
+                let ok, out;
+                try {
+                    out = await cdp.read(expr);
+                    ok = out === true;
+                } catch (err) {
+                    out = `例外: ${err.message}`;
+                    ok = false;
+                }
+                console.log(`  must    ${what || expr} → ${ok ? 'ok' : JSON.stringify(out)}`);
+                if (!ok) crashes.push(`満たされなかった: ${what || expr} → ${JSON.stringify(out)}`);
                 continue;
             }
             // `top:<css>` — その面が**本当にいちばん上に見えているか**。
