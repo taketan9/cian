@@ -20,8 +20,9 @@ __pycache__/
 
 # Local handoff doc for cross-session continuity; not part of the project.
 /HANDOFF.md
-# What the release workflow stages before zipping, and what `bundle.sh` leaves
-# if it is pointed here: a whole application bundle, binaries and all.
+# What the release workflow stages before zipping, and where `bundle-gui.sh`
+# leaves the .app if it is pointed here: a whole application bundle, binaries
+# and all.
 /cian-macos/
 /cian-windows-x64/
 /target/cian.app

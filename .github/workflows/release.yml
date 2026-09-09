@@ -62,17 +62,21 @@ jobs:
             exit 1
           fi
 
-  # The window build for a Mac, as a double-clickable .app. This is the one to
-  # download to try `cian` on a real machine; `cian-tui` rides along in the same
-  # zip for the terminal.
+  # What a Mac gets: the universal engine, and the window front end as a zip.
+  #
+  # **A double-clickable .app is not here.** There was one, and it wrapped the
+  # `cian` binary — the winit front end, which left main on 2026-09-06 and took
+  # that binary with it. The four steps that built it kept asking for it and
+  # kept failing, so they were removed with `packaging/macos/bundle.sh` itself
+  # (2026-09-10); `everything` no longer changes anything on this side. An
+  # .app around the *window* front end is a different piece of work — it has to
+  # carry Electron — and it waits until the shape of that settles.
+  #
+  # Until then the way to a Dock icon on the machine that builds it is
+  # `packaging/macos/bundle-gui.sh --dock`, which makes an .app that points at
+  # the working tree. That one cannot be handed to anybody else, by design.
   macos:
     needs: version
-    # **Not gated any more.** The window front end is what he actually uses,
-    # and until now the only way to get it onto a Mac was to clone the
-    # repository and run `npm start` — which is fine for the person who wrote
-    # it and is not a way to hand somebody a program. The heavy half (the
-    # the terminal build, the universal package) is still behind
-    # `everything`; what always runs is the engine and the window.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -108,16 +112,9 @@ jobs:
             cargo build --release --target "$target" --bin cian-server
           done
 
-      - name: Build the terminal build
-        if: inputs.everything
-        run: |
-          for target in aarch64-apple-darwin x86_64-apple-darwin; do
-            cargo build --release --target "$target" --bin cian-tui
-          done
-
-      # One binary that holds both, where the bundler and the zip expect to
-      # find it. `lipo` is what "universal" means: the two builds glued into
-      # one file, and macOS picks the slice it can run.
+      # One binary that holds both, where the window's zip expects to find
+      # it. `lipo` is what "universal" means: the two builds glued into one
+      # file, and macOS picks the slice it can run.
       - name: Make the engine universal
         run: |
           mkdir -p target/release
@@ -126,43 +123,6 @@ jobs:
             target/x86_64-apple-darwin/release/cian-server \
             -output target/release/cian-server
           lipo -info target/release/cian-server
-
-      - name: Make the rest universal
-        if: inputs.everything
-        run: |
-          mkdir -p target/release
-          for bin in cian cian-tui; do
-            lipo -create \
-              "target/aarch64-apple-darwin/release/$bin" \
-              "target/x86_64-apple-darwin/release/$bin" \
-              -output "target/release/$bin"
-            lipo -info "target/release/$bin"
-          done
-
-      - name: Bundle and stage
-        if: inputs.everything
-        run: |
-          ./packaging/macos/bundle.sh
-          stage=cian-macos
-          mkdir -p "$stage/examples"
-          cp -R target/cian.app "$stage/"
-          cp target/release/cian-tui target/release/cian-server "$stage/"
-          cp examples/init.lua "$stage/examples/"
-          cp README.md README.ja.md LICENSE "$stage/"
-          # The quarantine catches everyone who downloads this, and cian is
-          # not notarised. The fix belongs where they will look for it — in
-          # the folder, not on line 30 of a manual.
-          cp packaging/macos/README.txt "$stage/"
-          # Zipped with ditto so the .app keeps its permissions and the
-          # ad-hoc signature survives the round trip.
-          ditto -c -k --sequesterRsrc --keepParent "$stage" cian-macos.zip
-
-      - name: Upload artifact
-        if: inputs.everything
-        uses: actions/upload-artifact@v6
-        with:
-          name: cian-macos
-          path: cian-macos.zip
 
       # The engine on its own, the same courtesy the Windows job does: the
       # window front end is JavaScript and needs no compiler, so somebody
