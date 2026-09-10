@@ -15,35 +15,38 @@
 
 ## ダウンロード
 
-**[→ リリース](https://github.com/taketan9/cian/releases)** — 3つのパッケージと、照合用の `SHA256SUMS` が付いています。
+**[→ リリース](https://github.com/taketan9/cian/releases)** — 窓版とエンジン、それに照合用の `SHA256SUMS` が付いています。
 
-| プラットフォーム | パッケージ | 中身 |
+| 使いたいもの | 落とすもの | 中身 |
 |---|---|---|
-| macOS（Intel / Apple シリコン） | `cian-macos.zip` | ダブルクリックで起動する `cian.app` と、ターミナル用の `cian-tui` |
-| Windows x64 | `cian-windows-x64.zip` | `cian.exe` / `cian-tui.exe` / `install.ps1` — [オフライン導入](#windows-へオフライン導入)を参照 |
-| エンジンだけ | `cian-server-win-x64.exe` | 約1MB — Electron 版が喋る相手。Rust の無い機械向け |
-| ビルドする人向け | `cian-source-offline.zip` | 依存クレートを全部同梱したソース一式 — [ソースからビルド](#ソースからビルド)を参照 |
+| Windows で窓版 | `cian-gui-win-x64.zip`（15MB） | 前面一式・エディタの実行時・同梱フォント・エンジン。**Electron 本体だけ別途必要**（247MB、社内に既にあるものを使う前提） |
+| Mac で窓版 | `cian-gui-macos.zip`（18MB） | 同上。エンジンは Intel と Apple シリコンの両方入り |
+| エンジンだけ差し替え | `cian-server-win-x64.exe`（10MB）／`cian-server-macos.bin` | 窓版が喋る相手。前面は JavaScript なので、更新はたいていこれ1つで足ります |
+| `.exe` が社内の網に止められる | `cian-server-win-x64.exe.zip`（4MB）／`cian-server-macos.bin.zip` | 中身も名前も生のものと同じ。展開するとその exe がそのまま出ます |
+| ビルドする人向け | `cian-source-offline.zip`（182MB） | 依存クレートを全部同梱したソース一式 — [ソースからビルド](#ソースからビルド)を参照。Actions から `everything = true` で手動実行 |
+
+**配っているのは窓版だけです**（2026-09-10）。端末版（`cian-tui`）は生きていて
+テストも通っていますが、資材としては出していません。要るならソースから建ててください。
 
 展開して実行するだけです。インストーラの質問に答える必要はなく、設定を保存するまで置いたディレクトリの外には何も書きません。
 
-**ファイラは1つ、ビルドは2つ。** `cian` はウィンドウを開き、動かすのに何も
-入れる必要がありません。`cian-tui` は今ある端末の中で動きます — ssh 先や
-tmux の中はこちらでないと届きません。以下の説明は、断りがなければ
-`cian-tui` のものです。ウィンドウ版は同じプログラムから端末を抜いただけです。
+**ファイラは1つ、前面は2つ。** 窓版は Electron の中で描くので、Windows でも
+日本語が潰れません。`cian-tui` は今ある端末の中で動きます — ssh 先や tmux の
+中はこちらでないと届きません。**どちらも同じエンジン**（`cian-server` /
+`cian-core`）を相手にしていて、設定も配色も共用です。以下の説明は、断りが
+なければ `cian-tui` のものです。
 
-**ダウンロードした `cian.app` が「開いていません」と言われたら。** macOS は、
-ブラウザ経由で届いたアプリに隔離属性を付け、Apple の公証を受けていないものを
-止めます（Sequoia からは右クリック→開くの抜け道もありません）。cian は
-Apple Developer 証明書での署名・公証をしていないので、これに当たります。
-どれか一つで通ります:
+**Mac で展開したら、隔離を外す。** macOS はブラウザ経由で届いたものに隔離属性を
+付け、Apple の公証を受けていないものを止めます。cian は Apple Developer 証明書での
+署名・公証をしていないので、これに当たります ── 外さないと、エンジンが黙って
+起動しません（窓は出るのに中身が空、という形で出ます）。展開したフォルダで一度だけ:
 
 ```sh
-xattr -dr com.apple.quarantine /path/to/cian.app   # 属性を外す。確実
-gh run download <run-id> -n cian-macos             # そもそも付けない。ブラウザを経由しない
+xattr -dr com.apple.quarantine .                   # 属性を外す。確実
+gh run download <run-id> -n cian-gui-macos         # そもそも付けない。ブラウザを経由しない
 ```
 
-システム設定 →「プライバシーとセキュリティ」を下までスクロールし、
-**「このまま開く」** でも通ります。自分でビルドしたものには最初から付きません。
+自分でビルドしたものには最初から付きません。
 
 - Windows では **Windows Terminal** か **WezTerm** ＋ Nerd Font を。アイコンと角丸が正しく出るのはそこです。オフライン導入は[下のほう](#windows-へオフライン導入)。
 - **`?`** で全キー一覧。現在のキーマップから生成するので、自分で割り当てたキーも載ります。シェルからは `cian-tui -man`、コマンドラインの使い方は `cian-tui -h`。
@@ -584,27 +587,35 @@ flowchart TD
 
 ## Windows へオフライン導入
 
-自己完結した実行ファイルです（ランタイム・DLL・実行時ネットワークなし）。ネットにつながる機械で [リリース](https://github.com/taketan9/cian/releases) から `cian-windows-x64.zip` を取り、`SHA256SUMS` と照合して持ち込みます：
+**要るのは2つだけで、どちらも展開するだけです。** ネットにつながる機械で
+[リリース](https://github.com/taketan9/cian/releases) から `cian-gui-win-x64.zip`（15MB）を取り、
+`SHA256SUMS` と照合して持ち込みます：
 
 ```powershell
-Get-FileHash cian-windows-x64.zip -Algorithm SHA256
+Get-FileHash cian-gui-win-x64.zip -Algorithm SHA256
 ```
 
-zip 自体を自前で作ることもできます（Mac から、Windows の開発機なしで）。同梱のワークフローが本物の Windows ランナーでビルドします — タグを push（`git tag v1.1.0 && git push --tags`）、または **Actions → release → Run workflow** で、その実行結果のアーティファクトを取ってください。
+もう1つは **Electron 本体**（247MB）。zip には入っていません ── 社内に既にあるものを
+使う前提で、無ければ [electron/electron のリリース](https://github.com/electron/electron/releases)
+から `electron-v33.x.x-win32-x64.zip` を落として展開します。Rust もコンパイラも要りません
+（前面は JavaScript で、エンジンは exe で届きます）。
 
-オフライン機で展開し、`cian-tui.exe` をその場で動かすか、PATH に導入します：
+**展開する前に、zip のブロックを外してください。** 右クリック →「プロパティ」→
+「セキュリティ: 他のコンピューターから取得したものです」があれば **「許可する」** →
+OK。外さないと展開後の全ファイルに印が残り、`cian-server.exe` が黙って起動しません
+（窓は出るのに中身が空、という形で出ます）。
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1
-```
+置き方と更新のしかたは zip の中の `GUI.txt` と `DEPLOY.ja.txt` にあります ──
+`electron\` と `gui\` を並べ、`run.bat` で起動します。cian を上げるときは
+`gui\` を新しい zip の中身で置き換えるだけです。
 
-これは現在のユーザ用に `%LOCALAPPDATA%\Programs\cian` へ入れます（管理者権限不要）。全ユーザ向けは管理者 PowerShell で：
+zip 自体を自前で作ることもできます（Mac から、Windows の開発機なしで）。同梱の
+ワークフローが本物の Windows ランナーでビルドします — タグを push
+（`git tag v1.1.0 && git push --tags`）、または **Actions → release → Run workflow** で、
+その実行結果のアーティファクトを取ってください。
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -Dest "C:\Program Files\cian" -AllUsers
-```
-
-新しいターミナルを開いて `cian-tui`。ファイル種別アイコンには Nerd Font 対応の端末を。
+**端末版（`cian-tui.exe`）は資材として出していません**（2026-09-10）。要るなら
+`cian-source-offline.zip` を持ち込んで建ててください。
 
 ---
 

@@ -1,6 +1,15 @@
 name: release
 
-# Builds the three downloads and publishes them as one GitHub Release.
+# Builds what is actually handed to people — the window front end for Windows
+# and for a Mac, and the engine each one talks to — and publishes them as one
+# GitHub Release.
+#
+# **The window build is the whole of what is distributed** (2026-09-10, his
+# decision). The terminal build still exists, is still tested, and still builds
+# from source; it is simply not something this workflow hands out. What that
+# removed: `cian-windows-x64.zip` (which carried `cian.exe` — the winit front
+# end, gone from main on 2026-09-06 — beside `cian-tui.exe`), and, earlier the
+# same day, the macOS `.app` package.
 #
 # Trigger it by pushing a version tag (`git tag v1.1.0 && git push --tags`), or
 # by hand from the Actions tab. A tag publishes a release; a manual run only
@@ -8,9 +17,9 @@ name: release
 # build without announcing anything.
 #
 # Each platform job stages a package and uploads it as an artifact. One publish
-# job at the end gathers all three, writes the checksums over the finished set,
-# and creates the release. That ordering matters: when each job attached its own
-# file, three jobs raced to create the same release, and the notes came out
+# job at the end gathers them, writes the checksums over the finished set, and
+# creates the release. That ordering matters: when each job attached its own
+# file, the jobs raced to create the same release, and the notes came out
 # belonging to whichever finished first.
 
 on:
@@ -24,24 +33,27 @@ on:
   workflow_dispatch:
     inputs:
       everything:
-        description: "Build every platform (off: the Windows window only)"
+        # The window builds and the engines are what a release is, and they run
+        # every time. This adds the one package nobody needs unless they are
+        # building: the source with every crate already vendored (182MB).
+        description: "Also build the offline source bundle (182MB)"
         type: boolean
         default: false
 
 permissions:
   contents: write
 
-# **The Windows window only, unless asked otherwise.**
+# **The window build, on both platforms, every time.**
 #
-# 2026-09-01: "しばらくは Windows の gui モードでしか動作させないから、ビルドは
-# win-gui だけでいいよ". The full set is eleven minutes and a quarter of a
-# gigabyte, nearly all of it for platforms nobody is running this week — the
-# macOS universal build alone is two compiles of a wgpu front end, and the
-# offline source zip is 181MB.
+# 2026-09-01 it was Windows only: "しばらくは Windows の gui モードでしか
+# 動作させないから、ビルドは win-gui だけでいいよ" — the full set was eleven
+# minutes and a quarter of a gigabyte, most of it for platforms nobody was
+# running that week. The macOS window has since joined it; what left instead
+# was everything that packaged the terminal build and the winit front end
+# (2026-09-10).
 #
-# Nothing is deleted. The other jobs are gated on one input: run this workflow
-# by hand with **everything = true** and the release is the full set again,
-# which is what a version anybody else downloads will need.
+# One input is left, and it gates one thing: the offline source bundle, which
+# is 182MB and is only of use to somebody who has to build without a network.
 jobs:
   # A tag that disagrees with Cargo.toml ships binaries whose `:version` says
   # something other than the release they are attached to. Cheap to check, and
@@ -218,36 +230,6 @@ jobs:
       # is the fastest of the three to build.
       - name: Build the engine
         run: cargo build --release --bin cian-server
-
-      # `cian-tui` は端末版。窓版の zip には入らないので、全部を頼まれた
-      # ときだけ建てる。
-      - name: Build the terminal build
-        if: inputs.everything
-        run: |
-          cargo build --release --bin cian-tui
-
-      - name: Stage package
-        if: inputs.everything
-        shell: pwsh
-        run: |
-          $stage = "cian-windows-x64"
-          New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item target/release/cian.exe $stage/
-          Copy-Item target/release/cian-tui.exe $stage/
-          Copy-Item target/release/cian-server.exe $stage/
-          Copy-Item packaging/windows/install.ps1 $stage/
-          Copy-Item packaging/windows/README.txt $stage/
-          Copy-Item README.md, README.ja.md, LICENSE $stage/
-          New-Item -ItemType Directory -Force -Path "$stage/examples" | Out-Null
-          Copy-Item examples/init.lua "$stage/examples/"
-          Compress-Archive -Path "$stage/*" -DestinationPath "cian-windows-x64.zip" -Force
-
-      - name: Upload artifact
-        if: inputs.everything
-        uses: actions/upload-artifact@v6
-        with:
-          name: cian-windows-x64
-          path: cian-windows-x64.zip
 
       # The engine on its own, nine megabytes.
       #

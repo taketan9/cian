@@ -15,35 +15,41 @@ One binary. macOS and Windows. No runtime, no DLLs, nothing to install alongside
 
 ## Download
 
-**[→ Releases](https://github.com/taketan9/cian/releases)** — three packages, and a `SHA256SUMS` to check them against.
+**[→ Releases](https://github.com/taketan9/cian/releases)** — the window build and the engine, and a `SHA256SUMS` to check them against.
 
-| Platform | Package | What is in it |
+| What you want | What to download | What is in it |
 |---|---|---|
-| macOS (Intel and Apple silicon) | `cian-macos.zip` | `cian.app` to double-click, and `cian-tui` for the terminal |
-| Windows x64 | `cian-windows-x64.zip` | `cian.exe`, `cian-tui.exe` and `install.ps1` — see [offline install](#install-on-windows-offline) |
-| Just the engine | `cian-server-win-x64.exe` | about a megabyte — what the Electron front end talks to, for a machine with no Rust |
-| Any, to build on | `cian-source-offline.zip` | the source with every dependency already downloaded — see [build from source](#build-from-source) |
+| The window, on Windows | `cian-gui-win-x64.zip` (15MB) | the front end, the editor's runtime, the bundled font, and the engine. **Electron itself is not in it** (247MB — the assumption is that your machine already has one) |
+| The window, on a Mac | `cian-gui-macos.zip` (18MB) | the same, with a universal engine (Intel and Apple silicon) |
+| Just the engine | `cian-server-win-x64.exe` (10MB) / `cian-server-macos.bin` | what the window talks to. The front end is JavaScript, so this one file is usually the whole update |
+| A network that refuses a bare `.exe` | `cian-server-win-x64.exe.zip` (4MB) / `cian-server-macos.bin.zip` | the same file, same name, inside a zip |
+| Any, to build on | `cian-source-offline.zip` (182MB) | the source with every dependency already downloaded — see [build from source](#build-from-source); run `release` by hand with `everything = true` |
+
+**The window build is the whole of what is distributed** (2026-09-10). The
+terminal build still exists and is still tested; it is simply not handed out.
+Build it from source if you want it.
 
 Unpack it and run it. There is no installer to answer to, and nothing is written outside the folder you put it in until you save a setting.
 
-**Two builds, one file manager.** `cian` opens a window and needs nothing
-installed to run in; `cian-tui` runs inside the terminal you already have,
-which is where ssh and tmux need it. Everything below describes `cian-tui`
-unless it says otherwise — the window build is the same program with the
-terminal taken out from under it.
+**One file manager, two front ends.** The window draws inside Electron, which
+is what makes Japanese come out right on Windows; `cian-tui` runs inside the
+terminal you already have, which is where ssh and tmux need it. **Both talk to
+the same engine** (`cian-server` / `cian-core`) and share their configuration
+and their colours. Everything below describes `cian-tui` unless it says
+otherwise.
 
-**If a downloaded `cian.app` "cannot be opened".** macOS quarantines anything a
-browser delivered and refuses to run what Apple has not notarised — and since
-Sequoia, right-click → Open is no longer a way round it. cian is not signed
-with an Apple Developer certificate, so this applies. Any one of these works:
+**On a Mac, clear the quarantine after unpacking.** macOS marks anything a
+browser delivered and refuses to run what Apple has not notarised, and cian is
+not signed with an Apple Developer certificate — leave the mark on and the
+engine will not start, which shows up as a window with nothing in it. Once, in
+the unpacked folder:
 
 ```sh
-xattr -dr com.apple.quarantine /path/to/cian.app   # drop the attribute
-gh run download <run-id> -n cian-macos             # never gets one: no browser involved
+xattr -dr com.apple.quarantine .                   # drop the attribute
+gh run download <run-id> -n cian-gui-macos         # never gets one: no browser involved
 ```
 
-System Settings → Privacy & Security, scrolled to the bottom, has **Open
-Anyway**. A build you made yourself is never quarantined.
+A build you made yourself is never quarantined.
 
 - On Windows use **Windows Terminal** or **WezTerm** with a Nerd Font — that is where the icons and rounded corners look right. Offline install is [further down](#install-on-windows-offline).
 - **`?`** shows the full key list, generated from your live keymap, so rebound keys show up too. `cian-tui -man` prints it from a shell; `cian-tui -h` prints the command-line usage.
@@ -597,27 +603,21 @@ flowchart TD
 
 ## Install on Windows (offline)
 
-Self-contained executables — no runtime, no DLLs, no network. Take `cian-windows-x64.zip` from the [releases](https://github.com/taketan9/cian/releases) on a machine that has one, check it against `SHA256SUMS`, and carry it across:
+**Two things, both of which only need unzipping.** On a machine with a network, take `cian-gui-win-x64.zip` (15MB) from the [releases](https://github.com/taketan9/cian/releases), check it against `SHA256SUMS`, and carry it across:
 
 ```powershell
-Get-FileHash cian-windows-x64.zip -Algorithm SHA256
+Get-FileHash cian-gui-win-x64.zip -Algorithm SHA256
 ```
+
+The other is **Electron itself** (247MB), which is not in the zip — the assumption is that the machine already has one. If it does not, take `electron-v33.x.x-win32-x64.zip` from [electron/electron's releases](https://github.com/electron/electron/releases). No Rust and no compiler: the front end is JavaScript and the engine arrives as an exe.
+
+**Unblock the zip before unpacking it.** Right-click → Properties → tick **Unblock** if "This file came from another computer" is there. Leave it on and every unpacked file keeps the mark, and `cian-server.exe` will not start — which shows up as a window with nothing in it.
+
+How to lay it out and how to update it are in `GUI.txt` and `DEPLOY.ja.txt` inside the zip: put `electron\` and `gui\` side by side and start it with `run.bat`. Updating cian means replacing `gui\` with the contents of a newer zip.
 
 To build the zip yourself instead — from a Mac, with no Windows dev machine — the bundled workflow does it on a real Windows runner: push a tag (`git tag v1.1.0 && git push --tags`), or **Actions → release → Run workflow**, and take the artifact from that run.
 
-On the offline machine, unzip and either run `cian-tui.exe` where it sits, or put it on PATH:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1
-```
-
-That installs for the current user under `%LOCALAPPDATA%\Programs\cian`, no admin needed. For all users, from an elevated PowerShell:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -Dest "C:\Program Files\cian" -AllUsers
-```
-
-Open a new terminal and type `cian-tui`. Use a Nerd Font terminal for the file-type icons.
+**The terminal build is not handed out** (2026-09-10). If you want `cian-tui.exe`, carry `cian-source-offline.zip` across and build it.
 
 ---
 
