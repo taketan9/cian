@@ -291,6 +291,17 @@ fn run(inner: Arc<Inner>, job: Pending) {
                 crate::did_step(&undo, &redo, step);
             }
         }
+        // **席を空けてから `done` を言う。** 逆だと、`done` を受けて `:queue` を
+        // 読み直した前端に、終わった仕事がまだ「実行中」で見える ── 次の描画で
+        // 消えるので画面では一瞬だが、`done` が「もう並んでいない」の保証に
+        // なっていない、ということでもある。`jobs::tests::
+        // a_second_operation_waits_its_turn_and_then_runs` が CI の macOS で
+        // ときどき落ちていたのはこれで（2026-09-10）、負荷が高いと `done` と
+        // 席を空ける間で thread が降ろされる。
+        //
+        // `Drop` ではなくここに書くのは、次の仕事がこの thread の持つ lock の
+        // 上で始まってはいけないから ── その理由は前と同じ。
+        *inner.running.lock().unwrap() = None;
         out.event(
             "done",
             serde_json::json!({
@@ -323,10 +334,6 @@ fn run(inner: Arc<Inner>, job: Pending) {
             }),
         );
 
-        // Out of the runner's seat before the next one takes it. Written here
-        // rather than in a `Drop` guard because the next job must not start
-        // while this thread still holds the lock.
-        *inner.running.lock().unwrap() = None;
         let next = inner.waiting.lock().unwrap().pop_front();
         if let Some(next) = next {
             run(inner, next);
@@ -576,6 +583,13 @@ impl Jobs {
             }
             let stopped = cancel.load(Ordering::Relaxed);
             report(ok, total, "", 0, 0, true);
+            // 席を空けてから `done`。理由は上の経路と同じ。
+            {
+                let mut running = inner.running.lock().unwrap();
+                if running.as_ref().map(|j| j.op) == Some(op) {
+                    *running = None;
+                }
+            }
             out.event(
                 "done",
                 serde_json::json!({
@@ -588,10 +602,6 @@ impl Jobs {
                     "ms": began.elapsed().as_millis() as u64,
                 }),
             );
-            let mut running = inner.running.lock().unwrap();
-            if running.as_ref().map(|j| j.op) == Some(op) {
-                *running = None;
-            }
         });
         (op, 0)
     }
