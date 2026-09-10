@@ -590,6 +590,19 @@ pub(crate) fn column_gap(line: &str) -> Option<(usize, usize)> {
 }
 
 /// Pad to `w` display cells, accounting for wide characters.
+///
+/// **`format!("{:<9}", s)` is not this.** That pads to nine *characters*, and
+/// the two numbers are the same only in English: `行` is one character and two
+/// cells, `ファイル` is four and eight. A column of Japanese labels padded that
+/// way puts the next field somewhere different on every row — which is the
+/// whole of what "the menu is ragged" means, and **it cannot be seen in an
+/// English screenshot**. That is how fourteen call sites went around this
+/// function without anyone noticing (2026-09-10); `scripts/widths.py` now
+/// counts them.
+///
+/// Something already wider than `w` is returned unchanged rather than cut: a
+/// name shortened to keep a column answers a question nobody asked. Cut it
+/// first with [`truncate`] if the column has to hold.
 pub(crate) fn pad_to(s: &str, w: usize) -> String {
     let mut out = s.to_string();
     for _ in width(s)..w {

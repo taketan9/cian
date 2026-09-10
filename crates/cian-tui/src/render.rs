@@ -5336,7 +5336,7 @@ fn draw_theme_picker(f: &mut Frame, area: Rect, popup: &mut Popup, lang: Lang) {
         };
         lines.push(Line::from(vec![
             Span::styled(if sel { "▸ " } else { "  " }, name_style),
-            Span::styled(format!("{:<20}", name), name_style),
+            Span::styled(pad_to(name, 20), name_style),
             sw(pal.file.directory), sw(pal.file.code), sw(pal.file.archive),
             sw(pal.file.executable), sw(pal.accent),
         ]));
@@ -5817,9 +5817,9 @@ fn draw_ssh_hosts(
             format!("{} users", hst.users.len())
         };
         lines.push(Line::from(vec![
-            Span::styled(format!("{}{:<16}", if sel { "▸ " } else { "  " }, hst.name), style),
+            Span::styled(format!("{}{}", if sel { "▸ " } else { "  " }, pad_to(&hst.name, 16)), style),
             Span::styled(
-                format!("{:<22} {}", hst.host, users),
+                format!("{} {}", pad_to(&hst.host, 22), users),
                 Style::default().fg(muted_on(theme().popup_bg)),
             ),
         ]));
@@ -5868,7 +5868,7 @@ fn draw_snippets(
         let tag = if s.confirm { "?" } else if s.enter { "↵" } else { "…" };
         lines.push(Line::from(vec![
             Span::styled(format!("{}{} ", if sel { "▸ " } else { "  " }, tag), style),
-            Span::styled(format!("{:<20}", truncate(&s.name, 20)), style),
+            Span::styled(pad_to(&truncate(&s.name, 20), 20), style),
             Span::styled(
                 format!("  {}", truncate(&s.cmd, (inner.width as usize).saturating_sub(26))),
                 Style::default().fg(muted_on(theme().popup_bg)),
@@ -5978,7 +5978,7 @@ fn draw_remote_browser(
         };
         let mut line = Line::from(vec![
             Span::styled(format!("{}{}", mark, icon), base),
-            Span::styled(format!("{:<40}", truncate(&e.name, 40)), base),
+            Span::styled(pad_to(&truncate(&e.name, 40), 40), base),
             Span::styled(format!("{:>10}", size), Style::default().fg(th.dim)),
         ]);
         if sel {
@@ -6543,7 +6543,7 @@ fn draw_dest_picker(
             Paragraph::new(Line::from(vec![
                 Span::styled(if sel { " ▸ " } else { "   " }, base),
                 Span::styled(
-                    format!("{:<11}", kind),
+                    pad_to(kind, 11),
                     base.fg(dim_text(row_bg(sel))),
                 ),
                 Span::styled(
@@ -7220,7 +7220,10 @@ fn draw_viewer(
                     .get(i)
                     .map(|b| (b.hash.as_str(), b.author.as_str()))
                     .unwrap_or(("", ""));
-                let who: String = who.chars().take(11).collect();
+                // 桁で切る。`chars().take(11)` は日本語の作者名を11**字**
+                // 取るので、11桁のつもりの欄が22桁になり、その行だけ本文が
+                // 右へ流れていた。
+                let who: String = truncate(who, 11);
                 let same_as_prev = i > 0 && blame.get(i - 1).map(|p| p.hash.as_str()) == Some(hash);
                 let (shown_hash, shown_who) = if same_as_prev {
                     (String::new(), String::new()) // repeat block: leave blank
@@ -7228,7 +7231,7 @@ fn draw_viewer(
                     (hash.to_string(), who)
                 };
                 spans.push(Span::styled(
-                    format!("{:<7} {:<11} ", shown_hash, shown_who),
+                    format!("{:<7} {} ", shown_hash, pad_to(&shown_who, 11)),
                     Style::default().fg(dim_text(surface())),
                 ));
             }

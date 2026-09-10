@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use crate::{tr, App, Popup};
+use crate::{pad_to, tr, App, Popup};
 
 /// Load `count.lua` (portable-aware); fall back to the built-in defaults if it
 /// is absent or unparseable.
@@ -84,11 +84,11 @@ impl App {
         lines.push(String::new());
 
         let t = &r.total;
-        lines.push(format!("  {:<9}{:>10}", tr(lang, "files", "ファイル"), group(t.files)));
-        lines.push(format!("  {:<9}{:>10}", tr(lang, "lines", "行"), group(t.total)));
-        lines.push(format!("  {:<9}{:>10}", tr(lang, "blank", "空行"), group(t.blank)));
-        lines.push(format!("  {:<9}{:>10}", tr(lang, "comment", "コメント"), group(t.comment)));
-        lines.push(format!("  {:<9}{:>10}", tr(lang, "STEPS", "ステップ"), group(t.steps(o))));
+        lines.push(format!("  {}{:>10}", pad_to(tr(lang, "files", "ファイル"), 9), group(t.files)));
+        lines.push(format!("  {}{:>10}", pad_to(tr(lang, "lines", "行"), 9), group(t.total)));
+        lines.push(format!("  {}{:>10}", pad_to(tr(lang, "blank", "空行"), 9), group(t.blank)));
+        lines.push(format!("  {}{:>10}", pad_to(tr(lang, "comment", "コメント"), 9), group(t.comment)));
+        lines.push(format!("  {}{:>10}", pad_to(tr(lang, "STEPS", "ステップ"), 9), group(t.steps(o))));
 
         if !r.by_ext.is_empty() {
             lines.push(String::new());
@@ -96,8 +96,8 @@ impl App {
             for (ext, c) in r.by_ext.iter().take(20) {
                 let name = if ext.is_empty() { "(none)" } else { ext.as_str() };
                 lines.push(format!(
-                    "  {:<10}{:>6} {}{:>9} {}",
-                    name,
+                    "  {}{:>6} {}{:>9} {}",
+                    pad_to(name, 10),
                     group(c.files),
                     tr(lang, "files", "件"),
                     group(c.steps(o)),

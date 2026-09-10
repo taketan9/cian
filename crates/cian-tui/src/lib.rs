@@ -3875,6 +3875,36 @@ fn shortcut_icon(target: &str) -> &'static str {
     "\u{f15b}" // default file
 }
 
+/// How wide the key column is, in display columns — one number for both key
+/// lists, so the two halves of the manual line up with each other.
+///
+/// It is a constant rather than the widest entry because the widest entry is
+/// not fixed: keys the user bound in `init.lua` are appended to the built-in
+/// ones, and a column that moved when somebody rebound a key would be a
+/// different manual on every machine. `manual_key_column_is_wide_enough`
+/// keeps the built-in table inside it; anything wider (a user's long list)
+/// simply takes its one space and runs on.
+const MANUAL_KEY_COLS: usize = 19;
+
+/// One row of a key list: the keys, then the description at column
+/// `MANUAL_KEY_COLS + 3`, always.
+///
+/// **A key string wider than the column takes a line of its own** and the
+/// description follows on the next, indented to the same place. Six of the
+/// 291 rows are that wide (`wheel / Shift+PgUp / Shift+↑` is 28 columns), and
+/// widening the column for them would spend nine blank columns on the other
+/// 285 — while running the description on after a single space, which is what
+/// happened before, is the ragged edge itself. This is what a man page does
+/// with a long option, for the same reason.
+fn manual_row(keys: &str, desc: &str, out: &mut Vec<String>) {
+    if util::width(keys) > MANUAL_KEY_COLS {
+        out.push(format!("  {}", keys));
+        out.push(format!("  {} {}", " ".repeat(MANUAL_KEY_COLS), desc));
+    } else {
+        out.push(format!("  {} {}", pad_to(keys, MANUAL_KEY_COLS), desc));
+    }
+}
+
 /// One row of the manual: the built-in key(s), the remappable action they run
 /// (if any), and what it does, in English and Japanese.
 struct ManualEntry {
@@ -3971,8 +4001,8 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry("  :blame", None, "toggle the git blame gutter (who last changed each line)", "ビューア内：git blame ガター切替（各行の最終変更者）"),
                 entry("  from a grep hit", None, "Ctrl+n/N next/prev hit, :enc encoding (reveal is in the menu)", "grepヒットから：Ctrl+n/N 次/前, e 文字コード（場所を開くはメニュー内）"),
                 entry("=", None, "compare left ↔ right: two files (line diff), or two folders (recursive)", "左右を比較：ファイル同士（行差分）／ディレクトリ同士（再帰）"),
-                entry("  > / <", None, "  in a comparison: copy the entry across to the other side (confirms overwrite)", "  比較画面：エントリを反対側へコピー（上書きは確認）"),
-                entry("  c / w", None, "  in a comparison: copy to clipboard / save side-by-side (.html or .md, else .txt)", "  比較画面：クリップボードへ／左右並びで保存（.html か .md、他は .txt）"),
+                entry("  > / <", None, "in a comparison: copy the entry across to the other side (confirms overwrite)", "比較画面：エントリを反対側へコピー（上書きは確認）"),
+                entry("  c / w", None, "in a comparison: copy to clipboard / save side-by-side (.html or .md, else .txt)", "比較画面：クリップボードへ／左右並びで保存（.html か .md、他は .txt）"),
                 entry("Bksp", Some(Parent), "parent folder (bind `-` to it in init.lua if you want that too)", "親ディレクトリへ（`-` も使いたければ init.lua で割当）"),
                 entry("Left / Right", None, "focus the left / right pane", "左／右のペインにフォーカス"),
                 entry("h", Some(History), "history popup", "履歴ポップアップ"),
@@ -3985,7 +4015,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry("f", Some(Search), "search in this folder", "このディレクトリ内を検索"),
                 entry("Shift+F", None, "find by name, whole tree below here (:find)", "名前で検索（ここ以下のツリー全体）── :find でも"),
                 entry("Ctrl+F / Ctrl+G", Some(Action::GrepRecursive), "grep inside files, whole tree below here (:grep too)", "ファイル内をgrep（ここ以下のツリー全体）— Ctrl+G（サクラと同じ）や :grep でも可"),
-                entry("  patterns", None, "  bare text = literal; /re/ = regex, /re/i ignores case; grep also reads SJIS", "  裸の文字列=そのまま、/re/=正規表現（/re/i で大小無視）、grep は SJIS も読む"),
+                entry("  patterns", None, "bare text = literal; /re/ = regex, /re/i ignores case; grep also reads SJIS", "裸の文字列=そのまま、/re/=正規表現（/re/i で大小無視）、grep は SJIS も読む"),
                 entry("  p in results", None, "panelize: load the find/grep matches into the pane to mark & operate on", "検索結果を p でペイン化：マークして一括操作できます"),
                 entry("  r in results", None, "replace across every file the grep matched: preview each line, Space unchecks", "grep 結果の全ファイルを一括置換：1行ずつ確認、Space で除外"),
                 entry("b", None, "branch view: flatten this subtree into the pane, one row per file (b/Esc to leave)", "ブランチビュー：この配下を1ファイル1行に平坦化（b/Esc で戻る）"),
@@ -4005,8 +4035,8 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry("Space", Some(MarkDown), "toggle mark, move down", "マーク切替して下へ"),
                 entry("Shift+Space", Some(MarkUp), "toggle mark, move up", "マーク切替して上へ"),
                 entry("v", Some(Visual), "visual select", "ビジュアル選択"),
-                entry("  a", None, "  in visual: select all (or gg v G)", "  ビジュアル中：全選択（gg v G でも）"),
-                entry("  gg / G", None, "  in visual: extend to top / bottom", "  ビジュアル中：先頭／末尾まで伸ばす"),
+                entry("  a", None, "in visual: select all (or gg v G)", "ビジュアル中：全選択（gg v G でも）"),
+                entry("  gg / G", None, "in visual: extend to top / bottom", "ビジュアル中：先頭／末尾まで伸ばす"),
                 entry("V", Some(InvertMarks), "invert all marks", "全マークを反転"),
                 entry("u  Ctrl+Z", None, "undo the last rename / create / copy / move / folder step — an undone copy goes to the trash (also :undo)", "直前のリネーム／作成／コピー／移動／ディレクトリ移動を取り消し ── コピーはゴミ箱へ（:undo でも）"),
                 entry("Ctrl+R  Ctrl+Shift+Z", None, "redo what u just undid (Ctrl+Y, :redo)", "u で取り消した操作をやり直し（Ctrl+Y・:redo でも）"),
@@ -4051,7 +4081,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry("drag a border", None, "resize any split (mouse)", "境界をドラッグで分割をリサイズ（マウス）"),
                 entry("double-click", None, "enter a folder, or open a file (OS default)", "ディレクトリに入る／ファイルを開く（OS標準）"),
                 entry("drag an entry", None, "to the other pane: copy (Shift: move)", "反対ペインへ：コピー（Shift で移動）"),
-                entry("  ", None, "  onto the shell: type its path there", "  シェルへ：パスをそこに入力"),
+                entry("  ", None, "onto the shell: type its path there", "シェルへ：パスをそこに入力"),
                 entry(":copyto", None, "copy to a recent or typed directory", "最近使った／入力したディレクトリへコピー"),
                 entry(":moveto", None, "move there instead", "同じ選び方で移動"),
                 entry("right-click", None, "context menu (copy/cut/paste, color)", "コンテキストメニュー（コピー/カット/貼り付け、色）"),
@@ -4300,18 +4330,23 @@ pub(crate) fn viewer_manual_lines(lang: Lang) -> Vec<String> {
             Lang::Ja => ja.to_string(),
         });
         for (keys, e, j) in *rows {
-            out.push(format!("  {:<19} {}", keys, if lang == Lang::Ja { j } else { e }));
+            manual_row(keys, if lang == Lang::Ja { j } else { e }, &mut out);
         }
     }
+    // 最後の2行も同じ道を通す。手で空白を置いていたので、この2行だけ説明が
+    // 他と違う桁から始まっていた ── 一覧の末尾は目が行くところで、そこが
+    // ずれていると全体がずれて見える。
     out.push(String::new());
-    out.push(match lang {
-        Lang::En => "  Esc  drop a selection, a search, a half-typed command".to_string(),
-        Lang::Ja => "  Esc  選択・検索・入力途中のコマンドを取り消す".to_string(),
-    });
-    out.push(match lang {
-        Lang::En => "  Ctrl+.  or  :man   every key cian has".to_string(),
-        Lang::Ja => "  Ctrl+.  または  :man   cian の全キー".to_string(),
-    });
+    manual_row(
+        "Esc",
+        tr(lang, "drop a selection, a search, a half-typed command", "選択・検索・入力途中のコマンドを取り消す"),
+        &mut out,
+    );
+    manual_row(
+        tr(lang, "Ctrl+. or :man", "Ctrl+. または :man"),
+        tr(lang, "every key cian has", "cian の全キー"),
+        &mut out,
+    );
     out
 }
 
@@ -4352,7 +4387,7 @@ pub fn manual_lines(keymap: &HashMap<(char, KeyModifiers), Action>, lang: Lang) 
                     keys.push_str(&format!(", {}", c));
                 }
             }
-            out.push(format!("  {:<17} {}", keys, e.desc(lang)));
+            manual_row(&keys, e.desc(lang), &mut out);
         }
     }
     out

@@ -8536,6 +8536,105 @@ use crate::ai::StoredChatExt;
         assert!(text.contains("Alt+g"), "a modified binding is named in full:\n{}", text);
     }
 
+    /// **説明の欄が、どの行でも同じ桁から始まること。**
+    ///
+    /// 鍵の欄は `{:<19}` で詰められていた ── あれは19**字**であって19**桁**では
+    /// ない。`Alt+← / Alt+h` の `←` は東アジア曖昧幅で2桁を取るので、その行だけ
+    /// 説明が1桁ずれ、`drag in from Finder` は19字を超えるので詰め物が消えて
+    /// 説明が鍵にくっついていた。英語の画面では**どちらも起きない**（字数と桁数が
+    /// 同じなので）。だから目でも `cargo test` でも通っていた。
+    ///
+    /// 見るのは出来上がった行そのもの: 桁 21 は必ず区切りの空白で、桁 22 から
+    /// 説明が始まる。鍵が19桁を超えれば桁 21 に鍵の字が来て、ここで落ちる。
+    #[test]
+    fn probe_rows() {
+        for l in manual_lines(&HashMap::new(), Lang::En) {
+            if l.contains("in a comparison") || l.contains("drag in from Finder") {
+                println!("{:?}", l);
+            }
+        }
+    }
+
+    /// **説明が、どの行でも同じ桁から始まること。**
+    ///
+    /// 鍵の欄は `{:<19}` / `{:<17}` で詰められていた ── あれは19**字**であって
+    /// 19**桁**ではない。`Alt+← / Alt+h` の `←` は2桁を取る字で、その行だけ
+    /// 説明がずれる。`drag in from Finder` や、字下げの付いた入れ子の行
+    /// （`    :sort :rsort :uniq`）は字数の上限を超えるので詰め物が消え、説明が
+    /// 鍵にくっつく。**英語の画面ではどちらも起きない**（字数と桁数が同じなので）、
+    /// だから目でも `cargo test` でも通っていた。
+    ///
+    /// 見るのは出来上がった行そのもの。許すのは2つの形だけ:
+    ///
+    ///   桁 21 が空白・桁 22 が字     ふつうの行
+    ///   桁 21 に鍵の字が来ている     溢れた鍵。次の行が桁 22 から始まる説明
+    #[test]
+    fn manual_descriptions_all_start_in_the_same_column() {
+        /// `line` の表示桁 `col` を占めている文字。全角ならその後半に当たった
+        /// ときも同じ文字を返す。行が短ければ `None`。
+        fn char_at_column(line: &str, col: usize) -> Option<char> {
+            let mut at = 0usize;
+            for ch in line.chars() {
+                let w = crate::util::width(&ch.to_string()).max(1);
+                if col < at + w {
+                    return Some(ch);
+                }
+                at += w;
+            }
+            None
+        }
+        let sep = crate::MANUAL_KEY_COLS + 2; // 区切りの空白が居る桁
+        let desc = sep + 1; // 説明が始まる桁
+
+        let empty = HashMap::new();
+        for lang in [Lang::En, Lang::Ja] {
+            for (which, lines) in [
+                ("キー一覧", manual_lines(&empty, lang)),
+                ("ビューア", crate::viewer_manual_lines(lang)),
+            ] {
+                let (mut normal, mut wrapped) = (0, 0);
+                let mut i = 0;
+                while i < lines.len() {
+                    let line = &lines[i];
+                    i += 1;
+                    if !line.starts_with("  ") || line.trim().is_empty() {
+                        continue; // 見出しと空行
+                    }
+                    if char_at_column(line, sep) == Some(' ') {
+                        normal += 1;
+                        assert_ne!(
+                            char_at_column(line, desc),
+                            Some(' '),
+                            "{which}／{lang:?}: 説明が桁 {desc} から始まっていない\n  {line}",
+                        );
+                        continue;
+                    }
+                    // 溢れた鍵。説明は次の行に、同じ桁から。
+                    wrapped += 1;
+                    let follow = lines
+                        .get(i)
+                        .unwrap_or_else(|| panic!("{which}／{lang:?}: 溢れた鍵の次に説明が無い\n  {line}"));
+                    i += 1;
+                    for col in 0..desc {
+                        assert_eq!(
+                            char_at_column(follow, col),
+                            Some(' '),
+                            "{which}／{lang:?}: 続きの行が桁 {col} で字下げを破っている\n  {follow}",
+                        );
+                    }
+                    assert_ne!(
+                        char_at_column(follow, desc),
+                        Some(' '),
+                        "{which}／{lang:?}: 続きの行の説明が桁 {desc} から始まっていない\n  {follow}",
+                    );
+                }
+                // 数えるものには下限を書く ── 拾えなくなったときに黙らないように。
+                assert!(normal > 80, "{which}／{lang:?}: ふつうの行が {normal} 行しか無い");
+                assert!(wrapped > 0, "{which}／{lang:?}: 溢れた鍵が1行も無い ── 形が変わったか、数え損ねている");
+            }
+        }
+    }
+
     #[test]
     fn the_status_and_hints_default_to_english_and_switch_to_japanese() {
         // Default is English.

@@ -272,7 +272,7 @@ impl App {
                 Some(p) => (p.display().to_string(), "not present".into()),
                 None => ("(unresolved)".into(), String::new()),
             };
-            lines.push(format!("{:<14} {}", format!("{}:", name), path_str));
+            lines.push(format!("{} {}", pad_to(&format!("{}:", name), 14), path_str));
             if !status.is_empty() {
                 lines.push(format!("               → {}", status));
             }
