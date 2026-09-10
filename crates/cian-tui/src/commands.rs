@@ -252,10 +252,10 @@ impl App {
             // svn-only, so it says so in the name. `:up` in a file manager
             // reads as "go to the parent", which is not what it did.
             "svnupdate" => self.svn_update(),
-            // Likewise. cian has no git commit, so a bare `:commit` was a
-            // generic name for a specific thing — and left the obvious verb
-            // taken if git commit is ever added.
+            // Likewise. `:svncommit` names svn's, and the bare `:commit`
+            // below is git's — the verb was left free for it (2026-09-10).
             "svncommit" => self.svn_commit_prompt(),
+            "commit" => self.start_commit(),
             "svnresolve" | "resolve" => self.svn_resolve(),
             "snip" | "snippet" => self.start_snippets(),
             "aicommit" | "commitmsg" => self.start_ai_commit_message(),

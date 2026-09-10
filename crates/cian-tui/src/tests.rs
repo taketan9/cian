@@ -7846,6 +7846,74 @@ use crate::ai::StoredChatExt;
         assert!(before_marker.split('\n').all(|l| l.is_empty() || big.contains(l)));
     }
 
+    /// `:commit` ── AI を通さずに、自分で書いたメッセージでコミットする。
+    ///
+    /// これが無いあいだ、git へのコミットは `:aicommit` の中にしか無かった。
+    /// AI に届かない機械では git にコミットできない、ということでもあったので、
+    /// **AI を一切用意していない App** で通す ── その状態で通ることが、この
+    /// 機能の言いたいことそのもの。
+    #[test]
+    fn commit_writes_the_message_you_typed_without_asking_the_ai() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = std::fs::canonicalize(d.path()).unwrap();
+        let git_ok = std::process::Command::new("git")
+            .arg("-C").arg(&dir).args(["init", "-q"]).status()
+            .map(|s| s.success()).unwrap_or(false);
+        if !git_ok {
+            eprintln!("no git; skipping");
+            return;
+        }
+        for kv in [["user.email", "t@example.com"], ["user.name", "Test"]] {
+            let _ = std::process::Command::new("git").arg("-C").arg(&dir).args(["config", kv[0], kv[1]]).status();
+        }
+        std::fs::write(dir.join("a.txt"), "hello\n").unwrap();
+        cian_core::git::stage(&dir, &[dir.join("a.txt")]).unwrap();
+
+        // AI の設定は入れない。`config.ai` は None のまま。
+        let mut app = App::new(dir.clone(), dir.clone(), en_config()).unwrap();
+        app.start_commit();
+
+        // 空の枠が、入力中で開く。
+        match &app.popup {
+            Popup::CommitMessage { buffer, editing, drafted, .. } => {
+                assert!(buffer.is_empty(), "自分で書くので中身は空: {buffer:?}");
+                assert!(*editing, "入力中から始まる");
+                assert!(!*drafted, "AI の下書きではない");
+            }
+            other => panic!("コミットの枠が開いていない: {other:?}"),
+        }
+
+        for c in "add a.txt".chars() {
+            app.handle_key(key(c)).unwrap();
+        }
+        app.handle_key(code(KeyCode::Esc)).unwrap(); // 編集終了
+        app.handle_key(code(KeyCode::Enter)).unwrap(); // コミット
+
+        assert!(matches!(app.popup, Popup::None), "コミット後は閉じる: {:?}", app.popup);
+        assert_eq!(cian_core::git::staged_diff(&dir).as_deref(), Some(""), "ステージは空になった");
+        let log = std::process::Command::new("git").arg("-C").arg(&dir).args(["log", "-1", "--pretty=%s"]).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&log.stdout).trim(), "add a.txt");
+    }
+
+    /// ステージが空のときは枠を開かず、何をすればよいかを言う。
+    #[test]
+    fn commit_with_nothing_staged_says_so_instead_of_opening_an_empty_box() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = std::fs::canonicalize(d.path()).unwrap();
+        let git_ok = std::process::Command::new("git")
+            .arg("-C").arg(&dir).args(["init", "-q"]).status()
+            .map(|s| s.success()).unwrap_or(false);
+        if !git_ok {
+            eprintln!("no git; skipping");
+            return;
+        }
+        let mut app = App::new(dir.clone(), dir.clone(), en_config()).unwrap();
+        app.start_commit();
+        assert!(matches!(app.popup, Popup::None), "枠は開かない: {:?}", app.popup);
+        let said = app.message.clone().unwrap_or_default();
+        assert!(said.contains("nothing staged"), "何をすればよいかを言う: {said:?}");
+    }
+
     /// The whole commit-message flow with a throwaway repo: draft (mock), edit,
     /// and commit — then the message is in the log and the stage is clean.
     #[test]
@@ -15247,6 +15315,7 @@ mod every_popup_behaves {
                     stat: "1 file".into(),
                     dir: dir.to_path_buf(),
                     editing: false,
+                    drafted: true,
                 },
             ),
             (

@@ -261,6 +261,7 @@ impl App {
                 MenuItem::GitDiscard,
                 MenuItem::GitDiff,
                 MenuItem::GitHistory,
+                MenuItem::GitCommit,
                 MenuItem::Back,
             ]),
             MenuItem::SvnMenu => Some(vec![
@@ -649,6 +650,7 @@ impl App {
             MenuItem::GitDiscard => self.git_discard_prompt(),
             MenuItem::GitHistory => self.start_git_log(),
             MenuItem::GitDiff => self.git_diff_file(),
+            MenuItem::GitCommit => self.start_commit(),
             MenuItem::SvnAdd => self.git_stage(),
             MenuItem::SvnRevert => self.git_discard_prompt(),
             MenuItem::SvnResolve => self.svn_resolve(),

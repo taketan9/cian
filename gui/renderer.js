@@ -2646,6 +2646,7 @@ function contextRows() {
                 { label: tr("Discard changes", '変更を破棄'), value: 'git checkout', run: () => cmdVcs('discard') },
                 { label: tr("Diff vs HEAD", 'HEADとの差分'), value: 'git diff', run: () => cmdVcsDiff(null) },
                 { label: tr("History / log", '履歴 / ログ'), value: 'git log', run: () => cmdLog(false) },
+                { label: tr("Commit", 'コミット'), value: ':commit', run: cmdCommit },
                 // cian-tui's GitHistory is one row (repo, or the file's own
                 // history). The file-scoped one has no counterpart there, so
                 // it keeps its own row rather than changing what the shared
@@ -3141,6 +3142,7 @@ function helpRows() {
         [':log / :filelog', tr("the commit log / this file's history (git and svn)", 'コミットログ / このファイルの履歴（git・svn）')],
         [':gitdiff', tr("the selected file's diff", '選択ファイルの差分')],
         [':stage / :unstage / :discard', tr("git add / reset / discard the changes", 'git add / reset / 変更の破棄')],
+        [':commit', tr("commit the staged changes, with a message you write", 'ステージ済みの変更を、自分で書いたメッセージでコミット')],
         [':svnupdate :svncommit :svnresolve', tr("the three svn ones", 'svn の3つ')],
         [':dup', tr("find duplicate files \u2014 same contents (also :duplicate)", '重複ファイルを検出 — 中身が同じもの（:duplicate でも）')],
         [':df / :wc / :stat', tr("free space / lines, words, bytes / attributes", '空き容量 / 行・単語・バイト / 属性')],
@@ -6093,6 +6095,7 @@ function buildCommands() {
     { name: 'limit', alias: ['speed', 'ratelimit'], about: tr("cap the transfer rate \u2014 :limit 2m / 500k / off", '転送の速さの上限 — :limit 2m / 500k / off'), arg: '2m / 500k / off', optional: true, run: cmdLimit },
     { name: 'summary', alias: ['summarize', 'summarise'], about: tr("AI: summarise the open file", 'AI: 開いているファイルを要約'), run: cmdSummary },
     { name: 'aicommit', alias: ['commitmsg'], about: tr("AI: a commit message from the staged diff", 'AI: ステージ済みの差分からコミットメッセージを作る'), run: cmdAiCommit },
+    { name: 'commit', about: tr("commit the staged changes (git)", 'ステージ済みの変更をコミット（git）'), run: cmdCommit },
     { name: 'aierror', alias: ['explain'], about: tr("AI: explain the shell's last error", 'AI: シェルの直近のエラーを説明する'), run: cmdAiError },
     { name: 'ime', alias: ['inputmethod'], about: tr("input method \u2014 off in vim's normal mode (cian.ime)", 'IME 連携 — vim のノーマルモードで自動オフ（cian.ime）'), run: cmdIme },
     { name: 'stat', about: tr("attributes (same as :attr)", '属性（:attr と同じ）'), run: cmdAttr },
@@ -9405,6 +9408,25 @@ async function cmdLimit(spec) {
 /// `:aicommit` — the staged diff in, a Conventional Commits message out,
 /// **shown, not committed**. Enter commits with it; Esc walks away. The
 /// model drafts; the person signs.
+/// `:commit` ── ステージ済みの変更を、自分で書いたメッセージでコミットする。
+///
+/// これが無いあいだ、git へのコミットは `:aicommit` からしか行けなかった。AI に
+/// 下書きを作らせてからでないと確定に辿り着けないので、**社内の endpoint に
+/// 届かない機械では git にコミットできない**。svn の側には最初から素のコミットが
+/// あって（`cmdSvn('commit')`）、git にだけ無かった。
+///
+/// 訊き方も svn のコミットと同じにしてある ── 同じことをする2つの入口が違う
+/// 訊き方をすると、どちらを使っているのか分からなくなる。
+async function cmdCommit() {
+    const message = await askFor(tr('Commit message', 'コミットメッセージ'), '');
+    if (message === null || !message.trim()) return;
+    const done = await ask('commit', { pane: state.focus, message });
+    if (!done) return;
+    state[state.focus] = done.pane;
+    draw(state.focus);
+    say(tr('committed', 'コミットしました'));
+}
+
 async function cmdAiCommit() {
     const r = await ask('aicommit', { pane: state.focus });
     if (!r) return;

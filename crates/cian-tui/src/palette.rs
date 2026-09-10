@@ -46,6 +46,7 @@ pub(crate) fn command_list() -> &'static [(&'static str, (&'static str, &'static
         ("ai",         ("AI - simple: chat with the local model", "AI - simple: ローカルモデルとチャット"), false),
         ("aicmd",      ("AI: shell command from a description", "AI: 説明からコマンド"), true),
         ("aicommit",   ("AI: draft a commit message", "AI: コミットメッセージ下書き"), false),
+        ("commit",     ("commit the staged changes (git)", "ステージ済みの変更をコミット（git）"), false),
         ("aierror",    ("AI: explain the last shell error", "AI: 直前のエラーを説明"), false),
         ("aidiff",     ("AI: explain the diff on screen", "AI: 差分を説明"), false),
         ("ailog",      ("AI: triage the selected log", "AI: ログを診断"), false),

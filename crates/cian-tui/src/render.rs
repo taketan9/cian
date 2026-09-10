@@ -4309,16 +4309,18 @@ f.render_widget(Paragraph::new(lines), inner);
 /// footer; otherwise it is a read-only preview with commit / edit / cancel keys.
 fn draw_commit_message(f: &mut Frame, area: Rect, app: &mut App) {
     let lang = app.lang;
-    let Popup::CommitMessage { buffer, stat, editing, .. } = &app.popup else { return };
+    let Popup::CommitMessage { buffer, stat, editing, drafted, .. } = &app.popup else { return };
 let editing = *editing;
+let drafted = *drafted;
 let width: u16 = 80u16.min(area.width.saturating_sub(2));
 let height = area.height.saturating_sub(2).clamp(10, 30);
 let rect = centered_rect(width, height, area);
 clear_popup(f, rect);
-let title = if editing {
-    tr(lang, " Draft commit message — editing ", " コミットメッセージ生成 — 編集中 ")
-} else {
-    tr(lang, " Draft commit message ", " コミットメッセージ生成 ")
+let title = match (drafted, editing) {
+    (true, true) => tr(lang, " Draft commit message — editing ", " コミットメッセージ生成 — 編集中 "),
+    (true, false) => tr(lang, " Draft commit message ", " コミットメッセージ生成 "),
+    (false, true) => tr(lang, " Commit message — editing ", " コミットメッセージ — 編集中 "),
+    (false, false) => tr(lang, " Commit message ", " コミットメッセージ "),
 };
 let footer = if editing {
     tr(lang, " type to edit   Enter=newline   Esc=done editing ",

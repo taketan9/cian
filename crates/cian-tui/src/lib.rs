@@ -707,7 +707,10 @@ enum Popup {
     /// An AI-drafted commit message, shown editable before it is committed.
     /// `dir` is the repo the staged diff came from; `stat` summarises the files;
     /// `editing` toggles between preview and typing into `buffer`.
-    CommitMessage { buffer: String, stat: String, dir: PathBuf, editing: bool },
+    /// コミットメッセージの編集。`drafted` は AI が下書きしたものかどうかで、
+    /// 枠の題だけが変わる ── 自分で書いた文に「生成」と出ると、誰が書いたのか
+    /// 分からなくなる。
+    CommitMessage { buffer: String, stat: String, dir: PathBuf, editing: bool, drafted: bool },
     /// Proposed renames (old → new), each toggleable. Approving renames the
     /// checked files in place.
     RenameReview { items: Vec<RenameItem>, cursor: usize, scroll: usize },
@@ -1132,6 +1135,7 @@ enum MenuItem {
     GitHistory,
     /// The selected file's working-tree diff vs HEAD.
     GitDiff,
+    GitCommit,
     /// A submenu grouping the svn actions (add / revert / update / commit …).
     SvnMenu,
     /// `svn add` the selection.
@@ -1341,6 +1345,7 @@ impl MenuItem {
             MenuItem::GitDiscard => tr(lang, "Discard changes  (git checkout)", "変更を破棄  (git checkout)"),
             MenuItem::GitHistory => tr(lang, "History / log  (git log)", "履歴 / ログ  (git log)"),
             MenuItem::GitDiff => tr(lang, "Diff vs HEAD  (git diff)", "HEADとの差分  (git diff)"),
+            MenuItem::GitCommit => tr(lang, "Commit  (:commit)", "コミット  (:commit)"),
             MenuItem::SvnMenu => tr(lang, "SVN ▸", "SVN ▸"),
             MenuItem::SvnAdd => tr(lang, "Add  (svn add)", "追加  (svn add)"),
             MenuItem::SvnRevert => tr(lang, "Revert changes  (svn revert)", "変更を破棄  (svn revert)"),
@@ -4063,6 +4068,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry(":attr", None, "attributes;  :chmod 644,  :readonly on|off", "属性；  :chmod 644,  :readonly on|off"),
                 entry(":hash", None, "checksum;  :hash md5  /  :hash sha256", "チェックサム；  :hash md5  /  :hash sha256"),
                 entry(":stage / :unstage", None, "git add / git reset the selection (in a repo)", "選択を git add / git reset（リポジトリ内）"),
+                entry(":commit", None, "commit the staged changes, with a message you write", "ステージ済みの変更を、自分で書いたメッセージでコミット"),
                 entry(":discard", None, "git/svn: throw away worktree changes (git checkout / svn revert)", "作業ツリーの変更を破棄（git checkout / svn revert）"),
                 entry(":log", None, "commit log / a file's history — git or svn (also right-click)", "コミットログ／ファイル履歴 — git・svn（右クリックでも）"),
                 entry(":gitdiff", None, "the selected file's diff vs HEAD/BASE — git or svn", "選択ファイルの HEAD／BASE との差分 — git・svn"),

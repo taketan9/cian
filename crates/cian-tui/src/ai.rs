@@ -1103,7 +1103,7 @@ impl App {
                     if msg.is_empty() {
                         self.message = Some(tr(self.lang, "AI returned no message", "AI からメッセージが返りませんでした").into());
                     } else {
-                        self.open_popup(Popup::CommitMessage { buffer: msg, stat, dir, editing: false });
+                        self.open_popup(Popup::CommitMessage { buffer: msg, stat, dir, editing: false, drafted: true });
                     }
                 }
                 Err(e) => self.message = Some(format!("AI: {}", e)),

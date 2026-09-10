@@ -175,6 +175,35 @@ impl App {
     }
 
     /// `svn resolve --accept working` the selection (svn only).
+    /// `:commit` ── ステージ済みの変更を、自分で書いたメッセージでコミットする。
+    ///
+    /// これが無いあいだ、git へのコミットは `:aicommit` からしか行けなかった。
+    /// AI に下書きを作らせてから確定する道しか無いので、**社内の endpoint に
+    /// 届かない機械では git にコミットできない**という状態になっていた。svn の
+    /// 側には最初から素のコミットがある。
+    ///
+    /// 開く枠は `:aicommit` と同じもので、違うのは中身が空で編集中から始まる
+    /// ことだけ。入力 → Esc で編集終了 → Enter でコミット。
+    pub(crate) fn start_commit(&mut self) {
+        let Some(dir) = self.cwd() else { return };
+        let Some(diff) = cian_core::git::staged_diff(&dir) else {
+            self.message = Some(tr(self.lang, "not a git repository", "git リポジトリではありません").into());
+            return;
+        };
+        if diff.trim().is_empty() {
+            self.message = Some(tr(self.lang, "nothing staged. `git add` first (or stage from the pane)", "ステージされていません。先に `git add`（ペインからでも可）").into());
+            return;
+        }
+        let stat = cian_core::git::staged_stat(&dir).unwrap_or_default();
+        self.open_popup(Popup::CommitMessage {
+            buffer: String::new(),
+            stat,
+            dir,
+            editing: true,
+            drafted: false,
+        });
+    }
+
     pub(crate) fn svn_resolve(&mut self) {
         let Some((dir, kind)) = self.vcs_dir() else {
             self.message = Some(tr(self.lang, "not a version-controlled directory", "バージョン管理下のディレクトリではありません").into());
