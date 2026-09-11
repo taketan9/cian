@@ -408,7 +408,42 @@ async function main() {
         }
     }
 
-    const keys = process.argv.slice(2).filter((a) => a !== '--commands');
+    // `--values` ── **欄に意地の悪い値を入れて、往復させる。**
+    //
+    // 鍵を押す掃引（`--commands`）は「押したら何か起きるか」を見る。こちらは
+    // **書いたものが同じもので戻るか**を見る ── スニペットに複数行を入れると
+    // 保存が壊れていたのがこの型で、押す掃引では永久に出ない。
+    //
+    // 意地の悪さは、`init.lua` が Lua だからこその形を選ぶ:
+    //
+    //   `"` `\` … 文字列の終わりに見える
+    //   改行      … Lua の "…" は行をまたげない（これで実際に壊れた）
+    //   `--`      … Lua のコメント。引用符の外に出た瞬間、以降が消える
+    //   `}` `,`   … 表の区切りに見える
+    //   `[[` `]]` … Lua の長い文字列
+    //   前後の空白 … 落とされると別の値になる
+    //
+    // 見るのは「保存が通ったか」ではなく、**読み直して同じか**。通ったのに
+    // 中身が変わっているのが、いちばん質の悪い壊れ方。
+    const NASTY = [
+        ['引用符', 'a"b'],
+        ['バックスラッシュ', 'C:\\Users\\you\\x'],
+        ['両方', 'a"\\b'],
+        ['Lua のコメント', 'echo -- not a comment'],
+        ['閉じ括弧', 'echo } , {'],
+        ['長い文字列', 'echo [[x]]'],
+        ['複数行', 'cd /var/log\ntail -f messages'],
+        // **前後の空白は、わざと落としている。** `to_lua` が trim するので
+        // `editor` や AI のエンドポイントでは `  x  ` が `x` になる ──
+        // コマンド行やアドレスに前後の空白を要る場面が無く、打ち間違いの
+        // ほうがずっと多い。**落ちるのが正しい**ので、値の往復では見ない
+        // （見ると、正しい動きが毎回 ✗ で並ぶ）。
+        // ['前後の空白', '  x  '],
+        ['日本語と絵文字', '日本語 🙂 と混ぜる'],
+        ['とても長い', 'x'.repeat(400)],
+        ['タブ', 'a\tb'],
+    ];
+    const keys = process.argv.slice(2).filter((a) => a !== '--commands' && a !== '--values');
     // `--commands` ── **辞書にある名前を、一つずつ全部打つ。**
     //
     // 端末版には `scripts/sweep.py` があって 151 個の verb を叩く。窓版には
@@ -443,7 +478,88 @@ async function main() {
         }
         return out;
     };
-    const round = process.argv.includes('--commands') ? commandRound()
+    /// 設定画面の欄に、意地の悪い値を一つずつ入れて往復させる。
+    ///
+    /// 一つの値につき: 欄に入れる → 保存 → **読み直して比べる**。
+    /// 保存が断られたらそれも1件として数える（断るのは正しいこともあるが、
+    /// **書ける値を断っている**なら壊れている）。
+    const valueRound = () => {
+        const out = [[':', ''], ['type:settings', ''], ['Enter', ''], ['wait:1200', '']];
+        for (const [name, value] of NASTY) {
+            const v = JSON.stringify(value);
+            out.push(['read:' + `(async () => {
+                const one = ${v};
+                const r = [];
+                // ① スニペットのコマンド（複数行が入る欄）
+                if (!settings.snips.snips.some(s => s.name === '検')) {
+                    settings.newSnips = [{ name: '検', cmd: one, enter: true, confirm: false }];
+                    settings.touchedSnips.set('__new0', { name: '検', cmd: one, enter: true, confirm: false });
+                } else {
+                    settings.touchedSnips.set('検', { name: '検', cmd: one, enter: true, confirm: false });
+                }
+                // ② SSH のメモ
+                if (!settings.ssh.hosts.some(h => h.name === '検')) {
+                    settings.newHosts = [{ name: '検', host: '10.0.0.1', port: '', notes: one, users: '' }];
+                    settings.touchedHosts.set('__new0', { name: '検', host: '10.0.0.1', port: '', notes: one, users: '' });
+                } else {
+                    settings.touchedHosts.set('検', { name: '検', host: '10.0.0.1', port: '', notes: one, users: '' });
+                }
+                // ③ ふつうの設定（文字列の欄）
+                settings.touched.set('editor', one);
+                // ④ AI のエンドポイント
+                settings.touchedAi.set('endpoint', one);
+                let refused = '';
+                try { await saveSettings(); } catch (e) { refused = String(e); }
+                if (status.bad) { refused = status.msg; }
+                await new Promise(r2 => setTimeout(r2, 400));
+                await openSettings();
+                const snip = (settings.snips.snips.find(s => s.name === '検') || {}).cmd;
+                const host = (settings.ssh.hosts.find(h => h.name === '検') || {}).notes;
+                const opt = settings.fields.find(f => f.name === 'editor').written;
+                const ai = settings.ai.endpoint;
+                // **正規表現を使わない。** 逃がした字を戻すだけなので、
+                // 素直に一字ずつ見るほうが、書くほうも読むほうも間違えない
+                // （最初ここの正規表現がエスケープで潰れて、11 回とも同じ
+                // 例外を返していた ── 検査が黙るのではなく、検査が転ぶ形）。
+                const un = (s) => {
+                    if (s == null) { return null; }
+                    let v = String(s);
+                    if (v.startsWith('"') && v.endsWith('"')) { v = v.slice(1, -1); }
+                    let o = '';
+                    for (let i = 0; i < v.length; i += 1) {
+                        if (v[i] !== String.fromCharCode(92)) { o += v[i]; continue; }
+                        i += 1;
+                        const c = v[i];
+                        o += c === 'n' ? String.fromCharCode(10)
+                            : c === 't' ? String.fromCharCode(9)
+                            : c === 'r' ? String.fromCharCode(13) : c;
+                    }
+                    return o;
+                };
+                // **エンジンが返す形が2つある。** スニペットと SSH は
+                // **もう解いた値**、設定の欄と AI は**書いてある字面のまま**
+                // （引用符つき）。
+                // 同じ扱いにすると、前者を二度ほどいて Windows のパスから
+                // 区切りが消えて見える。一度それで、直っているものを壊れて
+                // いると読みかけた。
+                const plain = (got) => got == null ? null : String(got);
+                const cmp = (label, got, raw) => {
+                    const v = raw ? un(got) : plain(got);
+                    if (v !== one) { r.push(label + '=' + JSON.stringify(v)); }
+                };
+                cmp('スニペット', snip, false);
+                cmp('SSH のメモ', host, false);
+                cmp('設定の欄', opt, true);
+                cmp('AI の欄', ai, true);
+                if (refused) r.push('断られた: ' + refused.slice(0, 70));
+                return ${JSON.stringify(name)} + ': ' + (r.length ? '✗ ' + r.join(' / ') : 'ok');
+            })()`, '']);
+        }
+        return out;
+    };
+
+    const round = process.argv.includes('--values') ? valueRound()
+        : process.argv.includes('--commands') ? commandRound()
         : keys.length ? keys.map((k) => [k, '']) : [
         [',', 'ソート'], [',', 'ソートもう一度'],
         // The first row is 隠しファイル in both builds now (cian-tui's

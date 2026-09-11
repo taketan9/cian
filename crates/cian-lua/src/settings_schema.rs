@@ -471,6 +471,10 @@ pub fn elsewhere() -> &'static [Elsewhere] {
 /// `"true"` という**文字列**を真偽値に化けさせない。空は「書かない」なので
 /// `None`。
 pub fn to_lua(kind: Kind, value: &str) -> Option<String> {
+    // **前後の空白は落とす。** 空かどうかをここで決めている以上、
+    // `" "` を「書いてある」と読むわけにいかない ── そしてコマンド行や
+    // アドレスに前後の空白が要る場面は無く、打ち間違いのほうがずっと多い。
+    // 落ちることを知らずに使うと驚くので、書いておく。
     let v = value.trim();
     if v.is_empty() {
         return None;
@@ -485,23 +489,22 @@ pub fn to_lua(kind: Kind, value: &str) -> Option<String> {
                 .split(['\n', ','])
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
-                .map(|s| format!("\"{}\"", escape(s)))
+                .map(crate::settings_list::quote)
                 .collect();
             if items.is_empty() {
                 return None;
             }
             format!("{{ {} }}", items.join(", "))
         }
-        Kind::Text | Kind::Path | Kind::Choice(_) => format!("\"{}\"", escape(v)),
+        Kind::Text | Kind::Path | Kind::Choice(_) => crate::settings_list::quote(v),
     })
 }
 
-/// Lua の文字列に入れられる形に。**バックスラッシュを先に。**
-/// 順を逆にすると、自分が足した `\"` の `\` をもう一度escapeする。
-/// Windows のパス（`C:\Users\…`）が毎回ここを通る。
-fn escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
-}
+// **逃がし方は1つ。** ここに自前の `escape` を持っていたせいで、
+// `settings_list::quote` を改行に対応させても**こちらだけ直らず**、
+// `editor` や AI のエンドポイントに複数行を入れると保存が壊れたままだった
+// （2026-09-11、意地の悪い値の掃引で出た）。書き方を2つ持つと、片方だけ
+// 直したときにそちらだけ壊れる。
 
 #[cfg(test)]
 mod tests {
@@ -553,6 +556,21 @@ mod tests {
         // 空は「書かない」。
         assert_eq!(to_lua(Kind::Text, "   "), None);
         assert_eq!(to_lua(Kind::Int, "yes"), None);
+    }
+
+    /// **複数行も通る。** `editor` に2行入れても、保存が壊れない。
+    ///
+    /// ここに自前の `escape` を持っていたせいで、`settings_list::quote` を
+    /// 改行に対応させてもこちらだけ直らず、意地の悪い値の掃引で出た
+    /// （2026-09-11）。逃がし方は1つ。
+    #[test]
+    fn a_value_with_a_newline_stays_one_lua_line() {
+        let lua = to_lua(Kind::Text, "cd /var/log\ntail -f x").expect("a value");
+        assert!(!lua.contains('\n'), "{lua}");
+        assert_eq!(lua, "\"cd /var/log\\ntail -f x\"");
+        // 書いたものが Lua として読める。
+        let out = crate::settings_edit::set_option_in("", "editor", Some(&lua));
+        assert_eq!(crate::settings_edit::syntax_error(&out), None, "{out}");
     }
 
     /// **Windows のパスが毎回ここを通る。**

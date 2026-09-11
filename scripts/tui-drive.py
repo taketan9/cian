@@ -228,6 +228,11 @@ class Tui:
                     n += 1
         return n
 
+    def alive_or_dead(self) -> bool:
+        """まだ動いているか。**死んだことを、次の手で知る前に知る。**"""
+        self.pump(0.1)
+        return not self.dead
+
     def close(self):
         for fn in (lambda: os.close(self.fd),
                    lambda: os.kill(self.pid, 9),

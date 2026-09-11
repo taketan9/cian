@@ -5335,6 +5335,25 @@ fn draw_simple_dialog(
         _ => vec![],
     };
 
+    // **測った折り方で、そのまま折る。**
+    //
+    // 高さは上で `wrap_input`（どこででも折る）で数え、描くほうは ratatui の
+    // `Wrap`（空白でしか折らない）に任せていた。**二つが食い違う**ので、
+    // 空白の無い長い一語 ── 300 文字の名前を付けたときの
+    // `touch /長い/パス/xxxxx…` ── は、どこにも折れずに消えた。お知らせに
+    // 出るのは `touch` の4文字だけで、断られた理由も対象も見えない
+    // （2026-09-11、意地の悪い名前の掃引で出た）。
+    //
+    // 測る関数と描く関数を同じにすれば、食い違いようが無い。
+    // **入力欄は除く。** あちらは `caret_lines` が自分で折っていて、
+    // 下の `splice(1..2, …)` が「本文の2行目が欄」であることに頼っている ──
+    // ここで先に折ると行がずれ、欄が別の行に化ける（実際に、長い問いかけの
+    // 検査が2本落ちた）。直したい穴はお知らせのほうにある。
+    let body: Vec<String> = if matches!(popup, Popup::TextInput { .. }) {
+        body
+    } else {
+        body.iter().flat_map(|l| wrap_input(l, inner_w)).collect()
+    };
     let mut body_text: Vec<Line> = body.into_iter().map(Line::from).collect();
     // The text-input field renders the cursor as a highlighted character so
     // moving it never shifts the surrounding text (was inserting a caret glyph).
@@ -5356,6 +5375,10 @@ fn draw_simple_dialog(
     // Spelled out rather than inherited: a `Block`'s style does not reach a
     // paragraph rendered into it, so without this the text kept the
     // terminal's own foreground — invisible on a light dialog.
+    // 折り終わったものを渡すので、`Wrap` は要らない ── 付けると、二度目の
+    // 折り方（空白でしか折らない）がここで混ざる。
+    // 折り終わったものを渡すので `Wrap` は要らない ── ただし入力欄だけは
+    // 上で折っていないので、そちらのために残す。
     let p = Paragraph::new(body_text)
         .style(Style::default().fg(readable_on(theme().popup_bg)))
         .wrap(Wrap { trim: false });

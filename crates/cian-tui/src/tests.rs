@@ -16221,6 +16221,29 @@ mod ctrl_r_redoes {
     }
 }
 
+/// 空白の無い長い一語があっても、**お知らせの続きが消えない**。
+///
+/// 300 文字の名前でファイルを作ろうとしたとき、お知らせに出るのは `touch` の
+/// 4文字だけで、対象の道も断られた理由（`File name too long`）も見えなかった。
+/// 高さは `wrap_input`（どこででも折る）で数え、描くほうは ratatui の `Wrap`
+/// （空白でしか折らない）に任せていたので、**測ったものと描くものが違った** ──
+/// 折れない一語は、どこにも置けずに消える。
+///
+/// 2026-09-11、意地の悪い名前の掃引（`sweep.py --names`）で出た。
+#[test]
+fn a_notice_with_one_very_long_word_still_shows_the_rest() {
+    let (_d, mut app) = app_with(&["a.txt"]);
+    let long = "x".repeat(300);
+    app.popup = Popup::Notice {
+        lines: vec![format!("touch /tmp/{long}"), "File name too long (os error 63)".into()],
+    };
+    let screen = render(&mut app, 100, 30).join("\n");
+    assert!(screen.contains("File name too long"), "理由が出ていない:\n{screen}");
+    assert!(screen.contains("touch /tmp/"), "何をしようとしたかが出ていない:\n{screen}");
+    // 長い一語も、折られて出ている（丸ごと消えていない）。
+    assert!(screen.contains("xxxxxxxxxx"), "折れた一語が出ていない:\n{screen}");
+}
+
 /// 設定画面のキー割当の表が、**実装と1対1**であること。
 ///
 /// 表は `cian-lua` にある（`cian-server` は `cian-tui` に依存しないので、

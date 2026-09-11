@@ -619,10 +619,89 @@ def monkey(steps: int, seed: int, listing: bool) -> int:
     return 0
 
 
+# ══ 意地の悪い名前 ═════════════════════════════════════════════════════
+#
+# 窓版には `node gui/drive.js --values` がある（設定画面の欄に意地の悪い値を
+# 入れて往復させる）。こちらは**端末版の入力欄**で、行き先は Lua ではなく
+# **ファイルシステム** ── 壊れ方が違う。
+#
+#   引用符・空白・日本語 … 名前として通るはず。通らないなら理由が出るはず
+#   `/` と NUL          … OS が受け取らない。**断るはずで、黙って落ちてはいけない**
+#   とても長い名前      … 255 バイトの壁。断り方が見えるか
+#   先頭の `-`          … 引数と間違えないか
+#   `..` と `.`         … 作らせてはいけない
+#
+# 見るのは「作れたか」ではなく、**作れなかったときに理由が出るか**。
+# 黙って何も起きない欄が、この家でいちばん質の悪い壊れ方。
+
+NASTY_NAMES = [
+    ("引用符", 'a"b.txt'),
+    ("空白", "a b.txt"),
+    ("日本語", "日本語のファイル.txt"),
+    ("先頭のダッシュ", "-rf.txt"),
+    ("長い名前", "x" * 300),
+    ("斜線", "a/b.txt"),
+    ("点二つ", ".."),
+    ("点一つ", "."),
+]
+
+
+def check_names(listing: bool) -> int:
+    """端末版の「新規ファイル」に、意地の悪い名前を入れる。"""
+    print("=" * 72)
+    print(f"  端末版の入力欄に、意地の悪い名前を {len(NASTY_NAMES)} 通り")
+    print("=" * 72)
+    d = sandbox()
+    bench = Bench(d, fresh_each=True)
+    bad = []
+    try:
+        for what, name in NASTY_NAMES:
+            t = bench.t
+            t.send("a", 0.5)
+            # **切らずに打つ。** 60 字で切っていたので、255 バイトの壁が
+            # 一度も試されていなかった ── 試していないものを「通った」と
+            # 読むのが、この家でいちばん高くつく間違い方。
+            for ch in name:
+                t.send(ch, 0.01)
+            t.send("Enter", 0.9)
+            st = t.status()
+            # **一覧ではなく、状態行で判断する。** 長い名前は一覧で詰められる
+            # ので、「一覧に出たか」で見ると作れたものを「黙った」と読む。
+            made = "created" in st or "作成" in st
+            told = "お知らせ" in t.text() or any(
+                w in st
+                for w in ("できません", "ありません", "失敗", "denied", "使えません",
+                          "長すぎ", "too long", "エラー", "不正")
+            )
+            mark = "作れた" if made else ("断った" if told else "**黙った**")
+            if listing:
+                print(f"  {what:<14} {mark:<10} {st[-64:]}")
+            if not made and not told:
+                bad.append(f"{what}（{name[:20]}…）が、作られも断られもしない")
+            if not t.alive_or_dead():
+                bad.append(f"{what} で端末版が死んだ")
+                break
+            bench.reset()
+    finally:
+        bench.close()
+        shutil.rmtree(d, ignore_errors=True)
+    print("=" * 72)
+    if bad:
+        for b in bad:
+            print(f"  ✗ {b}")
+        print("=" * 72)
+        return 1
+    print("  どれも、作れるか、理由を言って断るかのどちらかです")
+    print("=" * 72)
+    return 0
+
+
 def main() -> int:
     listing = "--list" in sys.argv
     if "--keys" in sys.argv:
         return sweep_keys(listing, "--fast" not in sys.argv)
+    if "--names" in sys.argv:
+        return check_names(listing)
     if "--monkey" in sys.argv:
         argv = sys.argv
         steps = int(argv[argv.index("--monkey") + 1]) if len(argv) > argv.index("--monkey") + 1 \
