@@ -483,7 +483,7 @@ impl App {
                 }
                 self.message = Some(tr(self.lang, "blame on", "blame オン").into());
             }
-            None => self.message = Some(tr(self.lang, "no blame (untracked or not a repo)", "blame不可（未追跡/非リポジトリ）").into()),
+            None => self.message = Some(tr(self.lang, "no blame (untracked or not a repo)", "blame できません（未追跡、またはリポジトリの外）").into()),
         }
     }
 }

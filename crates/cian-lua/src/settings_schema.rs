@@ -270,7 +270,7 @@ pub fn fields() -> &'static [Field] {
             label_en: "Editor keys",
             label_ja: "エディタのキー操作",
             help_en: "notepad is for handing the same build to someone who has never used vi",
-            help_ja: "notepad は、vi を使ったことがない人に同じものを渡すためのものです",
+            help_ja: "vim を使ったことがない人にも、そのまま渡せるようにするためのものです",
         },
         Field {
             name: "editor",
@@ -432,7 +432,7 @@ pub fn elsewhere() -> &'static [Elsewhere] {
             what_en: "Macros",
             what_ja: "マクロ",
             how_en: "written by hand. :macro runs them",
-            how_ja: "手で書きます。:macro で走ります",
+            how_ja: "手で書きます。:macro で実行します",
         },
         Elsewhere {
             file: "count.lua",
@@ -446,7 +446,7 @@ pub fn elsewhere() -> &'static [Elsewhere] {
             what_en: "What cian remembers",
             what_ja: "cian が覚えていること",
             how_en: "the theme picked with :theme, the window's own look. cian writes it",
-            how_ja: ":theme で選んだ配色や、窓の見た目です。cian 自身が書きます",
+            how_ja: ":theme で選んだ配色や、ウィンドウの見た目です。cian 自身が書きます",
         },
         Elsewhere {
             file: "init.lua",

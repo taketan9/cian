@@ -4253,7 +4253,7 @@ fn draw_op_queue(f: &mut Frame, area: Rect, app: &mut App) {
         w,
         h,
         tr(lang, " operation queue ", " 操作キュー "),
-        tr(lang, " x=stop/remove (x again=abandon)  Esc ", " x=停止/削除（再度x=見捨て）  Esc "),
+        tr(lang, " x=stop/remove (x again=abandon)  Esc ", " x=停止/削除（再度x=強制終了）  Esc "),
     );
     let body_c = readable_on(theme().popup_bg);
     let mut lines: Vec<Line> = Vec::new();

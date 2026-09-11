@@ -196,7 +196,7 @@ impl App {
             None => tr(self.lang, "not set yet", "未適用"),
         };
         let remembered = remembered_source().unwrap_or_else(|| {
-            tr(self.lang, "(nothing yet — text opens off)", "（未記憶 — 入力時もオフのまま）").into()
+            tr(self.lang, "(nothing yet — text opens off)", "（まだ覚えていません — 入力のときもオフのまま）").into()
         });
         let last = match last_switch()
             .lock()

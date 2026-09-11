@@ -324,7 +324,7 @@ impl App {
                     tr(
                         self.lang,
                         "rm works on the marks, or the file under the cursor — it takes no name",
-                        "rm はマークまたはカーソル位置に対して働きます — 名前は取りません",
+                        "rm はマークかカーソル位置のファイルを消します — 名前は指定できません",
                     )
                     .into(),
                 )

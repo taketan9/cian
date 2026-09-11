@@ -76,10 +76,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TUI = ROOT / "crates" / "cian-tui" / "src"
 JS = ROOT / "gui" / "renderer.js"
+# 設定画面が読み上げる表。**ここもユーザが読む画面**なのに、長いあいだこの
+# 検査の外だった ── 2026-09-12、「窓の見た目」がここに残っていて、④が
+# 黙ったまま通していた。拾うのは `*_ja:` の一本道だけで、テストの文字列や
+# Lua の見本は入らない。
+LUA = ROOT / "crates" / "cian-lua" / "src"
+LUA_FILES = ("settings_schema.rs", "settings_keymap.rs")
+# 窓版が画面に出す断りの言葉の**半分はエンジンが書いている** ── `say()` に
+# そのまま流れるので、これもユーザが読む画面。`zip へはコピー（追加）のみ`
+# は端末版と窓版の両方で直したのに、ここに三つ目の写しが残っていた
+# （2026-09-12）。**扉は `bail!` / `anyhow!` / `format!` の三つだけ**にして、
+# 検査の中の文字列は入れない。
+SRV = ROOT / "crates" / "cian-server" / "src"
 
 JA = re.compile(r"[぀-ヿ一-鿿]")
 WORD = re.compile(r"[A-Za-z]{2,}")
+JA = re.compile(r"[ぁ-んァ-ヶ一-龠]")
 RS_LIT = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
+JA_FIELD = re.compile(
+    r'\b(?:default|category|label|help|what|how)_ja\s*:\s*"((?:[^"\\\n]|\\.)*)"')
 JS_LIT = re.compile(r"'((?:[^'\\\n]|\\.)*)'|\"((?:[^\"\\\n]|\\.)*)\"|`((?:[^`\\]|\\.)*)`")
 
 # ── 天井 ──────────────────────────────────────────────────────────────
@@ -90,7 +105,11 @@ ENGLISH_ONLY_CEILING = 102  # 端末版。既定が日本語なのに英語し�
 #   103 → 102（2026-09-11、`:key` の案内を tr() に通した）。**直したら天井も
 #   その日の数まで下げる** ── 下げ忘れると、直したぶんの余白でまた増やせる
 ENGLISH_ONLY_JS_CEILING = 1  # 窓版。ここはほぼ片付いている
-DASH_CEILING_RS = 124        # 端末版。`tr()` の両方の言葉ぶんを数えるので、報せの数のほぼ倍
+DASH_CEILING_RS = 125        # 端末版。`tr()` の両方の言葉ぶんを数えるので、報せの数のほぼ倍
+#   124 → 125（2026-09-12）。**文章が増えたのではなく、見る場所が増えた** ──
+#   エンジン（`cian-server`）の断りの言葉を読むようにしたら、そこに1本あった
+#   （`中身が違います — 手元 … ≠ 向こう …`）。数え上げの天井を上げるのは
+#   これだけが理由で、書き手が増やしたぶんは**一つも入っていない**
 DASH_CEILING_JS = 156        # 窓版
 # 硬い言い方。**ここは 0 を目指す** ── 数が少なく、直し方が一つに決まる。
 STIFF_CEILING = 0
@@ -149,6 +168,23 @@ def screen_strings():
         for m in JS_LIT.finditer(text[start : end + 1]):
             lit = next((g for g in m.groups() if g is not None), "")
             out.append(("gui/renderer.js", text[:start].count("\n") + 1, lit))
+    for path in sorted(SRV.glob("*.rs")):
+        rel = f"crates/cian-server/src/{path.name}"
+        text = strip_line_comments(path.read_text(encoding="utf-8"))
+        spans = _outermost(
+            _call_spans(text, r"\bbail!\(")
+            + _call_spans(text, r"\banyhow!\(")
+            + _call_spans(text, r"\bformat!\(")
+        )
+        for start, end in spans:
+            for m in RS_LIT.finditer(text[start : end + 1]):
+                if JA.search(m.group(1)):
+                    out.append((rel, text[:start].count("\n") + 1, m.group(1)))
+    for name in LUA_FILES:
+        rel = f"crates/cian-lua/src/{name}"
+        text = strip_line_comments((LUA / name).read_text(encoding="utf-8"))
+        for m in JA_FIELD.finditer(text):
+            out.append((rel, text[: m.start()].count("\n") + 1, m.group(1)))
     return out
 
 
@@ -303,6 +339,32 @@ STIFF = {
     "窓では": "ウィンドウ版では",
     "上の窓": "上のウィンドウ版",
     "窓と見た目": "ウィンドウと見た目",
+    "窓の見た目": "ウィンドウの見た目",
+    "窓版": "ウィンドウ版",
+    # 2026-09-12 のひと通り。**読めるが、その人が声に出して言わない言い方**が
+    # 出どころで、上の一字漢語と同じ癖。直した先を鍵にして、戻ったら鳴らす。
+    "この機械": "このパソコン",
+    "この端末を経由": "このパソコンを経由",   # 「端末」そのものは cian の言葉
+    "見捨て": "強制終了",
+    "縛ったキー": "割り当てたキー",
+    "縛らなかった": "割り当てていない",
+    "走らせ": "実行",
+    "で走り": "で実行",
+    "順に走り": "順に実行",
+    "外で走る": "外で動く",
+    "d 忘れる": "d 削除",
+    "結果を言います": "結果を表示します",
+    "選ぶだけで着きます": "選ぶだけで着せ替わります",
+    "けた待ち": "あと1けた",
+    "触らず": "触りませんでした",
+    "握っています": "使っています",
+    "立っている側": "カーソルのある側",
+    "向こうの書いたもの": "外で書き換えられた内容",
+    "場合の答え": "「〜のときは、こちらです」",
+    "不可": "できません",
+    "未対応": "できません",
+    "未記憶": "まだ覚えていません",
+    "据置": "そのまま",
 }
 
 

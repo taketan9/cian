@@ -77,7 +77,7 @@ impl App {
                 self.message = Some(tr(
                     self.lang,
                     "copy adds to the zip; move is not supported",
-                    "zipへはコピー（追加）のみ — 移動は未対応",
+                    "zipへはコピー（追加）だけです — 移動はできません",
                 ).into());
                 return;
             }
@@ -1187,7 +1187,7 @@ impl App {
             return;
         }
         if a.is_dir || b.is_dir {
-            self.message = Some(tr(self.lang, "compare two files, or two folders. not one of each", "ファイル同士かディレクトリ同士で比較してください（混在は不可）").into());
+            self.message = Some(tr(self.lang, "compare two files, or two folders. not one of each", "ファイル同士かディレクトリ同士で比較してください（混ぜられません）").into());
             return;
         }
         match cian_core::diff::diff_files(&a.path, &b.path) {
@@ -2160,7 +2160,7 @@ impl App {
         let Some(job) = self.find_job.as_ref() else { return Ok(()) };
         if job.mode != cian_core::search::Mode::Content {
             self.message =
-                Some(tr(self.lang, "replace works on a grep, not a name search", "置換は grep 結果に対して行う（名前検索では不可）").into());
+                Some(tr(self.lang, "replace works on a grep, not a name search", "置換は grep の結果にだけできます（名前で探した結果では使えません）").into());
             return Ok(());
         }
         let pattern = job.query.clone();
@@ -3063,7 +3063,7 @@ impl App {
                     self.message = Some(tr(
                         self.lang,
                         "stop already requested — press x again shortly to abandon",
-                        "停止要求済み — 少し待ってもう一度 x で見捨てます",
+                        "停止を要求しました — 少し待って、もう一度 x で強制終了します",
                     ).into());
                 }
             }
@@ -3086,7 +3086,7 @@ impl App {
             self.message = Some(tr(
                 self.lang,
                 "⚠ abandoned — the stuck worker may linger until cian exits; continuing with the queue",
-                "⚠ 見捨てました — 固まったワーカーは終了まで残る場合があります。キューを続行します",
+                "⚠ 強制終了しました — 応答しない処理はしばらく残る場合があります。キューは続けます",
             ).into());
         }
         self.start_next_op();

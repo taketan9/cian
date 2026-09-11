@@ -2062,7 +2062,7 @@ impl App {
                     };
                     if action.trim() != "d" {
                         self.message = Some(
-                            tr(self.lang, "the action must be d. :g/pattern/d deletes every matching line", "動作は d のみです。:g/パターン/d で一致行を削除します").into(),
+                            tr(self.lang, "the action must be d. :g/pattern/d deletes every matching line", "使えるのは d だけです。:g/パターン/d で一致した行を削除します").into(),
                         );
                         return;
                     }

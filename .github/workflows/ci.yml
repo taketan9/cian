@@ -96,6 +96,13 @@ jobs:
       - name: The same words in both front ends
         run: python3 scripts/parity.py
 
+      # 画面に出る言葉が、書き手の声のままか。天井つきの数え上げなので、
+      # 「AI が書いたと分かる言い方」を足すと落ちる ── 2026-09-12 に
+      # 窓版・見捨てる・この機械・縛ったキー…をひと通り直した回に、戻りを
+      # 止めるためここへ入れた。天井は触った面から下げていく。
+      - name: The words on screen
+        run: python3 scripts/kotoba.py
+
       # How much of the window can speak English yet. Not a gate — it is a
       # number that should go up — so it never fails the build; it prints so
       # that a pull request which adds twenty Japanese-only strings says so.

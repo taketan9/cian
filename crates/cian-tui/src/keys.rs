@@ -2408,7 +2408,7 @@ impl App {
                     self.message = Some(tr(
                         self.lang,
                         "remote pane: not available (c copy, m move, A/a/r/d write)",
-                        "リモートペイン: 未対応（c コピー, m 移動, A/a/r/d 書込）",
+                        "リモートペインではできません（c コピー, m 移動, A/a/r/d 書込）",
                     ).into());
                     return Ok(());
                 }

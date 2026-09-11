@@ -919,7 +919,7 @@ async function operate(kind) {
     if (kind !== 'delete' && dest.archive) {
         const zip = dest.archive.split(/[\\/]/).pop();
         if (kind === 'move') {
-            say(tr('zip takes copies only — move is not supported', 'zip へはコピー（追加）のみ — 移動は未対応'), true);
+            say(tr('zip takes copies only — move is not supported', 'zip へはコピー（追加）だけです — 移動はできません'), true);
             return;
         }
         if (!await confirm(tr(`Add ${rows.length} to ${zip}`, `${rows.length} 件を ${zip} に追加`),
@@ -1083,7 +1083,7 @@ async function offerRetry(msg, verb) {
                  '管理者の権限で robocopy を実行してやり直しますか？\n権限（ACL）は変更しません。\n')
             + kept
             + tr('\n\nIt runs outside cian, so there is no progress bar.',
-                 '\n\ncian の外で走るので進捗バーは出ません。'));
+                 '\n\ncian の外で動くので進捗バーは出ません。'));
     if (!ok) { say(why, true); return; }
 
     say(tr('running robocopy with administrator privileges…', '管理者の権限で robocopy を実行しています…'));
@@ -1102,7 +1102,7 @@ async function offerRetry(msg, verb) {
     if (!await confirm(
         tr('robocopy could not either', 'robocopy でも通りませんでした'),
         tr('Retry through an elevated process? Windows will ask for permission.\nThis is the answer when cian is not running as administrator.',
-           '昇格してやり直しますか？ Windows が確認を出します。\ncian を管理者として起動していない場合の答えです。'))) {
+           '昇格してやり直しますか？ Windows が確認を出します。\ncian を管理者として起動していないときは、こちらです。'))) {
         return;
     }
     say(tr('waiting for the elevated copy…', '管理者権限のコピーを待っています…'));
@@ -3169,7 +3169,7 @@ function helpRows() {
         ['Shift+S', tr("the SSH picker \u2014 the hosts in init.lua\u2019s cian.ssh", 'SSHピッカー — init.lua の cian.ssh から選ぶ')],
         [':remote  /  :ssh', tr("or type one \u2014 user@host[:port][:/path]", '手で打つなら — user@host[:port][:/path]')],
         ['Enter / Backspace', tr("move around on the server", 'サーバの中を移動')],
-        ['c', tr("to the other pane \u2014 which side you stand on decides upload or download", '反対ペインへ — 立っている側でアップロードか転送かが決まる')],
+        ['c', tr("to the other pane \u2014 which side you stand on decides upload or download", '反対ペインへ — カーソルのある側でアップロードかダウンロードかが決まる')],
         [tr("a / A / r / d", 'a / A / r / d'), tr("the same keys on the server (a delete there has no trash \u2014 it is gone)", 'サーバ上でも同じキー（削除はゴミ箱なし＝戻せません）')],
         ['Enter / F3', tr("open a file on the server \u2014 Ctrl+S writes it back there", 'サーバのファイルを開く — Ctrl+S でサーバへ書き戻す')],
         [tr("Ctrl+V / a drop", 'Ctrl+V / ドロップ'), tr("upload a local file", 'ローカルのファイルをアップロード')],
@@ -3182,7 +3182,7 @@ function helpRows() {
         [':aierror  、:explain', tr("explain the shell's last error", 'シェルの直近のエラーを説明')],
         [':aicommit', tr("a commit message from the staged diff (Enter signs it)", 'ステージ済み差分からコミットメッセージ（Enter で署名）')],
         [':ime', tr("switch the input method off in vim's normal mode (init.lua's cian.ime)", 'vim のノーマルモードで IME を自動オフ（init.lua の cian.ime）')],
-        [tr("  with the IME on", '  IME オンのまま'), tr("the listing keys still work \u2014 this build reads the physical key, so no helper is needed", '一覧のキーはそのまま効きます — 窓版は物理キーを読みます（ヘルパー不要）')],
+        [tr("  with the IME on", '  IME オンのまま'), tr("the listing keys still work \u2014 this build reads the physical key, so no helper is needed", '一覧のキーはそのまま効きます — ウィンドウ版は物理キーを読みます（ヘルパー不要）')],
         [tr(":ai <question>", ':ai 質問'), tr("AI - simple: chat with the local model", 'AI - simple: ローカルモデルとチャット')],
         [':aidiff', tr("explain the diff on screen (x on the comparison)", '表示中の差分を説明（差分画面で x）')],
     ]],
@@ -3201,7 +3201,7 @@ function helpRows() {
         ['Shift+F1 / Shift+F2', tr("previous / next pane", '前 / 次のペインへ')],
         ['F1-F8', tr("go straight to shell tab 1-8", 'シェルタブ 1-8 に切替')],
         [tr("Ctrl+Shift+arrows", 'Ctrl+Shift+矢印'), tr("move the dividers", '分割の境界を動かす')],
-        ['Ctrl+S  /  :sync', tr("type into every pane at once (one command, four machines)", '全ペインに同時入力（同じコマンドを4台へ）')],
+        ['Ctrl+S  /  :sync', tr("type into every pane at once (one command, four machines)", '全ペインに同時入力（1回打てば全部のシェルへ）')],
         ['F12  /  :zoom', tr("zoom whichever surface has the keys", 'いま選んでいる枠を広げる（もう一度で戻る）')],
         ['Shift+F12', tr("show only this pane / back to the split", 'いまのペインだけを表示／分割に戻す')],
         [':sessionlog', tr("record the shell to a file (again stops it)", 'シェルの写しをファイルに取る（もう一度で止める）')],
@@ -4184,7 +4184,7 @@ function drawSettings() {
         const only = f.applies === 'tui'
             ? `<span class="sonly">${esc(tr('terminal build only', '端末版だけ'))}</span>`
             : f.applies === 'gui'
-                ? `<span class="sonly">${esc(tr('window build only', '窓版だけ'))}</span>`
+                ? `<span class="sonly">${esc(tr('window build only', 'ウィンドウ版だけ'))}</span>`
                 : '';
         return `<div class="srow${isSet(f) ? ' set' : ''}" data-row="${esc(f.name)}">`
             + `<div class="slabel">${esc(f.label[L])}<span class="sname">${esc(f.name)}${only}</span></div>`
@@ -4272,7 +4272,7 @@ function drawSettings() {
     // **平文のパスワードを置いた人が、置いた直後に知れる。**
     const sshWarn = settings.ssh.worldReadable
         ? `<div class="sbad">${esc(tr('this file is readable by anyone on this machine. chmod 600 it if it holds a password',
-              'このファイルはこの機械の誰からでも読めます。パスワードを書くなら chmod 600 してください'))}</div>`
+              'このファイルはこのパソコンの誰からでも読めます。パスワードを書くなら chmod 600 してください'))}</div>`
         : '';
     const open2 = settings.ssh.hosts.length || settings.newHosts.length || wasOpen.has('ssh');
     const ssh = `<details class="sgrp" data-g="ssh"${open2 ? ' open' : ''}>`
@@ -4322,7 +4322,7 @@ function drawSettings() {
               : '')
           + '</summary>'
           + `<div class="shelp">${esc(tr('what you bind here is looked at first. every key you do not bind keeps working as it does now, and ? lists those',
-                'ここで縛ったキーが先に見られます。縛らなかったキーは今までどおり動きます。既定の一覧は ? にあります'))}</div>`
+                'ここで割り当てたキーが先に効きます。割り当てていないキーは今までどおり動きます。既定の一覧は ? にあります'))}</div>`
           + keysWhere + settings.keys.binds.map(keyRow).join('') + '</details>'
         : '';
 
@@ -4360,10 +4360,10 @@ function drawSettings() {
             + f('name', tr('Name', '名前'), tr('what the picker shows', 'ピッカーに出る名前'))
             + f('cmd', tr('Command', 'コマンド'), 'tail -f /var/log/messages', true)
             + `<div class="shelp">${esc(tr('more than one line is fine. each line runs in turn',
-                  '複数行でも構いません。上から順に走ります'))}</div>`
-            + flag('enter', tr('Run at once', 'すぐ走らせる'),
+                  '複数行でも構いません。上から順に実行します'))}</div>`
+            + flag('enter', tr('Run at once', 'すぐ実行する'),
                    tr('no types it into the shell for you to look at first',
-                      'いいえを選ぶと、シェルに打ち込むだけで走らせません'))
+                      'いいえを選ぶと、シェルに入力するだけで実行しません'))
             + flag('confirm', tr('Ask first', '送る前に訊く'),
                    tr('for the ones you do not want to send by accident',
                       '間違って送りたくないものに'))
@@ -4572,7 +4572,7 @@ function captureKey(e) {
     // IME が握っているあいだは、文字がこちらに来ない。
     if (e.key === 'Process' || e.isComposing) {
         say(tr('the input method has this key. turn it off and press again',
-               '入力方式がこのキーを握っています。オフにしてもう一度押してください'), true);
+               '入力方式（IME）がこのキーを使っています。オフにしてもう一度押してください'), true);
         return;
     }
     if ([...e.key].length !== 1) {
@@ -4703,7 +4703,7 @@ async function openChatHistory() {
     // and `leave` brings it back for an Esc that chose nothing.
     el.chat.hidden = true;
     show(tr('Past conversations', '過去の会話'), tr('newest first', '新しい順'), rows, {
-        foot: tr('Enter reopen   d forget   Esc back', 'Enter 開き直す   d 忘れる   Esc 戻る'),
+        foot: tr('Enter reopen   d forget   Esc back', 'Enter 開き直す   d 削除   Esc 戻る'),
         leave: () => { el.chat.hidden = !chat.on; if (chat.on) el.cIn.focus(); },
         pick: async (row) => {
             const one = await ask('aihistory', { do: 'load', at: row.at });
@@ -5017,7 +5017,7 @@ function resolvedFace() {
         const name = raw.trim().replace(/^["\']|["\']$/g, '');
         if (faceIsHere(name)) return name;
     }
-    return tr('(none of them — the browser chose)', '(どれも無く、ブラウザが選びました)');
+    return tr('(none of them — the browser chose)', '(どれも入っていないので、ブラウザが選びました)');
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -6153,7 +6153,7 @@ function drawViewFoot() {
     if (viewer.readOnly) {
         el.vFoot.textContent = hex.editing
             ? tr(`hex edit — 0-9 a-f overwrite   ·   offset ${hex.at.toString(16).padStart(8, '0')}`, `16進編集 — 0-9 a-f で上書き   ·   ${hex.at.toString(16).padStart(8, '0')} 番地`)
-              + tr(`${hex.half ? ' (waiting for the low digit)' : ''}   ·   Ctrl+S saves (keeping a .bak)   Esc back`, `${hex.half ? '（下位けた待ち）' : ''}   ·   Ctrl+S 保存（.bak を残します）   Esc 戻る`)
+              + tr(`${hex.half ? ' (waiting for the low digit)' : ''}   ·   Ctrl+S saves (keeping a .bak)   Esc back`, `${hex.half ? '（あと1けた）' : ''}   ·   Ctrl+S 保存（.bak を残します）   Esc 戻る`)
             : tr('hex — i edits   ·   Esc ×3 closes', '16進表示 — i で編集   ·   Esc ×3 閉じる');
         return;
     }
@@ -6217,7 +6217,7 @@ async function saveFile() {
     // else's writing is worse than stopping.
     if (r.conflict) {
         const pick = await confirm(tr('It changed while you had it open', '開いている間に、ファイルが変わりました'),
-            `${r.conflict}\n\n` + tr('Overwriting loses what they wrote.', '上書きすると、向こうの書いたものが消えます。'),
+            `${r.conflict}\n\n` + tr('Overwriting loses what they wrote.', '上書きすると、外で書き換えられた内容が消えます。'),
             {
                 yes: tr('look at the difference', '差分を見る'),
                 extras: [
@@ -6972,7 +6972,7 @@ async function cmdMacros() {
         n: m.script ? tr('script', 'スクリプト') : tr(`${m.panes} panes`, `${m.panes}枚`),
         label: m.name,
         sub: m.script
-            ? tr('Lua — it moves files and says what it did', 'Lua ── ファイルを操作して、結果を言います')
+            ? tr('Lua — it moves files and says what it did', 'Lua ── ファイルを操作して、結果を表示します')
             : tr('opened as tabs', 'タブとして開きます'),
         name: m.name,
         script: m.script,
@@ -7752,7 +7752,7 @@ async function transfer() {
     // comes here and goes out again, and a person watching the bytes twice
     // should know why.
     const body = what.map((x) => x.name).join('\n')
-        + (relay ? tr('\n\nthey pass through this machine on the way', '\n\nこの機械を経由します') : '');
+        + (relay ? tr('\n\nthey pass through this machine on the way', '\n\nこのパソコンを経由します') : '');
     if (!await confirm(head, body)) { say(tr('stopped', 'やめました')); return; }
     say(tr(`${head}…`, `${head}中…`));
     // The bar, before the transfer rather than after it. SFTP does not go
@@ -7949,7 +7949,7 @@ async function cmdNoBom() {
     draw(state.focus);
     const parts = [tr(`${r.stripped} stripped`, `BOM除去 ${r.stripped} 件`)];
     if (r.none) parts.push(tr(`${r.none} had none`, `もともと無し ${r.none} 件`));
-    if (r.utf16) parts.push(tr(`${r.utf16} UTF-16 left alone`, `UTF-16 は据置 ${r.utf16} 件`));
+    if (r.utf16) parts.push(tr(`${r.utf16} UTF-16 left alone`, `UTF-16 はそのまま ${r.utf16} 件`));
     if (r.failed) parts.push(tr(`${r.failed} failed`, `失敗 ${r.failed} 件`));
     say(parts.join('   '), r.failed > 0);
 }
@@ -9262,7 +9262,7 @@ function cmdPaneGround() {
     const at = Math.max(0, rows.findIndex((r) => r.color === was));
     openMenu({
         key: '',
-        foot: tr(`the ${which === 'left' ? 'left' : 'right'} pane   ↑↓ dresses it as you pass   Enter keep   Esc put it back`, `${which === 'left' ? '左' : '右'}のペイン   ↑↓ 選ぶだけで着きます   Enter 決定   Esc 戻す`),
+        foot: tr(`the ${which === 'left' ? 'left' : 'right'} pane   ↑↓ dresses it as you pass   Enter keep   Esc put it back`, `${which === 'left' ? '左' : '右'}のペイン   ↑↓ 選ぶだけで着せ替わります   Enter 決定   Esc 戻す`),
         stay: false,
         rows: () => rows,
         at: () => at,
@@ -9806,7 +9806,7 @@ function showReplacePlan(spec, plan) {
                     if (!done) return;
                     await reread();
                     const bits = [tr(`replaced ${done.lines} lines in ${done.files} files`, `${done.files} ファイル ${done.lines} 行を置換`)];
-                    if (done.stale) bits.push(tr(`${done.stale} lines had changed and were left alone`, `${done.stale} 行は変わっていたので触らず`));
+                    if (done.stale) bits.push(tr(`${done.stale} lines had changed and were left alone`, `${done.stale} 行は変わっていたので触りませんでした`));
                     say(bits.join('   '), done.errors.length > 0);
                 },
         });

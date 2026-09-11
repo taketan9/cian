@@ -887,7 +887,7 @@ impl Session {
                     };
                     if let Some((archive, sub)) = into {
                         if req.method == "move" {
-                            anyhow::bail!("zip へはコピー（追加）のみ — 移動は未対応");
+                            anyhow::bail!("zip へはコピー（追加）だけです。移動はできません");
                         }
                         if !zip_writable(&archive) {
                             anyhow::bail!("これは書き換えられない形式です");

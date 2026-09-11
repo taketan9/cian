@@ -696,7 +696,7 @@ impl App {
         if let (Some(dst_dir), Some((s_target, _)), Some((d_target, d_label))) = (dst_dir, src, dst) {
             self.message = Some(format!(
                 "{} → {} …",
-                tr(self.lang, "copying via this machine", "この端末を経由してコピー"),
+                tr(self.lang, "copying via this machine", "このパソコンを経由してコピー"),
                 d_label
             ));
             // Re-list the destination pane once the relay finishes.
