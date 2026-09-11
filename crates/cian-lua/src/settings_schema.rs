@@ -457,13 +457,6 @@ pub fn elsewhere() -> &'static [Elsewhere] {
         },
         Elsewhere {
             file: "init.lua",
-            what_en: "Snippets",
-            what_ja: "スニペット",
-            how_en: "cian.snippets{…}. not in this screen yet",
-            how_ja: "cian.snippets{…} に書きます。この画面にはまだありません",
-        },
-        Elsewhere {
-            file: "init.lua",
             what_en: "Font, input method, SharePoint, open rules",
             what_ja: "書体・IME・SharePoint・開き方",
             how_en: "cian.font{} cian.ime{} cian.sharepoint{} cian.open{} / cian.on_open()",

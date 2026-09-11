@@ -3729,6 +3729,89 @@ impl Session {
                     "ai": ai,
                 }))
             }
+            // ---- スニペット ----
+            //
+            // シェルへ送る一行に名前を付けたもの（`Ctrl+Shift+Enter` / `:snip`）。
+            // **同梱の見本に一行も無い** ── マニュアルは名前を挙げているのに
+            // 書き方を知る道が無かったので、この画面がその穴を埋める側になる。
+            //
+            // 分割ファイルは無いので、置き場は `init.lua`。
+            "settings_snips_read" => {
+                let (path, write_to) = cian_lua::settings_snips::snip_files();
+                let text = path
+                    .as_ref()
+                    .and_then(|p| std::fs::read_to_string(p).ok())
+                    .or_else(|| {
+                        write_to.as_ref().and_then(|p| std::fs::read_to_string(p).ok())
+                    })
+                    .unwrap_or_default();
+                Ok(serde_json::json!({
+                    "path": path.as_ref().map(|p| p.display().to_string()),
+                    "writes": write_to.as_ref().map(|p| p.display().to_string()),
+                    "error": cian_lua::settings_edit::syntax_error(&text),
+                    "snips": cian_lua::settings_snips::snips_in(&text)
+                        .iter()
+                        .map(|s| {
+                            serde_json::json!({
+                                "name": s.name,
+                                "cmd": s.cmd,
+                                "enter": s.enter,
+                                "confirm": s.confirm,
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                }))
+            }
+            "settings_snips_write" => {
+                let (path, write_to) = cian_lua::settings_snips::snip_files();
+                let Some(write_to) = write_to else {
+                    anyhow::bail!("書き込み先が分かりません");
+                };
+                let mut out = path
+                    .as_ref()
+                    .and_then(|p| std::fs::read_to_string(p).ok())
+                    .or_else(|| std::fs::read_to_string(&write_to).ok())
+                    .unwrap_or_default();
+                if let Some(why) = cian_lua::settings_edit::syntax_error(&out) {
+                    anyhow::bail!("init.lua が Lua として読めません。直してから保存してください: {why}");
+                }
+                // **書いてあったものは、既定と同じでも書き戻す。** いま
+                // ファイルにある姿を読んでから重ねる。
+                let before = cian_lua::settings_snips::snips_in(&out);
+                for change in req.params["snips"].as_array().cloned().unwrap_or_default() {
+                    let Some(name) = change["name"].as_str() else { continue };
+                    let row = change["row"].as_object().map(|r| {
+                        let s = |k: &str| r.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let b = |k: &str, d: bool| {
+                            r.get(k).and_then(|v| v.as_bool()).unwrap_or(d)
+                        };
+                        let was = before.iter().find(|x| x.name == name);
+                        cian_lua::settings_snips::Snip {
+                            name: s("name"),
+                            cmd: s("cmd"),
+                            enter: b("enter", true),
+                            confirm: b("confirm", false),
+                            wrote_enter: was.map(|w| w.wrote_enter).unwrap_or(false),
+                            wrote_confirm: was.map(|w| w.wrote_confirm).unwrap_or(false),
+                        }
+                    });
+                    if let Some(r) = &row {
+                        if r.name.trim().is_empty() || r.cmd.trim().is_empty() {
+                            anyhow::bail!("名前とコマンドの両方が要ります");
+                        }
+                    }
+                    out = cian_lua::settings_snips::set_snip_in(&out, name, row.as_ref());
+                }
+                if let Some(why) = cian_lua::settings_edit::syntax_error(&out) {
+                    anyhow::bail!("書こうとした中身が Lua として読めません。保存しませんでした: {why}");
+                }
+                cian_lua::settings_edit::write_init(&write_to, &out)
+                    .map_err(|e| anyhow::anyhow!("{}: {e}", write_to.display()))?;
+                Ok(serde_json::json!({
+                    "path": write_to.display().to_string(),
+                    "backup": write_to.with_extension("lua.bak").display().to_string(),
+                }))
+            }
             // ---- キー割当 ----
             //
             // 本人:「よくあるアプリケーションって自分のアプリの中でキーマップの

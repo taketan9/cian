@@ -303,6 +303,28 @@
 
 
 -- ----------------------------------------------------------------------------
+--  Snippets  —  cian.snippets { ... }
+-- ----------------------------------------------------------------------------
+-- A line of shell with a name on it. `Ctrl+Shift+Enter` (`:snip`) picks one and
+-- sends it to the built-in shell. **The settings screen can add them too**
+-- (right-click → Settings… → Snippets).
+--
+--   name    what the picker shows. Defaults to the command itself
+--   cmd     the line to send
+--   enter   run it at once (default true). false types it in for you to read
+--           first, and you press Enter yourself
+--   confirm ask before sending (default false), for the ones you would rather
+--           not fire by accident
+--
+-- cian.snippets {
+--   { name = "follow the log", cmd = "tail -f /var/log/messages" },
+--   { name = "free space",     cmd = "df -h" },
+--   { name = "restart",        cmd = "systemctl restart app", confirm = true },
+--   { name = "draft",          cmd = "docker ps -a", enter = false },
+-- }
+
+
+-- ----------------------------------------------------------------------------
 --  AI  —  cian.ai { ... }   (optional; needs Python + Azure OpenAI access)
 -- ----------------------------------------------------------------------------
 -- Enables cian's AI features (`:ai` chat, and later junk detection / structure

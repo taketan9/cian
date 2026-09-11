@@ -4029,6 +4029,10 @@ const settings = {
     touchedKeys: new Map(),
     /// いま打鍵を待っている動作。`null` なら待っていない。
     capturing: null,
+    /// スニペット。`{ path, writes, snips: [{name,cmd,enter,confirm}] }`。
+    snips: { path: '', writes: '', snips: [], error: null },
+    touchedSnips: new Map(),
+    newSnips: [],
     /// 画面で足した、まだ名前の決まっていない行のぶん。
     newHosts: [],
 };
@@ -4072,6 +4076,15 @@ async function openSettings() {
         settings.keys = {
             path: k.path || '', writes: k.writes || '',
             binds: k.binds || [], error: k.error || null,
+        };
+    }
+    settings.touchedSnips = new Map();
+    settings.newSnips = [];
+    const s2 = await ask('settings_snips_read', {});
+    if (s2) {
+        settings.snips = {
+            path: s2.path || '', writes: s2.writes || '',
+            snips: s2.snips || [], error: s2.error || null,
         };
     }
     const h = await ask('settings_hosts_read', {});
@@ -4307,6 +4320,54 @@ function drawSettings() {
           + keysWhere + settings.keys.binds.map(keyRow).join('') + '</details>'
         : '';
 
+    // ── スニペット ────────────────────────────────────────────────
+    //
+    // シェルへ送る一行に名前を付けたもの。**同梱の見本に一行も無い**ので、
+    // 書き方を知る道がここになる ── だから欄の脇に例を置く。
+    const snipRow = (s, i) => {
+        const t2 = settings.touchedSnips;
+        const key = s.name || `__new${i}`;
+        const cur = t2.has(key) ? (t2.get(key) || {}) : s;
+        const gone = t2.has(key) && t2.get(key) === null;
+        const f = (k, label, ph) => `<div class="srow"><div class="slabel">${esc(label)}</div>`
+            + `<div class="sin"><input type="text" data-snip="${esc(key)}" data-sk="${esc(k)}" `
+            + `data-si="${i}" value="${esc(cur[k] ?? '')}" placeholder="${esc(ph || '')}" `
+            + 'autocomplete="off" spellcheck="false"></div></div>';
+        const flag = (k, label, help) => `<div class="srow"><div class="slabel">${esc(label)}</div>`
+            + `<div class="sin"><select data-snip="${esc(key)}" data-sk="${esc(k)}" data-si="${i}">`
+            + `<option value="true"${cur[k] ? ' selected' : ''}>${esc(tr('yes', 'はい'))}</option>`
+            + `<option value="false"${cur[k] ? '' : ' selected'}>${esc(tr('no', 'いいえ'))}</option>`
+            + `</select></div></div><div class="shelp">${esc(help)}</div>`;
+        return `<div class="shost${gone ? ' gone' : ''}">`
+            + `<div class="shhead">${esc(s.name || tr('(new)', '（新規）'))}`
+            + `<button class="sdrop" data-sdrop="${esc(key)}">`
+            + esc(gone ? tr('undo', 'やめる') : tr('remove', '消す')) + '</button></div>'
+            + f('name', tr('Name', '名前'), tr('what the picker shows', 'ピッカーに出る名前'))
+            + f('cmd', tr('Command', 'コマンド'), 'tail -f /var/log/messages')
+            + flag('enter', tr('Run at once', 'すぐ走らせる'),
+                   tr('no types it into the shell for you to look at first',
+                      'いいえを選ぶと、シェルに打ち込むだけで走らせません'))
+            + flag('confirm', tr('Ask first', '送る前に訊く'),
+                   tr('for the ones you do not want to send by accident',
+                      '間違って送りたくないものに'))
+            + '</div>';
+    };
+    const snipRows = settings.snips.snips.map((s, i) => snipRow(s, i))
+        .concat(settings.newSnips.map((s, i) => snipRow(s, settings.snips.snips.length + i)))
+        .join('');
+    const snipsOpen = settings.snips.snips.length || settings.newSnips.length || wasOpen.has('snips');
+    const snips = `<details class="sgrp" data-g="snips"${snipsOpen ? ' open' : ''}>`
+        + `<summary>${esc(tr('Snippets', 'スニペット'))}`
+        + `<span class="snum">${settings.snips.snips.length + settings.newSnips.length}</span></summary>`
+        + `<div class="shelp">${esc(tr('a line of shell with a name on it. Ctrl+Shift+Enter or :snip picks one',
+              'シェルへ送る一行に名前を付けたものです。Ctrl+Shift+Enter か :snip で選びます'))}</div>`
+        + (settings.snips.writes
+            ? `<div class="shelp">${esc(tr('written into ', '書き先: '))}<code>${esc(settings.snips.writes)}</code></div>`
+            : '')
+        + snipRows
+        + `<div class="srow"><button id="se-addsnip">${esc(tr('add a snippet', 'スニペットを追加'))}</button></div>`
+        + '</details>';
+
     // ── ここでは直せないもの ──────────────────────────────────────
     //
     // **画面に出ないものは、無いことにされる。** cian が読む設定はこの画面の
@@ -4336,7 +4397,7 @@ function drawSettings() {
             // 「通知 2 1 件」と読めてしまったので、何の数か言う。
             + (n ? `<span class="sset">${esc(tr(`${n} set`, `${n} 件設定済み`))}</span>` : '')
             + '</summary>' + g.items.map(rowHtml).join('') + '</details>';
-    }).join('') + keys + ai + ssh + elsewhere;
+    }).join('') + keys + ai + ssh + snips + elsewhere;
 
     for (const node of el.seBody.querySelectorAll('[data-k]')) {
         node.addEventListener('input', () => {
@@ -4362,6 +4423,39 @@ function drawSettings() {
     for (const node of el.seBody.querySelectorAll('[data-kdrop]')) {
         node.addEventListener('click', () => {
             settings.touchedKeys.set(node.dataset.kdrop, null);
+            drawSettings();
+        });
+    }
+    for (const node of el.seBody.querySelectorAll('[data-snip]')) {
+        const push = () => {
+            const i = Number(node.dataset.si);
+            const base = settings.snips.snips[i]
+                || settings.newSnips[i - settings.snips.snips.length] || {};
+            const key = node.dataset.snip;
+            const row = { ...(settings.touchedSnips.get(key) || base) };
+            const k = node.dataset.sk;
+            row[k] = node.tagName === 'SELECT' ? node.value === 'true' : node.value;
+            settings.touchedSnips.set(key, row);
+            drawSettingsFoot();
+        };
+        node.addEventListener('input', push);
+        node.addEventListener('change', push);
+    }
+    for (const node of el.seBody.querySelectorAll('[data-sdrop]')) {
+        node.addEventListener('click', () => {
+            const key = node.dataset.sdrop;
+            if (settings.touchedSnips.get(key) === null) {
+                settings.touchedSnips.delete(key);
+            } else {
+                settings.touchedSnips.set(key, null);
+            }
+            drawSettings();
+        });
+    }
+    const addSnip = el.seBody.querySelector('#se-addsnip');
+    if (addSnip) {
+        addSnip.addEventListener('click', () => {
+            settings.newSnips.push({ name: '', cmd: '', enter: true, confirm: false });
             drawSettings();
         });
     }
@@ -4410,13 +4504,14 @@ el.seCancel.addEventListener('click', () => closeSettings());
 
 function drawSettingsFoot() {
     const n = settings.touched.size + settings.touchedAi.size + settings.touchedHosts.size
-        + settings.touchedKeys.size;
+        + settings.touchedKeys.size + settings.touchedSnips.size;
     // **どのファイルに書くかを言う。** ホストは `ssh.lua` に行くことがあるので、
     // 「init.lua に書きます」と言い切ると嘘になる回がある。
     const where = [];
     if (settings.touched.size || settings.touchedAi.size) { where.push('init.lua'); }
     for (const [n2, w] of [[settings.touchedHosts.size, settings.ssh.writes],
-                           [settings.touchedKeys.size, settings.keys.writes]]) {
+                           [settings.touchedKeys.size, settings.keys.writes],
+                           [settings.touchedSnips.size, settings.snips.writes]]) {
         if (!n2) { continue; }
         const f = (w || '').split(/[\\/]/).pop() || 'init.lua';
         if (!where.includes(f)) { where.push(f); }
@@ -4483,7 +4578,12 @@ async function saveSettings() {
     const ai = [...settings.touchedAi].map(([key, value]) => ({ key, value }));
     const hosts = [...settings.touchedHosts].map(([name, row]) => ({ name, row }));
     const keys = [...settings.touchedKeys].map(([action, key]) => ({ action, key }));
-    if (!set.length && !ai.length && !hosts.length && !keys.length) { return; }
+    const snips = [...settings.touchedSnips].map(([name, row]) => ({ name, row }));
+    if (!set.length && !ai.length && !hosts.length && !keys.length && !snips.length) { return; }
+    if (snips.length) {
+        const s2 = await ask('settings_snips_write', { snips });
+        if (!s2) { return; }
+    }
     // キーも別の呼び出し ── 書く先が `keymap.lua` のことがある。
     if (keys.length) {
         const k = await ask('settings_keys_write', { keys });
