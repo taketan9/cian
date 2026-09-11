@@ -390,6 +390,88 @@ pub fn fields() -> &'static [Field] {
     ]
 }
 
+/// 設定画面が**触らない**設定の置き場。
+///
+/// **画面に出ないものは、無いことにされる。** `Options` の 20 個と `cian.ai{}`
+/// と SSH ホストは触れるが、cian が読む設定はそれだけではない ── キー割当も
+/// ブックマークもマクロもテーマもある。画面がそれらに一言も触れなければ、
+/// 「設定画面に無い＝設定できない」と読まれる。
+///
+/// だからここに並べて、画面の最後に**どこで直すか**を出す。並びが実装と
+/// ずれないよう、`scripts/settingscover.py` が
+/// `:where` の一覧（`actions.rs`）と `cian.*` の API を数えて突き合わせる。
+#[derive(Debug, Clone, Copy)]
+pub struct Elsewhere {
+    /// `:where` に出るファイル名。init.lua に直接書くものは "init.lua"。
+    pub file: &'static str,
+    pub what_en: &'static str,
+    pub what_ja: &'static str,
+    /// どうやって直すか。
+    pub how_en: &'static str,
+    pub how_ja: &'static str,
+}
+
+pub fn elsewhere() -> &'static [Elsewhere] {
+    &[
+        Elsewhere {
+            file: "keymap.lua",
+            what_en: "Key bindings",
+            what_ja: "キー割当",
+            how_en: "cian.set_keymap(\"j\", \"cursor_down\") — in keymap.lua or init.lua",
+            how_ja: "cian.set_keymap(\"j\", \"cursor_down\") を keymap.lua か init.lua に書きます",
+        },
+        Elsewhere {
+            file: "shortcuts.lua",
+            what_en: "Bookmarks",
+            what_ja: "ブックマーク",
+            how_en: "made from the s menu. cian writes this file itself",
+            how_ja: "s のメニューから作ります。このファイルは cian 自身が書きます",
+        },
+        Elsewhere {
+            file: "macro.lua",
+            what_en: "Macros",
+            what_ja: "マクロ",
+            how_en: "written by hand. :macro runs them",
+            how_ja: "手で書きます。:macro で走ります",
+        },
+        Elsewhere {
+            file: "count.lua",
+            what_en: "What :count counts",
+            what_ja: ":count が数えるもの",
+            how_en: "written by hand",
+            how_ja: "手で書きます",
+        },
+        Elsewhere {
+            file: "state.toml",
+            what_en: "What cian remembers",
+            what_ja: "cian が覚えていること",
+            how_en: "the theme picked with :theme, the window's own look. cian writes it",
+            how_ja: ":theme で選んだ配色や、窓の見た目です。cian 自身が書きます",
+        },
+        Elsewhere {
+            file: "init.lua",
+            what_en: "Theme",
+            what_ja: "配色",
+            how_en: ":theme opens a gallery, and the choice is remembered",
+            how_ja: ":theme でギャラリーが開きます。選んだものは覚えます",
+        },
+        Elsewhere {
+            file: "init.lua",
+            what_en: "Snippets",
+            what_ja: "スニペット",
+            how_en: "cian.snippets{…}. not in this screen yet",
+            how_ja: "cian.snippets{…} に書きます。この画面にはまだありません",
+        },
+        Elsewhere {
+            file: "init.lua",
+            what_en: "Font, input method, SharePoint, open rules",
+            what_ja: "書体・IME・SharePoint・開き方",
+            how_en: "cian.font{} cian.ime{} cian.sharepoint{} cian.open{} / cian.on_open()",
+            how_ja: "cian.font{} cian.ime{} cian.sharepoint{} cian.open{} / cian.on_open()",
+        },
+    ]
+}
+
 /// 画面が受け取った値を、`init.lua` に書く **Lua の字面**にする。
 ///
 /// `set_option_in` が字面を要るのは、ここで型を推し量らせないため ──

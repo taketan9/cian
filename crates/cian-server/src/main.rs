@@ -3696,10 +3696,29 @@ impl Session {
                             )
                         })
                         .collect();
+                // **画面に出ないものは、無いことにされる。** cian が読む設定は
+                // `Options` の 20 個だけではない ── キー割当もブックマークも
+                // マクロもテーマもある。画面が一言も触れなければ「設定画面に
+                // 無い＝設定できない」と読まれるので、どこで直すかを出す。
+                // 実装とずれないよう `scripts/settingscover.py` が数える。
+                let elsewhere: Vec<serde_json::Value> = cian_lua::settings_schema::elsewhere()
+                    .iter()
+                    .map(|e| {
+                        let at = cian_lua::config_read_path(e.file);
+                        serde_json::json!({
+                            "file": e.file,
+                            "what": { "en": e.what_en, "ja": e.what_ja },
+                            "how": { "en": e.how_en, "ja": e.how_ja },
+                            "path": at.as_ref().map(|p| p.display().to_string()),
+                            "exists": at.as_ref().map(|p| p.exists()).unwrap_or(false),
+                        })
+                    })
+                    .collect();
                 Ok(serde_json::json!({
                     "path": path.as_ref().map(|p| p.display().to_string()),
                     "writes": cian_lua::config_write_path("init.lua").map(|p| p.display().to_string()),
                     "portable": cian_lua::is_portable(),
+                    "elsewhere": elsewhere,
                     "exists": path.as_ref().map(|p| p.exists()).unwrap_or(false),
                     // Lua として読めないなら、その訳。**画面はこのとき保存
                     // させない** ── 壊れたファイルを塗り潰すのが、設定画面の

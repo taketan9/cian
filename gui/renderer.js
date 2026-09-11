@@ -4013,6 +4013,9 @@ const settings = {
     /// Lua として読めなかった訳。あるあいだは保存させない。
     error: null,
     path: '',
+    /// **ここでは直せないもの。** 画面が触らない設定の置き場 ── 出さないと
+    /// 「設定画面に無い＝設定できない」と読まれる。
+    elsewhere: [],
     /// SSH ホスト。**`init.lua` とは別のファイルかもしれない** ── cian は
     /// `ssh.lua` を init.lua の直後に同じ設定として読むので、書き先は
     /// 「いま `cian.ssh{}` がある方」。どちらに書くかは画面に出す。
@@ -4049,6 +4052,7 @@ async function openSettings() {
     settings.fields = r.fields || [];
     settings.ai = r.ai || {};
     settings.error = r.error || null;
+    settings.elsewhere = r.elsewhere || [];
     settings.path = r.writes || r.path || '';
     settings.touched = new Map();
     settings.touchedAi = new Map();
@@ -4242,6 +4246,23 @@ function drawSettings() {
         + `<div class="srow"><button id="se-addhost">${esc(tr('add a host', 'ホストを追加'))}</button></div>`
         + '</details>';
 
+    // ── ここでは直せないもの ──────────────────────────────────────
+    //
+    // **画面に出ないものは、無いことにされる。** cian が読む設定はこの画面の
+    // 20 個と AI と SSH だけではない。触らないものは、せめて**どこで直すか**を
+    // 言う。実装とずれないよう `scripts/settingscover.py` が数えている。
+    const others = settings.elsewhere.map((e) => `<div class="srow">`
+        + `<div class="slabel">${esc(e.what[L])}<span class="sname">${esc(e.file)}`
+        + (e.exists ? '' : `<span class="sonly">${esc(tr('not there yet', 'まだありません'))}</span>`)
+        + '</span></div>'
+        + `<div class="sin"><span class="sdef">${esc(e.how[L])}</span></div></div>`
+        + (e.path ? `<div class="shelp"><code>${esc(e.path)}</code></div>` : '')).join('');
+    const elsewhere = settings.elsewhere.length
+        ? `<details class="sgrp" data-g="elsewhere"${wasOpen.has('elsewhere') ? ' open' : ''}>`
+          + `<summary>${esc(tr('Edited elsewhere', 'ここでは直せないもの'))}`
+          + `<span class="snum">${settings.elsewhere.length}</span></summary>${others}</details>`
+        : '';
+
     const bad = settings.error
         ? `<div class="sbad">${esc(tr('init.lua does not read as Lua. nothing is saved until it does',
               'init.lua が Lua として読めません。直すまで保存できません'))}\n${esc(settings.error)}</div>`
@@ -4254,7 +4275,7 @@ function drawSettings() {
             // 「通知 2 1 件」と読めてしまったので、何の数か言う。
             + (n ? `<span class="sset">${esc(tr(`${n} set`, `${n} 件設定済み`))}</span>` : '')
             + '</summary>' + g.items.map(rowHtml).join('') + '</details>';
-    }).join('') + ai + ssh;
+    }).join('') + ai + ssh + elsewhere;
 
     for (const node of el.seBody.querySelectorAll('[data-k]')) {
         node.addEventListener('input', () => {

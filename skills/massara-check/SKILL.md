@@ -38,7 +38,16 @@ python3 scripts/keycover.py     # ヘルプが挙げるキー（押されたこ�
 python3 scripts/requests.py     # 依頼の台帳
 python3 scripts/parity.py       # 端末版と窓版で同じものが同じ言葉で呼ばれているか
 python3 scripts/configcover.py  # init.lua の設定を、窓版がいくつ読んでいるか
+python3 scripts/settingscover.py # 設定画面が、cian の設定のどこまでを触れているか
 ```
+
+**設定画面は放っておくと嘘をつく。** 本人の心配（2026-09-11）:「実装とずれた
+設定画面になっていないか心配だ」── もっともで、その日のうちに `ssh.lua` の
+行き先を間違えている。**画面に出ないものは、無いことにされる** ── cian が
+読む設定は `Options` の 20 個だけではなく、キー割当もブックマークもマクロも
+テーマもある。`settingscover.py` は `cian.*` の API 13 個と `:where` の
+ファイル7つを数え、**画面が触るか、どこで直すかを画面が言っているか**を見る。
+出さないものには理由を書く。
 
 `keycover.py` の 73 種のキー、コマンドパレットの一覧（`palette::command_list`）、
 メニューの項目（`MenuItem`）、トグルの行（`toggle_rows`）―― この4つが「全機能」
