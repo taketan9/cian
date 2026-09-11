@@ -266,7 +266,7 @@ pub fn set_field_in(text: &str, call: &str, key: &str, value: Option<&str>) -> S
 ///
 /// 同じ呼び出しが何度も有効なら**最後のもの**。Lua は上から実行するので、
 /// あとの呼び出しが前のものを上書きする。
-fn live_block(lines: &[String], call: &str) -> Option<(usize, usize)> {
+pub(crate) fn live_block(lines: &[String], call: &str) -> Option<(usize, usize)> {
     let head = format!("cian.{call}");
     let mut found = None;
     for (i, line) in lines.iter().enumerate() {
@@ -293,7 +293,7 @@ fn live_block(lines: &[String], call: &str) -> Option<(usize, usize)> {
 }
 
 /// その行の `{` と `}` の差。文字列の中とコメントは数えない。
-fn braces(line: &str) -> i32 {
+pub(crate) fn braces(line: &str) -> i32 {
     let mut depth = 0i32;
     let chars: Vec<char> = line.chars().collect();
     let mut i = 0;

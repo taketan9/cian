@@ -4013,6 +4013,14 @@ const settings = {
     /// Lua として読めなかった訳。あるあいだは保存させない。
     error: null,
     path: '',
+    /// SSH ホスト。**`init.lua` とは別のファイルかもしれない** ── cian は
+    /// `ssh.lua` を init.lua の直後に同じ設定として読むので、書き先は
+    /// 「いま `cian.ssh{}` がある方」。どちらに書くかは画面に出す。
+    ssh: { path: '', writes: '', hosts: [], worldReadable: false, error: null },
+    /// 触ったホスト。`名前 → 行 or null（消す）`。
+    touchedHosts: new Map(),
+    /// 画面で足した、まだ名前の決まっていない行のぶん。
+    newHosts: [],
 };
 
 /// 書いてある字面を、欄に入れる形へ。`"nvim"` → `nvim`、`8` → `8`、
@@ -4044,6 +4052,18 @@ async function openSettings() {
     settings.path = r.writes || r.path || '';
     settings.touched = new Map();
     settings.touchedAi = new Map();
+    settings.touchedHosts = new Map();
+    settings.newHosts = [];
+    const h = await ask('settings_hosts_read', {});
+    if (h) {
+        settings.ssh = {
+            path: h.path || '',
+            writes: h.writes || '',
+            hosts: h.hosts || [],
+            worldReadable: !!h.world_readable,
+            error: h.error || null,
+        };
+    }
     setSettingsOn(true);
     drawSettings();
 }
@@ -4063,6 +4083,16 @@ function closeSettings() {
 
 function drawSettings() {
     const L = lang === 'en' ? 'en' : 'ja';
+    // **開いてある節を覚える。** `innerHTML` で描き直すと `<details>` の開閉は
+    // 消えるので、「ホストを追加」を押した瞬間に節ごと畳まれて、足した枠が
+    // 見えなくなった。開いたのは人の判断で、描き直しの都合で畳んでよいもの
+    // ではない。
+    const wasOpen = new Set(
+        [...el.seBody.querySelectorAll('details[data-g]')]
+            .filter((d) => d.open)
+            .map((d) => d.dataset.g),
+    );
+    const first = el.seBody.children.length === 0;
     el.seName.textContent = tr('Settings', '設定');
     el.seAbout.textContent = settings.path;
     const cats = [];
@@ -4142,7 +4172,7 @@ function drawSettings() {
             + `<div class="shelp">${esc(help)}</div>`;
     };
     const aiOn = Object.values(settings.ai).some((v) => v) || settings.touchedAi.size > 0;
-    const ai = `<details class="sgrp"${aiOn ? ' open' : ''}><summary>${esc(tr('AI', 'AI'))}`
+    const ai = `<details class="sgrp" data-g="ai"${aiOn || wasOpen.has('ai') ? ' open' : ''}><summary>${esc(tr('AI', 'AI'))}`
         + `<span class="snum">7</span>`
         + (aiOn ? '' : `<span class="sset">${esc(tr('off until an endpoint is set', 'エンドポイントを入れるまでオフです'))}</span>`)
         + '</summary>'
@@ -4165,18 +4195,66 @@ function drawSettings() {
         + aiRow('python', tr('Python', 'Python'), tr('the interpreter that runs the client', 'クライアントを動かすインタプリタです'))
         + '</details>';
 
+    // ── SSH ホスト ────────────────────────────────────────────────
+    //
+    // **1行に1つで編集させない。** crmaine が「object の配列をそう編集させると
+    // 保存で設定が壊れる」と書いていたのがこの形で、ホスト1台に1つのフォームを
+    // 出す。`users`（鍵やパスワードが入る）は**読めるように出すだけ**で、
+    // 直すのは init.lua ── 畳んで書き直すとその形が失われる。
+    const hostRow = (h, i) => {
+        const t2 = settings.touchedHosts;
+        const cur = t2.has(h.name) ? (t2.get(h.name) || {}) : h;
+        const gone = t2.has(h.name) && t2.get(h.name) === null;
+        const f = (k, label, ph) => `<div class="srow"><div class="slabel">${esc(label)}</div>`
+            + `<div class="sin"><input type="text" data-host="${esc(h.name || '')}" data-hk="${esc(k)}" `
+            + `data-hi="${i}" value="${esc(cur[k] ?? '')}" placeholder="${esc(ph || '')}" `
+            + 'autocomplete="off" spellcheck="false"></div></div>';
+        return `<div class="shost${gone ? ' gone' : ''}">`
+            + `<div class="shhead">${esc(h.name || tr('(new)', '（新規）'))}`
+            + `<button class="sdrop" data-hdrop="${esc(h.name || '')}" data-hi="${i}">`
+            + esc(gone ? tr('undo', 'やめる') : tr('remove', '消す')) + '</button></div>'
+            + f('name', tr('Name', '名前'), 'web1')
+            + f('host', tr('Address', 'アドレス'), '10.0.1.11')
+            + f('port', tr('Port', 'ポート'), '22')
+            + f('notes', tr('Notes (given to the AI)', 'メモ（AI に渡ります）'), '')
+            + (h.users
+                ? `<div class="shelp">${esc(tr('users: ', 'users: '))}<code>${esc(h.users)}</code>　`
+                  + esc(tr('edited in init.lua. keys and passwords keep their shape there',
+                           'ここでは直せません。鍵やパスワードの形を保つため init.lua で直します')) + '</div>'
+                : '')
+            + '</div>';
+    };
+    const rows2 = settings.ssh.hosts.map((h, i) => hostRow(h, i))
+        .concat(settings.newHosts.map((h, i) => hostRow(h, settings.ssh.hosts.length + i)))
+        .join('');
+    const sshWhere = settings.ssh.writes
+        ? `<div class="shelp">${esc(tr('written into ', '書き先: '))}<code>${esc(settings.ssh.writes)}</code></div>`
+        : '';
+    // **平文のパスワードを置いた人が、置いた直後に知れる。**
+    const sshWarn = settings.ssh.worldReadable
+        ? `<div class="sbad">${esc(tr('this file is readable by anyone on this machine. chmod 600 it if it holds a password',
+              'このファイルはこの機械の誰からでも読めます。パスワードを書くなら chmod 600 してください'))}</div>`
+        : '';
+    const open2 = settings.ssh.hosts.length || settings.newHosts.length || wasOpen.has('ssh');
+    const ssh = `<details class="sgrp" data-g="ssh"${open2 ? ' open' : ''}>`
+        + `<summary>SSH<span class="snum">${settings.ssh.hosts.length + settings.newHosts.length}</span></summary>`
+        + sshWhere + sshWarn + rows2
+        + `<div class="srow"><button id="se-addhost">${esc(tr('add a host', 'ホストを追加'))}</button></div>`
+        + '</details>';
+
     const bad = settings.error
         ? `<div class="sbad">${esc(tr('init.lua does not read as Lua. nothing is saved until it does',
               'init.lua が Lua として読めません。直すまで保存できません'))}\n${esc(settings.error)}</div>`
         : '';
     el.seBody.innerHTML = bad + cats.map((g, i) => {
         const n = g.items.filter(isSet).length;
-        return `<details class="sgrp"${i === 0 ? ' open' : ''}>`
+        const open = wasOpen.has(g.name) || (first && i === 0);
+        return `<details class="sgrp" data-g="${esc(g.name)}"${open ? ' open' : ''}>`
             + `<summary>${esc(g.name)}<span class="snum">${g.items.length}</span>`
             // 「通知 2 1 件」と読めてしまったので、何の数か言う。
             + (n ? `<span class="sset">${esc(tr(`${n} set`, `${n} 件設定済み`))}</span>` : '')
             + '</summary>' + g.items.map(rowHtml).join('') + '</details>';
-    }).join('') + ai;
+    }).join('') + ai + ssh;
 
     for (const node of el.seBody.querySelectorAll('[data-k]')) {
         node.addEventListener('input', () => {
@@ -4189,6 +4267,35 @@ function drawSettings() {
     for (const node of el.seBody.querySelectorAll('[data-drop]')) {
         node.addEventListener('click', () => {
             settings.touched.set(node.dataset.drop, null);
+            drawSettings();
+        });
+    }
+    for (const node of el.seBody.querySelectorAll('[data-host]')) {
+        node.addEventListener('input', () => {
+            const i = Number(node.dataset.hi);
+            const base = settings.ssh.hosts[i] || settings.newHosts[i - settings.ssh.hosts.length] || {};
+            const key = node.dataset.host;
+            const row = { ...(settings.touchedHosts.get(key) || base) };
+            row[node.dataset.hk] = node.value;
+            settings.touchedHosts.set(key, row);
+            drawSettingsFoot();
+        });
+    }
+    for (const node of el.seBody.querySelectorAll('[data-hdrop]')) {
+        node.addEventListener('click', () => {
+            const key = node.dataset.hdrop;
+            if (settings.touchedHosts.get(key) === null) {
+                settings.touchedHosts.delete(key);
+            } else {
+                settings.touchedHosts.set(key, null);
+            }
+            drawSettings();
+        });
+    }
+    const addBtn = el.seBody.querySelector('#se-addhost');
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            settings.newHosts.push({ name: '', host: '', port: '', notes: '', users: '' });
             drawSettings();
         });
     }
@@ -4207,11 +4314,20 @@ el.seSave.addEventListener('click', () => saveSettings());
 el.seCancel.addEventListener('click', () => closeSettings());
 
 function drawSettingsFoot() {
-    const n = settings.touched.size + settings.touchedAi.size;
+    const n = settings.touched.size + settings.touchedAi.size + settings.touchedHosts.size;
+    // **どのファイルに書くかを言う。** ホストは `ssh.lua` に行くことがあるので、
+    // 「init.lua に書きます」と言い切ると嘘になる回がある。
+    const where = [];
+    if (settings.touched.size || settings.touchedAi.size) { where.push('init.lua'); }
+    if (settings.touchedHosts.size) {
+        const f = (settings.ssh.writes || '').split(/[\\/]/).pop() || 'init.lua';
+        if (!where.includes(f)) { where.push(f); }
+    }
     el.seFoot.textContent = settings.error
         ? tr('read the file first', 'まず init.lua を直してください')
         : n
-            ? tr(`${n} change(s). saved into init.lua`, `${n} 件の変更を init.lua に書きます`)
+            ? tr(`${n} change(s). saved into ${where.join(' / ')}`,
+                 `${n} 件の変更を ${where.join(' / ')} に書きます`)
             : tr('nothing changed yet', 'まだ何も変えていません');
     el.seSave.textContent = tr('Save', '保存');
     el.seCancel.textContent = tr('Close', '閉じる');
@@ -4224,9 +4340,19 @@ async function saveSettings() {
     if (settings.error) { return; }
     const set = [...settings.touched].map(([name, value]) => ({ name, value }));
     const ai = [...settings.touchedAi].map(([key, value]) => ({ key, value }));
-    if (!set.length && !ai.length) { return; }
-    const r = await ask('settings_write', { set, ai });
-    if (!r) { return; }
+    const hosts = [...settings.touchedHosts].map(([name, row]) => ({ name, row }));
+    if (!set.length && !ai.length && !hosts.length) { return; }
+    // **ホストは別の呼び出し。** 書く先が `init.lua` とは限らない
+    // （`ssh.lua` があればそちら）ので、どちらに何を書くかを混ぜない。
+    if (hosts.length) {
+        const h = await ask('settings_hosts_write', { hosts });
+        if (!h) { return; }
+    }
+    let r = { path: settings.ssh.writes, backup: '' };
+    if (set.length || ai.length) {
+        r = await ask('settings_write', { set, ai });
+        if (!r) { return; }
+    }
     // **設定を直したら、読み直す。** この家で最頻のバグは「設定を直したのに
     // 効かない」で、書いたあと画面が古い値を出し続けるのはその一種。
     await openSettings();

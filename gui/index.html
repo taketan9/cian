@@ -637,6 +637,25 @@ html, body {
   border: 1px solid var(--line); border-radius: 4px; padding: 0 8px;
 }
 #settings .sdrop:hover { color: var(--k-warn); border-color: var(--k-warn); }
+/* ホスト1台につき1つの枠。**1行に1つで編集させない**（crmaine の8番目）。 */
+#settings .shost {
+  border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0 8px 14px; padding: 4px 8px 8px;
+}
+#settings .shost .shhead {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 4px 2px; font-weight: 600; color: var(--accent);
+}
+#settings .shost .srow { padding-left: 2px; }
+/* 消すと決めた枠。**まだ保存していない**ので、やめれば戻る。 */
+#settings .shost.gone { opacity: 0.45; }
+#settings .shost.gone .shhead { color: var(--k-warn); text-decoration: line-through; }
+#settings #se-addhost {
+  font: inherit; cursor: pointer; padding: 2px 12px;
+  background: var(--pane-off); color: var(--text);
+  border: 1px solid var(--line); border-radius: 4px;
+}
+#settings .shelp code { color: var(--text); opacity: 0.8; }
 #settings .srow { padding: 4px 2px 2px 14px; }
 /* 読めないファイルは**赤くして、保存を止める**。塗り潰すのが、設定画面の
    いちばん高い事故（crmaine で 5,399 バイトが 64 バイトになった）。 */

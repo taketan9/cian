@@ -33,6 +33,7 @@ pub mod macro_script;
 pub mod macros;
 pub mod settings_edit;
 pub mod settings_schema;
+pub mod settings_ssh;
 pub mod shortcuts;
 
 /// A color spec exactly as the user wrote it: `"#rrggbb"`, a named color

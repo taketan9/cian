@@ -3710,6 +3710,89 @@ impl Session {
                     "ai": ai,
                 }))
             }
+            // ---- SSH ホスト ----
+            //
+            // `cian.ssh{…}` は `init.lua` にも `ssh.lua` にも書ける ── cian は
+            // 後者を前者の直後に**同じ設定として**読む。だから設定画面が
+            // いつも `init.lua` へ書くと、`ssh.lua` を使っている人に**二つ目の
+            // 水源**ができる。規則は「いま有効なブロックがある方に書く」。
+            "settings_hosts_read" => {
+                let (path, _, bad, rows) = cian_lua::settings_ssh::read_hosts();
+                let write_to = cian_lua::settings_ssh::write_target();
+                Ok(serde_json::json!({
+                    "path": path.as_ref().map(|p| p.display().to_string()),
+                    "writes": write_to.as_ref().map(|p| p.display().to_string()),
+                    "error": bad,
+                    // **平文のパスワードを置いた人が、置いた直後に知れる。**
+                    // cian は起動時にも言うが、書く場所を見ているこの画面で
+                    // 言うほうが早い。Windows にはこの権限の考え方が無い。
+                    "world_readable": write_to
+                        .as_ref()
+                        .map(|p| cian_lua::settings_ssh::world_readable(p))
+                        .unwrap_or(false),
+                    "hosts": rows
+                        .iter()
+                        .map(|h| {
+                            serde_json::json!({
+                                "name": h.name,
+                                "host": h.host,
+                                "port": h.port,
+                                "notes": h.notes,
+                                // 字面のまま。画面は読めるように出すだけで
+                                // 書き換えない ── 鍵やパスワードの形が
+                                // 畳まれて失われる。
+                                "users": h.users,
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                }))
+            }
+            // ホストを足す・直す・消す。`row` が無ければ消す。
+            "settings_hosts_write" => {
+                let (path, text, bad, _) = cian_lua::settings_ssh::read_hosts();
+                if let Some(why) = bad {
+                    anyhow::bail!("設定が Lua として読めません。直してから保存してください: {why}");
+                }
+                let Some(write_to) = cian_lua::settings_ssh::write_target() else {
+                    anyhow::bail!("書き込み先が分かりません");
+                };
+                // まだどこにも `cian.ssh{}` が無いなら、書き先の中身から始める。
+                let mut out = match path {
+                    Some(_) => text,
+                    None => std::fs::read_to_string(&write_to).unwrap_or_default(),
+                };
+                for change in req.params["hosts"].as_array().cloned().unwrap_or_default() {
+                    let Some(name) = change["name"].as_str() else { continue };
+                    let row = change["row"].as_object().map(|r| {
+                        let s = |k: &str| {
+                            r.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string()
+                        };
+                        cian_lua::settings_ssh::HostRow {
+                            name: s("name"),
+                            host: s("host"),
+                            port: s("port"),
+                            notes: s("notes"),
+                            users: s("users"),
+                        }
+                    });
+                    if let Some(r) = &row {
+                        if r.name.trim().is_empty() || r.host.trim().is_empty() {
+                            anyhow::bail!("名前とアドレスの両方が要ります");
+                        }
+                    }
+                    out = cian_lua::settings_ssh::set_host_in(&out, name, row.as_ref());
+                }
+                // **自分が壊した設定を置いていかない。**
+                if let Some(why) = cian_lua::settings_edit::syntax_error(&out) {
+                    anyhow::bail!("書こうとした中身が Lua として読めません。保存しませんでした: {why}");
+                }
+                cian_lua::settings_edit::write_init(&write_to, &out)
+                    .map_err(|e| anyhow::anyhow!("{}: {e}", write_to.display()))?;
+                Ok(serde_json::json!({
+                    "path": write_to.display().to_string(),
+                    "backup": write_to.with_extension("lua.bak").display().to_string(),
+                }))
+            }
             // 保存。**元のファイルに重ねる。丸ごと書き直さない。**
             //
             // 受け取るのは変えるものだけ ── 画面が知らない行、手で足した行、
