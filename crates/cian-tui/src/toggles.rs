@@ -88,7 +88,7 @@ impl App {
                 match self.edit_style {
                     crate::EditStyle::Vim => tr(self.lang, "vim", "vim").to_string(),
                     crate::EditStyle::Notepad => {
-                        tr(self.lang, "notepad", "メモ帳").to_string()
+                        tr(self.lang, "notepad", "notepad").to_string()
                     }
                 },
                 self.edit_style == crate::EditStyle::Vim,
@@ -254,7 +254,7 @@ impl App {
             crate::EditStyle::Notepad => tr(
                 self.lang,
                 "editor: notepad keys — just type; Shift+arrows select",
-                "エディタ: メモ帳ふう — そのまま入力、Shift+矢印で選択",
+                "エディタ: notepad — そのまま入力、Shift+矢印で選択",
             )
             .into(),
         });

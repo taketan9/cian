@@ -193,7 +193,7 @@ impl App {
         let state = match self.ime_on {
             Some(true) => tr(self.lang, "typing (your own input source)", "入力中（記憶した入力ソース）"),
             Some(false) => tr(self.lang, "driving cian (off)", "操作中（オフ）"),
-            None => tr(self.lang, "not set yet", "未適用"),
+            None => tr(self.lang, "not set yet", "まだ切り替えていません"),
         };
         let remembered = remembered_source().unwrap_or_else(|| {
             tr(self.lang, "(nothing yet — text opens off)", "（まだ覚えていません — 入力のときもオフのまま）").into()

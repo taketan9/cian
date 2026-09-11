@@ -374,7 +374,7 @@ enum Popup {
     },
     Notice { lines: Vec<String> },
     /// A read-only report too tall for a `Notice`, so it scrolls like the
-    /// manual but carries its own title (`:ragdebug`'s retrieval trace).
+    /// manual but carries its own title.
     /// `back` is the popup to put back on Esc — a report raised over the chat
     /// with `Ctrl+D` drops the user straight back into the conversation it
     /// explains.
@@ -1325,7 +1325,7 @@ impl MenuItem {
             MenuItem::ViewerEdit => tr(lang, "Open in my editor  (:edit)", "外部エディタで開く  (:edit)"),
             MenuItem::ViewerSave => tr(lang, "Save  (Ctrl+S)", "保存  (Ctrl+S)"),
             MenuItem::ViewerEditStyle => {
-                tr(lang, "Editor keys: vim / notepad", "エディタのキー操作: vim / メモ帳")
+                tr(lang, "Editor keys: notepad / vim", "エディタのキー操作: notepad / vim")
             }
             MenuItem::ViewerCloseDiscard => tr(lang, "Close without saving", "保存せずに閉じる"),
             MenuItem::RemotePane => tr(lang, "Open server in pane  (:sftp)", "サーバをペインで開く  (:sftp)"),
@@ -4266,8 +4266,8 @@ pub(crate) fn viewer_manual_lines(lang: Lang) -> Vec<String> {
         (".", "do that change again", "直前の変更をもう一度"),
         ("V then I  A", "insert at the start, end of every selected line", "選択全行の先頭・末尾に挿入"),
         (":edit", "open it in your own editor", "外部エディタで開く"),
-        (":notepad  :editstyle vim", "swap the whole grammar: notepad keys, or vi's back again (T, or the panel's menu)", "文法ごと切替：メモ帳のキー／vi のキーに戻す（T かパネルのメニューでも）"),
-        ("in notepad style", "Shift+arrows select, Alt+Shift a rectangle, Ctrl+arrows by word; no normal mode, so : is a colon and Esc ×3 leaves", "メモ帳文法：Shift+矢印で選択・Alt+Shift で矩形・Ctrl+矢印で単語。ノーマルモードが無いので : はただの文字、Esc 3回で退出"),
+        (":notepad  :editstyle vim", "swap the whole grammar: notepad keys, or vi's back again (T, or the panel's menu)", "キー操作ごと切替：notepad のキー／vim のキーに戻す（T かパネルのメニューでも）"),
+        ("in notepad style", "Shift+arrows select, Alt+Shift a rectangle, Ctrl+arrows by word; no normal mode, so : is a colon and Esc ×3 leaves", "notepad のキー操作：Shift+矢印で選択・Alt+Shift で矩形・Ctrl+矢印で単語。ノーマルモードが無いので : はただの文字、Esc 3回で退出"),
     ];
     const FILES: &[Row] = &[
         ("F2  Shift+F2", "next, previous open file", "次・前の開いているファイル"),

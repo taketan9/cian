@@ -2686,7 +2686,7 @@ pub(crate) fn key_hints(app: &App) -> Vec<(&'static str, &'static str)> {
                 ("d c y", d("+ motion", "＋モーション")),
                 ("Tab", d("the other pane", "反対ペインへ")),
                 (":q", d("close", "閉じる")),
-                (":notepad", d("notepad keys", "メモ帳ふうに")),
+                (":notepad", d("notepad keys", "notepad のキー操作に")),
                 ("?", d("keys", "キー一覧")),
             ]
         };
@@ -4044,8 +4044,8 @@ fn draw_ai_chat(f: &mut Frame, area: Rect, app: &mut App) {
         ]))
         .title_bottom(tr(
             lang,
-            " Enter=send  Shift+Enter=newline  Ctrl+V=paste  Ctrl+R=history  Ctrl+D=what it read  Esc=stop/close ",
-            " Enter=送信  Shift+Enter=改行  Ctrl+V=貼り付け  Ctrl+R=履歴  Ctrl+D=拾った断片  Esc=中断/閉じる ",
+            " Enter=send  Shift+Enter=newline  Ctrl+V=paste  Ctrl+R=history  Esc=stop/close ",
+            " Enter=送信  Shift+Enter=改行  Ctrl+V=貼り付け  Ctrl+R=履歴  Esc=中断/閉じる ",
         ));
     let inner = rect.inner(Margin { vertical: 1, horizontal: 2 });
     f.render_widget(block, rect);
@@ -5738,7 +5738,9 @@ fn draw_manual(f: &mut Frame, area: Rect, popup: &mut Popup, lang: Lang) {
     draw_scrolling_text(f, area, lines, scroll, tr(lang, " manual ", " キー一覧 "), 104, lang);
 }
 
-/// A read-only report (`:ragdebug`) — the manual's viewport with its own title.
+/// A read-only report — the manual's viewport with its own title. (It was
+/// built for `:ragdebug`, which left with the crmaine bridge; the viewer's
+/// own reports use it now.)
 fn draw_report(f: &mut Frame, area: Rect, popup: &mut Popup, lang: Lang) {
     let Popup::Report { title, lines, scroll, .. } = popup else { return };
     let title = title.clone();

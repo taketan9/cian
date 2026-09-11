@@ -1414,7 +1414,7 @@ async function toggleHidden() {
 /// **A function, not a constant.** `tr()` returns a string, so a `const`
 /// holding one holds whichever language was on when the file loaded — and
 /// nothing short of a reload ever changes it again. Switching to English left
-/// 名前 / サイズ / 日時 in the sort menu, メモ帳 in the toggles and
+/// 名前 / サイズ / 日時 in the sort menu, notepad in the toggles and
 /// クラシック / アイコン in the view row: six frozen words in a window that
 /// was otherwise entirely translated. Everything made of words has to be
 /// *asked* for at the moment it is drawn.
@@ -2383,7 +2383,7 @@ function viewerRows() {
     // folder it is in. The cursor is already on it, so this is just the way
     // back out of the viewer.
     v.push({ label: tr("Show where this file is", 'このファイルの場所を開く'), value: '', run: () => closeView(false) });
-    v.push({ label: tr("Editor keys: vim / notepad", 'エディタのキー操作: vim / メモ帳'), value: styleName(style), run: () => setStyle(style + 1) });
+    v.push({ label: tr("Editor keys: notepad / vim", 'エディタのキー操作: notepad / vim'), value: styleName(style), run: () => setStyle(style + 1) });
     v.push({ label: tr("Theme (whole app)", 'テーマ（全体）'), value: ':theme', run: () => cmdTheme() });
     v.push({ label: tr("Close without saving", '保存せずに閉じる'), value: '', run: () => closeView(false) });
     // `?` はこの中のキー、`:help` は cian 全体。**別のもの**で、
@@ -3228,8 +3228,8 @@ function helpRows() {
         [':expand :unexpand :reindent', tr("tabs \u2194 spaces, and a consistent indent", 'タブ↔スペース、インデントを揃える')],
         [':lf :crlf', tr("change the line endings (written on save)", '改行コードを変える（保存時に反映）')],
         // cian-tui's words for this pair, and its default: vim is what cian
-        // was built around, メモ帳 is the one you hand to a colleague.
-        [tr("Editor keys", 'エディタのキー操作'), tr("vim (the default) / notepad \u2014 back in the listing, inside T\u2019s menu (:editstyle vim / :notepad too)", 'vim（既定）／ メモ帳 ── 一覧に戻って T のメニューの中（:editstyle vim / :notepad でも）')],
+        // was built around, notepad is the one you hand to a colleague.
+        [tr("Editor keys", 'エディタのキー操作'), tr("vim (the default) / notepad \u2014 back in the listing, inside T\u2019s menu (:editstyle vim / :notepad too)", 'notepad / vim（既定）── 一覧に戻って T のメニューの中（:editstyle vim / :notepad でも）')],
         [tr("  in vim style", '  vim のとき'), tr("opens in normal mode. :w saves, :q closes, :wq both", 'ノーマルモードで開く。:w 保存 :q 閉じる :wq 両方')],
         ['  % ', tr("to the matching bracket (monaco-vim's)", '対応する括弧へ（monaco-vim のもの）')],
         ['  ]] / [[', tr("next / previous heading", '次 / 前の見出しへ')],
@@ -3241,8 +3241,8 @@ function helpRows() {
         ['  :g/re/d  :v/re/d', tr("delete the matching lines / keep only them", '一致した行を削除 / 一致した行だけ残す')],
         ['  :combine [n][!]', tr("join the next line (! without a space)", '次の行を連結（! は空白なし）')],
         [tr("rectangle", '矩形'), tr("Alt+Shift+arrows selects; Alt+Shift+I/A/C/D for left edge / right edge / replace / delete", 'Alt+Shift+矢印 で選び、Alt+Shift+I/A/C/D で 左端/右端/置換/削除')],
-        ['Ctrl+] / Ctrl+[', tr("move by heading (works in notepad style too)", '見出し移動（メモ帳のキー操作でも使えます）')],
-        [tr("  in notepad style", '  メモ帳のとき'), tr("Ctrl+C/V/Z/F and the rest of the Windows hand", 'Ctrl+C/V/Z/F など Windows の手が効く')],
+        ['Ctrl+] / Ctrl+[', tr("move by heading (works in notepad style too)", '見出し移動（notepad のキー操作でも使えます）')],
+        [tr("  in notepad style", '  notepad のとき'), tr("Ctrl+C/V/Z/F and the rest of the Windows hand", 'Ctrl+C/V/Z/F など Windows の手が効く')],
         ['jj  /  ｊｊ  /  っｊ', tr("leave insert mode — the last two are what a Japanese IME makes of pressing j twice", '挿入モードを抜ける ── 後ろ2つは、IME オンで j を2回押したときに出るもの')],
         ['ZZ  /  ZQ', tr("save and close / close without saving", '保存して閉じる ／ 保存せずに閉じる')],
     ]],
@@ -3280,7 +3280,7 @@ function helpRows() {
     // first person to run this asked whether themes could be chosen at all —
     // twenty-one of them, and `?` did not say the word once.
     [tr("The window and how it looks", 'ウィンドウと見た目'), [
-        [tr(":theme  /  \u201cTheme\u201d in T\u2019s menu", ':theme  /  T のメニューの「配色」'), tr("twenty-one palettes \u2014 \u2191\u2193 dresses the window as you pass", '配色 21 種 ── ↑↓ で選ぶだけで着せ替わります')],
+        [tr(":theme  /  \u201cTheme\u201d in T\u2019s menu", ':theme  /  T のメニューの「配色」'), tr("twenty-one palettes \u2014 \u2191\u2193 dresses the window as you pass", '配色 21 種 ── ↑↓ で選ぶとその場で変わります')],
         [tr(":theme <name>", ':theme 名前'), tr("straight to one by name (dracula, nord, solarized-light \u2026)", '名前で直に（dracula, nord, solarized-light …）')],
         ['F11', tr("full screen, and back", '全画面／戻す')],
         ['F12', tr("zoom whichever surface has the keys (files or shell)", 'キーのある枠を広げる／戻す（ファイルでもシェルでも）')],
@@ -5088,11 +5088,11 @@ function show(title, about, rows, opts = {}) {
     el.rAbout.textContent = about;
     el.rFoot.textContent = opts.foot
         || (report.checks ? tr('Space off/on   a all   n none   Enter run   Esc cancel', 'Space 外す／戻す   a 全部   n 全部外す   Enter 実行   Esc 取消')
-            : report.query ? tr('type to narrow   ↑↓ choose   Enter open   Esc close', '打って絞る   ↑↓ 選ぶ   Enter 開く   Esc 閉じる')
+            : report.query ? tr('type to narrow   ↑↓ choose   Enter open   Esc close', 'フィルタ   ↑↓ 選ぶ   Enter 開く   Esc 閉じる')
             : rows.length ? tr('↑↓ choose   Enter open   Esc close', '↑↓ 選ぶ   Enter 開く   Esc 閉じる') : tr('Esc close', 'Esc 閉じる'));
     el.rQ.hidden = !report.query;
     el.rQ.value = '';
-    el.rQ.placeholder = opts.hint || tr('type to narrow', '打って絞り込み');
+    el.rQ.placeholder = opts.hint || tr('type to narrow', 'フィルタ');
     el.report.hidden = false;
     drawReport();
     drawCheckCount();
@@ -5399,7 +5399,7 @@ const STYLES = [['notepad'], ['vim']];
 /// the *identity* of each — an id is written into the settings file and must
 /// not change with the language; a label is read by a person and must.
 function styleName(i) {
-    return STYLES[i][0] === 'vim' ? 'vim' : tr('notepad', 'メモ帳');
+    return STYLES[i][0] === 'vim' ? 'vim' : tr('notepad', 'notepad');
 }
 /// vim, as in cian-tui (`edit_style: … unwrap_or(EditStyle::Vim)`, lib.rs:3013):
 /// "the default, and the one cian was built around". This started on notepad,
@@ -6770,7 +6770,7 @@ function buildCommands() {
     { name: 'g', about: tr("delete the matching lines (:g/re/d)", '一致した行を削除（:g/re/d）'), arg: tr('regex', '正規表現'), run: (a) => cmdLineFilter(a, false) },
     { name: 'v', about: tr("keep only the matching lines (:v/re/d)", '一致した行だけ残す（:v/re/d）'), arg: tr('regex', '正規表現'), run: (a) => cmdLineFilter(a, true) },
     { name: 'combine', about: tr("join the next line (:combine 3 for three; :combine! without a space)", '次の行を連結（:combine 3 で3行、:combine! は空白なし）'), arg: tr('how many lines', '行数'), optional: true, run: cmdCombine },
-    { name: 'theme', alias: ['colorscheme', 'colourscheme'], about: tr("twenty-one palettes \u2014 choosing one dresses the window (also in T\u2019s menu)", '配色 21 種 — 選ぶだけで着せ替わります（T のメニューにも）'), arg: tr('name', '名前'), optional: true, run: cmdTheme },
+    { name: 'theme', alias: ['colorscheme', 'colourscheme'], about: tr("twenty-one palettes \u2014 choosing one dresses the window (also in T\u2019s menu)", '配色 21 種 — 選ぶとその場で変わります（T のメニューにも）'), arg: tr('name', '名前'), optional: true, run: cmdTheme },
     { name: 'redraw', alias: ['refresh!'], about: tr("redraw the screen", '画面を描き直す'), run: () => { draw('left'); draw('right'); say(tr('redrawn', '描き直しました')); } },
     { name: 'preview', about: tr("follow the cursor and show what it is on (again stops)", 'カーソルのファイルを追って表示（もう一度で止める）'), run: togglePreview },
     // cian-tui's `:mermaid` opens the file's diagrams in a browser. The window
@@ -7506,8 +7506,8 @@ async function cmdSshPicker() {
     const rows = sshRows(r.hosts);
     show('SSH', tr(`${rows.length} hosts (init.lua’s cian.ssh) — opens a shell`, `${rows.length} 件（init.lua の cian.ssh）── シェルで開きます`), rows, {
         filter: true,
-        hint: tr('type to narrow (host or user)', '打って絞り込み（ホスト名・ユーザー）'),
-        foot: tr('type to narrow   Enter connect   Esc close', '打って絞る   Enter 接続   Esc 閉じる'),
+        hint: tr('type to narrow (host or user)', 'フィルタ（ホスト名・ユーザー）'),
+        foot: tr('type to narrow   Enter connect   Esc close', 'フィルタ   Enter 接続   Esc 閉じる'),
         pick: async (row) => {
             closeReport();
             if (!term.on) await openShell();
@@ -7589,8 +7589,8 @@ async function cmdSftpPicker() {
         // A host list is long the moment there is more than a handful, and
         // cian-tui narrows it as you type.
         filter: true,
-        hint: tr('type to narrow (host or user)', '打って絞り込み（ホスト名・ユーザー）'),
-        foot: tr('type to narrow   Enter connect   F2 type one   Esc close', '打って絞る   Enter 接続   F2 手で入力   Esc 閉じる'),
+        hint: tr('type to narrow (host or user)', 'フィルタ（ホスト名・ユーザー）'),
+        foot: tr('type to narrow   Enter connect   F2 type one   Esc close', 'フィルタ   Enter 接続   F2 手で入力   Esc 閉じる'),
         act: { F2: () => { closeReport(); cmdConnect(); } },
         pick: async (row) => {
             closeReport();
@@ -7635,8 +7635,8 @@ async function cmdSend(dir) {
         tr(`${rows.length} hosts (init.lua’s cian.ssh) — opening in the ${other === 'left' ? 'left' : 'right'} pane`, `${rows.length} 件（init.lua の cian.ssh）— ${other === 'left' ? '左' : '右'}のペインに開きます`),
         rows, {
             filter: true,
-            hint: tr('type to narrow (host or user)', '打って絞り込み（ホスト名・ユーザー）'),
-            foot: tr('type to narrow   Enter connect   Esc close', '打って絞る   Enter 接続   Esc 閉じる'),
+            hint: tr('type to narrow (host or user)', 'フィルタ（ホスト名・ユーザー）'),
+            foot: tr('type to narrow   Enter connect   Esc close', 'フィルタ   Enter 接続   Esc 閉じる'),
             pick: async (row) => {
                 closeReport();
                 const c = await connectPreset(other, row);
@@ -8039,8 +8039,8 @@ function openPalette() {
         // The one the help has always called あいまい検索 and which walked
         // a hundred and thirty rows with j and k until now.
         filter: true,
-        hint: tr('type to narrow (:name or the description)', '打って絞り込み（:name か説明）'),
-        foot: tr('type to narrow   ↑↓ choose   Enter run   Esc close', '打って絞る   ↑↓ 選ぶ   Enter 実行   Esc 閉じる'),
+        hint: tr('type to narrow (:name or the description)', 'フィルタ（:name か説明）'),
+        foot: tr('type to narrow   ↑↓ choose   Enter run   Esc close', 'フィルタ   ↑↓ 選ぶ   Enter 実行   Esc 閉じる'),
         pick: (row) => { closeReport(); runCommand(row.cmd, ''); },
     });
 }
@@ -8956,8 +8956,8 @@ async function cmdJump() {
         // The terminal build calls `Z` a *fuzzy* jump, and a list of paths is
         // exactly the list where typing three letters beats arrowing.
         filter: true,
-        hint: tr('type to narrow (part of a path)', '打って絞り込み（パスの一部）'),
-        foot: tr('type to narrow   Enter go there   Esc close', '打って絞る   Enter そこへ   Esc 閉じる'),
+        hint: tr('type to narrow (part of a path)', 'フィルタ（パスの一部）'),
+        foot: tr('type to narrow   Enter go there   Esc close', 'フィルタ   Enter そこへ   Esc 閉じる'),
         pick: (row) => { closeReport(); revealPath(row.target, true); },
     });
 }
@@ -9233,8 +9233,8 @@ async function cmdTheme(name) {
     show(tr('Themes', '配色'), tr(`${rows.length} — the top ${LOOKS.length} are this window's, the rest are cian-tui's`, `${rows.length} 種 — 上の ${LOOKS.length} つはウィンドウ版のもの、あとは cian-tui のもの`),
         rows, {
             filter: true,
-            hint: tr('type to narrow (dracula, light, …)', '打って絞り込み（dracula, light, …）'),
-            foot: tr('type to narrow   ↑↓ dresses the window as you pass   Enter keep   Esc put it back', '打って絞る   ↑↓ 選ぶだけで着せ替わります   Enter 決定   Esc 戻す'),
+            hint: tr('type to narrow (dracula, light, …)', 'フィルタ（dracula, light, …）'),
+            foot: tr('type to narrow   ↑↓ dresses the window as you pass   Enter keep   Esc put it back', 'フィルタ   ↑↓ 選ぶとその場で変わります   Enter 決定   Esc 戻す'),
             // Live, as the terminal build's gallery is: a palette is a thing
             // you look at, and choosing one from a list of names without
             // seeing it is choosing by memory.
@@ -9262,7 +9262,7 @@ function cmdPaneGround() {
     const at = Math.max(0, rows.findIndex((r) => r.color === was));
     openMenu({
         key: '',
-        foot: tr(`the ${which === 'left' ? 'left' : 'right'} pane   ↑↓ dresses it as you pass   Enter keep   Esc put it back`, `${which === 'left' ? '左' : '右'}のペイン   ↑↓ 選ぶだけで着せ替わります   Enter 決定   Esc 戻す`),
+        foot: tr(`the ${which === 'left' ? 'left' : 'right'} pane   ↑↓ dresses it as you pass   Enter keep   Esc put it back`, `${which === 'left' ? '左' : '右'}のペイン   ↑↓ 選ぶとその場で変わります   Enter 決定   Esc 戻す`),
         stay: false,
         rows: () => rows,
         at: () => at,
@@ -9298,7 +9298,7 @@ function cmdPaneTheme() {
     const at = Math.max(0, rows.findIndex((r) => r.palette === (was || null)));
     openMenu({
         key: '',
-        foot: tr(`the ${which === 'left' ? 'left' : 'right'} pane only   ↑↓ dresses it as you pass   Enter keep   Esc put it back`, `${which === 'left' ? '左' : '右'}のペインだけ   ↑↓ 選ぶだけで着せ替わります   Enter 決定   Esc 戻す`),
+        foot: tr(`the ${which === 'left' ? 'left' : 'right'} pane only   ↑↓ dresses it as you pass   Enter keep   Esc put it back`, `${which === 'left' ? '左' : '右'}のペインだけ   ↑↓ 選ぶとその場で変わります   Enter 決定   Esc 戻す`),
         stay: false,
         rows: () => rows,
         at: () => at,
@@ -10754,8 +10754,8 @@ async function cmdSnippets() {
         confirm: x.confirm,
     })), {
         filter: true,
-        hint: tr('type to narrow', '打って絞り込み'),
-        foot: tr('type to narrow   Enter sends it to the shell   Esc close', '打って絞る   Enter シェルへ送る   Esc 閉じる'),
+        hint: tr('type to narrow', 'フィルタ'),
+        foot: tr('type to narrow   Enter sends it to the shell   Esc close', 'フィルタ   Enter シェルへ送る   Esc 閉じる'),
         pick: async (row) => {
             closeReport();
             // `confirm = true` in init.lua means "ask me before you send
