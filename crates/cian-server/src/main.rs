@@ -3756,10 +3756,14 @@ impl Session {
                 let Some(write_to) = cian_lua::settings_ssh::write_target() else {
                     anyhow::bail!("書き込み先が分かりません");
                 };
-                // まだどこにも `cian.ssh{}` が無いなら、書き先の中身から始める。
+                // まだどこにも `cian.ssh{}` が無いなら、書き先の中身から始める
+                // ── 行き先は `ssh.lua`（SSH ホストの置き場）で、まだ無ければ
+                // 何のファイルかを書いた見出しから作る。
+                let fresh = path.is_none() && !write_to.exists();
                 let mut out = match path {
                     Some(_) => text,
-                    None => std::fs::read_to_string(&write_to).unwrap_or_default(),
+                    None => std::fs::read_to_string(&write_to)
+                        .unwrap_or_else(|_| cian_lua::settings_ssh::ssh_head()),
                 };
                 for change in req.params["hosts"].as_array().cloned().unwrap_or_default() {
                     let Some(name) = change["name"].as_str() else { continue };
@@ -3788,9 +3792,18 @@ impl Session {
                 }
                 cian_lua::settings_edit::write_init(&write_to, &out)
                     .map_err(|e| anyhow::anyhow!("{}: {e}", write_to.display()))?;
+                // 作ったばかりなら、置ける権限で置く。**警告より先に、作る側が
+                // 正しく作る。**
+                if fresh {
+                    cian_lua::settings_ssh::tighten(&write_to);
+                }
                 Ok(serde_json::json!({
                     "path": write_to.display().to_string(),
-                    "backup": write_to.with_extension("lua.bak").display().to_string(),
+                    // **無い控えの場所を言わない。** 新しく作った回は
+                    // 控えるものが無いので、`.bak` は作られていない。
+                    "backup": (!fresh)
+                        .then(|| write_to.with_extension("lua.bak").display().to_string()),
+                    "created": fresh,
                 }))
             }
             // 保存。**元のファイルに重ねる。丸ごと書き直さない。**

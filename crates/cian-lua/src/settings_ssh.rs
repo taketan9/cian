@@ -14,8 +14,18 @@
 //! できる。この家で最頻のバグ（設定を直したのに効かない）に、新しい源を
 //! 足すことになる。
 //!
-//! 規則は一つ: **いま有効なブロックがある方に書く。** どちらにも無ければ
-//! `init.lua`。画面はどのファイルに書くかを出す。
+//! 規則:
+//!
+//! 1. `ssh.lua` に有効な `cian.ssh{}` があれば、そこ
+//! 2. `init.lua` にあれば、そこ ── **手で書いた人の場所を、勝手に移さない**
+//! 3. どちらにも無ければ **`ssh.lua`**（無ければ作る）
+//!
+//! 3 が `init.lua` だった日がある。**`ssh.lua` は SSH ホストの置き場として
+//! 用意された別ファイル**で、同梱の見本も「init.lua を表示 / Git・SVN / AI
+//! まわりに集中させておくための分割です」と書いている。そこへ置かずに
+//! `init.lua` を太らせるのは、この分割を無かったことにするのと同じ。
+//!
+//! 画面はどのファイルに書くかを出す。
 //!
 //! ## 触るのは name / host / port / notes まで
 //!
@@ -41,22 +51,77 @@ pub struct HostRow {
     pub users: String,
 }
 
+/// どのファイルに書くか。**ファイルを読まずに決められる部分だけ**を
+/// ここに出してあるので、検査が当てられる（`ssh_files` は実際の設定
+/// ディレクトリを触るので、単体では確かめにくい）。
+pub fn pick_target(ssh_has_block: bool, init_has_block: bool) -> &'static str {
+    if ssh_has_block {
+        "ssh.lua"
+    } else if init_has_block {
+        // **手で書いた人の場所を、勝手に移さない。**
+        "init.lua"
+    } else {
+        // **SSH ホストの家は `ssh.lua`。** 同梱の見本も「init.lua を
+        // 表示 / Git・SVN / AI まわりに集中させておくための分割です」と書いて
+        // いる。無ければ作る。
+        "ssh.lua"
+    }
+}
+
 /// `cian.ssh{ hosts = { … } }` を持っているファイル。
 ///
 /// 返すのは（読む場所、書く場所）。読む場所が `None` なら、まだどこにも
 /// 書かれていない。
 pub fn ssh_files() -> (Option<PathBuf>, Option<PathBuf>) {
-    for name in ["ssh.lua", "init.lua"] {
-        let Some(p) = crate::config_read_path(name) else { continue };
-        let Ok(text) = std::fs::read_to_string(&p) else { continue };
-        let lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
-        if live_block(&lines, "ssh").is_some() {
+    let has = |name: &str| {
+        crate::config_read_path(name)
+            .and_then(|p| std::fs::read_to_string(&p).ok().map(|t| (p, t)))
+            .map(|(p, t)| {
+                let lines: Vec<String> = t.lines().map(|l| l.to_string()).collect();
+                (p, live_block(&lines, "ssh").is_some())
+            })
+    };
+    for name in [pick_target(true, false), "init.lua"] {
+        if let Some((p, true)) = has(name) {
             // 読んだのと**同じファイル**へ書き戻す。`config_write_path` は
             // ポータブル構成で場所が変わるので、読み書きで別の答えになりうる。
             return (Some(p.clone()), Some(p));
         }
     }
-    (None, crate::config_write_path("init.lua"))
+    // **どちらにも無ければ `ssh.lua`。** ここが SSH ホストの家で、
+    // 置いてあれば cian が `init.lua` の直後に読む（`SPLIT_CONFIG_FILES`）。
+    (None, crate::config_write_path(pick_target(false, false)))
+}
+
+/// まだ `ssh.lua` が無いときに、最初に書く見出し。
+///
+/// **何のファイルかを、ファイル自身に書いておく。** 設定画面が黙って作った
+/// `cian.ssh{}` だけのファイルは、あとで開いた人に「これは何で、手で直して
+/// いいのか」を答えない。
+pub fn ssh_head() -> String {
+    format!(
+        "-- ssh.lua — SSH ホスト。cian は init.lua の直後に、同じ設定として読みます。\n\
+         --\n\
+         -- users の中に鍵やパスワードを書くときは、このファイルを chmod 600 に。\n\
+         \n\
+         {}\n",
+        crate::settings_edit::ADDED_HEAD,
+    )
+}
+
+/// `ssh.lua` を新しく作るときの権限。
+///
+/// **パスワードを置ける場所は、置ける権限で作る。** cian は誰でも読める
+/// ファイルにパスワードがあると起動時に警告するが、警告より先に、作る側が
+/// 正しく作ればいい。Windows にはこの考え方が無い。
+pub fn tighten(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(not(unix))]
+    let _ = path;
 }
 
 /// `hosts = {` の中身の行範囲（`{` の行と `}` の行）。
@@ -420,6 +485,40 @@ cian.ssh {
         for line in text.lines() {
             assert!(out.contains(line), "消えた: {line}");
         }
+        assert_eq!(hosts_in(&out).len(), 1);
+    }
+
+    /// **どのファイルに書くか。**
+    ///
+    /// 一度 `init.lua` を既定にして本人に見つかった（2026-09-11）──
+    /// 「あれ・・？ ssh って別ファイルじゃなかったっけ？」。`ssh.lua` は
+    /// SSH ホストの置き場として用意された別ファイルで、そこへ置かずに
+    /// `init.lua` を太らせるのは、この分割を無かったことにするのと同じ。
+    #[test]
+    fn new_hosts_go_to_the_file_that_is_for_them() {
+        // 何も無いところ ── **`ssh.lua` を作る。**
+        assert_eq!(pick_target(false, false), "ssh.lua");
+        // `ssh.lua` に書いてあるなら、そこ。
+        assert_eq!(pick_target(true, false), "ssh.lua");
+        // **`init.lua` に手で書いた人の場所は、勝手に移さない。**
+        assert_eq!(pick_target(false, true), "init.lua");
+        // 両方にあるなら `ssh.lua`（cian もそちらを後に読む）。
+        assert_eq!(pick_target(true, true), "ssh.lua");
+    }
+
+    /// 新しく作る `ssh.lua` は、**何のファイルかを自分で言う**。
+    #[test]
+    fn a_fresh_ssh_lua_explains_itself() {
+        let head = ssh_head();
+        assert!(head.contains("ssh.lua"), "{head}");
+        assert!(head.contains("chmod 600"), "鍵を置く場所だと言う: {head}");
+        // 見出しの中に「設定画面が書きます」が入っているので、足すときに
+        // **二度書かれない**。
+        assert!(head.contains(crate::settings_edit::ADDED_HEAD), "{head}");
+        let row = HostRow { name: "web1".into(), host: "10.0.0.1".into(), ..Default::default() };
+        let out = set_host_in(&head, "web1", Some(&row));
+        assert_eq!(out.matches(crate::settings_edit::ADDED_HEAD).count(), 1, "{out}");
+        assert_eq!(crate::settings_edit::syntax_error(&out), None, "{out}");
         assert_eq!(hosts_in(&out).len(), 1);
     }
 
