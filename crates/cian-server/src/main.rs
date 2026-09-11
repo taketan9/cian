@@ -3729,6 +3729,90 @@ impl Session {
                     "ai": ai,
                 }))
             }
+            // ---- キー割当 ----
+            //
+            // 本人:「よくあるアプリケーションって自分のアプリの中でキーマップの
+            // 設定を見直しできるよね？」── できる。**押して決めさせる**ので、
+            // 欄に綴りを打たせるわけではない（窓版は `e.code` で物理キーを読む）。
+            //
+            // **足すのであって、置き換えるのではない。** `keys.rs` は人が明示的に
+            // 縛ったキーだけを先に見て、無ければ既定に落ちる。画面もそう言う。
+            "settings_keys_read" => {
+                let (path, write_to) = cian_lua::settings_keymap::keymap_files();
+                let text = path
+                    .as_ref()
+                    .and_then(|p| std::fs::read_to_string(p).ok())
+                    .unwrap_or_default();
+                let bound = cian_lua::settings_keymap::keymaps_in(&text);
+                Ok(serde_json::json!({
+                    "path": path.as_ref().map(|p| p.display().to_string()),
+                    "writes": write_to.as_ref().map(|p| p.display().to_string()),
+                    "error": cian_lua::settings_edit::syntax_error(&text),
+                    "binds": cian_lua::settings_keymap::binds()
+                        .iter()
+                        .map(|b| {
+                            serde_json::json!({
+                                "action": b.action,
+                                "label": { "en": b.label_en, "ja": b.label_ja },
+                                // **いま縛ってあるキー。** 既定のキーは出さない ──
+                                // 出すには `keys.rs` の巨大な match を写すことに
+                                // なり、二つ目の真実ができて必ずずれる。既定は
+                                // `?` のキー一覧が答える。
+                                "key": bound
+                                    .iter()
+                                    .rev()
+                                    .find(|(_, a)| a == b.action)
+                                    .map(|(k, _)| k.clone()),
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                }))
+            }
+            "settings_keys_write" => {
+                let (path, write_to) = cian_lua::settings_keymap::keymap_files();
+                let Some(write_to) = write_to else {
+                    anyhow::bail!("書き込み先が分かりません");
+                };
+                let fresh = path.is_none() && !write_to.exists();
+                let mut out = match &path {
+                    Some(p) => std::fs::read_to_string(p).unwrap_or_default(),
+                    None => std::fs::read_to_string(&write_to)
+                        .unwrap_or_else(|_| cian_lua::settings_keymap::keymap_head()),
+                };
+                if let Some(why) = cian_lua::settings_edit::syntax_error(&out) {
+                    anyhow::bail!("設定が Lua として読めません。直してから保存してください: {why}");
+                }
+                let known: Vec<&str> =
+                    cian_lua::settings_keymap::binds().iter().map(|b| b.action).collect();
+                for change in req.params["keys"].as_array().cloned().unwrap_or_default() {
+                    let Some(action) = change["action"].as_str() else { continue };
+                    if !known.contains(&action) {
+                        anyhow::bail!("知らない動作です: {action}");
+                    }
+                    let key = change["key"].as_str().filter(|k| !k.trim().is_empty());
+                    // `cian.set_keymap` が受け取るのは「1文字」か「修飾+1文字」。
+                    // 受け取らない綴りを書き込むと、起動時に苦情が出るだけで
+                    // **効かない設定**になる ── ここで断る。
+                    if let Some(k) = key {
+                        let last = k.rsplit('+').next().unwrap_or("");
+                        if last.chars().count() != 1 || k.ends_with('+') {
+                            anyhow::bail!("このキーは割り当てられません（1文字か、修飾キー＋1文字）: {k}");
+                        }
+                    }
+                    out = cian_lua::settings_keymap::set_keymap_in(&out, action, key);
+                }
+                if let Some(why) = cian_lua::settings_edit::syntax_error(&out) {
+                    anyhow::bail!("書こうとした中身が Lua として読めません。保存しませんでした: {why}");
+                }
+                cian_lua::settings_edit::write_init(&write_to, &out)
+                    .map_err(|e| anyhow::anyhow!("{}: {e}", write_to.display()))?;
+                Ok(serde_json::json!({
+                    "path": write_to.display().to_string(),
+                    "backup": (!fresh)
+                        .then(|| write_to.with_extension("lua.bak").display().to_string()),
+                    "created": fresh,
+                }))
+            }
             // ---- SSH ホスト ----
             //
             // `cian.ssh{…}` は `init.lua` にも `ssh.lua` にも書ける ── cian は

@@ -50,9 +50,9 @@ API_OK = {
     "set_option": "画面の本体。20 個ぜんぶ出ている",
     "ai": "AI の節で出ている",
     "ssh": "SSH の節で出ている",
+    "set_keymap": "キー割当の節で出ている（押して決める）",
     # 出さないもの ── どれも「画面より良い道がある」か「形が畳めない」。
     "set_theme": "`:theme` のギャラリーで選ぶ。21 個を一覧から選ぶのは画面の仕事ではない",
-    "set_keymap": "キー割当。押して決めるものなので、欄に綴りを打たせる形が合わない",
     "snippets": "まだ無い。同じ依頼に入っていて、次の仕事",
     "font": "`cian.font{ face }` は窓版だけ。書体の一覧を出す道がまだ無い",
     "ime": "IME の切替は外部コマンドを呼ぶ設定で、動くかどうかは機械による（`:ime` で試す）",
@@ -103,6 +103,8 @@ def screen_touches() -> set[str]:
         out.add("ai")
     if "settings_ssh::set_host_in" in text or "settings_hosts_read" in text:
         out.add("ssh")
+    if "settings_keymap::set_keymap_in" in text or "settings_keys_read" in text:
+        out.add("set_keymap")
     return out
 
 

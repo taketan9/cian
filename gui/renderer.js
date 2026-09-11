@@ -3734,6 +3734,7 @@ document.addEventListener('keydown', (e) => {
     // それ以外は欄のものなので、一覧の 27 分岐へ回さない ── 回すと、
     // エンドポイントに `j` と打っただけでカーソルが動く。
     if (settings.on) {
+        if (settings.capturing) { captureKey(e); return; }
         if (e.key === 'Escape') { e.preventDefault(); closeSettings(); }
         return;
     }
@@ -4022,6 +4023,12 @@ const settings = {
     ssh: { path: '', writes: '', hosts: [], worldReadable: false, error: null },
     /// 触ったホスト。`名前 → 行 or null（消す）`。
     touchedHosts: new Map(),
+    /// キー割当。`{ path, writes, binds: [{action,label,key}] }`。
+    keys: { path: '', writes: '', binds: [], error: null },
+    /// 触った割当。`動作 → キー or null（外す）`。
+    touchedKeys: new Map(),
+    /// いま打鍵を待っている動作。`null` なら待っていない。
+    capturing: null,
     /// 画面で足した、まだ名前の決まっていない行のぶん。
     newHosts: [],
 };
@@ -4058,6 +4065,15 @@ async function openSettings() {
     settings.touchedAi = new Map();
     settings.touchedHosts = new Map();
     settings.newHosts = [];
+    settings.touchedKeys = new Map();
+    settings.capturing = null;
+    const k = await ask('settings_keys_read', {});
+    if (k) {
+        settings.keys = {
+            path: k.path || '', writes: k.writes || '',
+            binds: k.binds || [], error: k.error || null,
+        };
+    }
     const h = await ask('settings_hosts_read', {});
     if (h) {
         settings.ssh = {
@@ -4246,6 +4262,51 @@ function drawSettings() {
         + `<div class="srow"><button id="se-addhost">${esc(tr('add a host', 'ホストを追加'))}</button></div>`
         + '</details>';
 
+    // ── キー割当 ──────────────────────────────────────────────────
+    //
+    // **綴りを打たせない。押させる。** 本人:「よくあるアプリケーションって
+    // 自分のアプリの中でキーマップの設定を見直しできるよね？」── できる。
+    // 窓版は物理キーを読めるので（`e.code` ではなく、ここは文字が要るので
+    // `e.key`）、欄を押したあとの打鍵をそのまま割当にする。
+    //
+    // **足すのであって、置き換えるのではない。** 縛らなかったキーは既定のまま
+    // 動く。それを一言目に書く ── でないと「ここに無い＝使えない」と読まれる。
+    const keyRow = (b) => {
+        const cur = settings.touchedKeys.has(b.action)
+            ? settings.touchedKeys.get(b.action)
+            : b.key;
+        const waiting = settings.capturing === b.action;
+        const shown = waiting
+            ? tr('press a key…', 'キーを押してください…')
+            : (cur || tr('(default)', '（既定のまま）'));
+        return `<div class="srow${cur ? ' set' : ''}">`
+            + `<div class="slabel">${esc(b.label[L])}<span class="sname">${esc(b.action)}</span></div>`
+            + `<div class="sin"><button class="skey${waiting ? ' on' : ''}" `
+            + `data-cap="${esc(b.action)}">${esc(shown)}</button></div>`
+            + (cur
+                ? `<button class="sdrop" data-kdrop="${esc(b.action)}">`
+                  + esc(tr('unbind', '外す')) + '</button>'
+                : '')
+            + '</div>';
+    };
+    const keysOpen = settings.keys.binds.some((b) => b.key)
+        || settings.touchedKeys.size > 0 || wasOpen.has('keys');
+    const keysWhere = settings.keys.writes
+        ? `<div class="shelp">${esc(tr('written into ', '書き先: '))}<code>${esc(settings.keys.writes)}</code></div>`
+        : '';
+    const keys = settings.keys.binds.length
+        ? `<details class="sgrp" data-g="keys"${keysOpen ? ' open' : ''}>`
+          + `<summary>${esc(tr('Keys', 'キー割当'))}`
+          + `<span class="snum">${settings.keys.binds.length}</span>`
+          + (settings.keys.binds.filter((b) => b.key).length
+              ? `<span class="sset">${settings.keys.binds.filter((b) => b.key).length} ${esc(tr('bound', '件割当済み'))}</span>`
+              : '')
+          + '</summary>'
+          + `<div class="shelp">${esc(tr('what you bind here is looked at first. every key you do not bind keeps working as it does now, and ? lists those',
+                'ここで縛ったキーが先に見られます。縛らなかったキーは今までどおり動きます。既定の一覧は ? にあります'))}</div>`
+          + keysWhere + settings.keys.binds.map(keyRow).join('') + '</details>'
+        : '';
+
     // ── ここでは直せないもの ──────────────────────────────────────
     //
     // **画面に出ないものは、無いことにされる。** cian が読む設定はこの画面の
@@ -4275,7 +4336,7 @@ function drawSettings() {
             // 「通知 2 1 件」と読めてしまったので、何の数か言う。
             + (n ? `<span class="sset">${esc(tr(`${n} set`, `${n} 件設定済み`))}</span>` : '')
             + '</summary>' + g.items.map(rowHtml).join('') + '</details>';
-    }).join('') + ai + ssh + elsewhere;
+    }).join('') + keys + ai + ssh + elsewhere;
 
     for (const node of el.seBody.querySelectorAll('[data-k]')) {
         node.addEventListener('input', () => {
@@ -4288,6 +4349,19 @@ function drawSettings() {
     for (const node of el.seBody.querySelectorAll('[data-drop]')) {
         node.addEventListener('click', () => {
             settings.touched.set(node.dataset.drop, null);
+            drawSettings();
+        });
+    }
+    for (const node of el.seBody.querySelectorAll('[data-cap]')) {
+        node.addEventListener('click', () => {
+            settings.capturing = settings.capturing === node.dataset.cap
+                ? null : node.dataset.cap;
+            drawSettings();
+        });
+    }
+    for (const node of el.seBody.querySelectorAll('[data-kdrop]')) {
+        node.addEventListener('click', () => {
+            settings.touchedKeys.set(node.dataset.kdrop, null);
             drawSettings();
         });
     }
@@ -4335,13 +4409,16 @@ el.seSave.addEventListener('click', () => saveSettings());
 el.seCancel.addEventListener('click', () => closeSettings());
 
 function drawSettingsFoot() {
-    const n = settings.touched.size + settings.touchedAi.size + settings.touchedHosts.size;
+    const n = settings.touched.size + settings.touchedAi.size + settings.touchedHosts.size
+        + settings.touchedKeys.size;
     // **どのファイルに書くかを言う。** ホストは `ssh.lua` に行くことがあるので、
     // 「init.lua に書きます」と言い切ると嘘になる回がある。
     const where = [];
     if (settings.touched.size || settings.touchedAi.size) { where.push('init.lua'); }
-    if (settings.touchedHosts.size) {
-        const f = (settings.ssh.writes || '').split(/[\\/]/).pop() || 'init.lua';
+    for (const [n2, w] of [[settings.touchedHosts.size, settings.ssh.writes],
+                           [settings.touchedKeys.size, settings.keys.writes]]) {
+        if (!n2) { continue; }
+        const f = (w || '').split(/[\\/]/).pop() || 'init.lua';
         if (!where.includes(f)) { where.push(f); }
     }
     el.seFoot.textContent = settings.error
@@ -4357,12 +4434,61 @@ function drawSettingsFoot() {
 
 /// 保存。**触った項目だけを送る。** 元のファイルに重ねるのはエンジンの仕事で、
 /// ここが知らない行は送りようがない ── だから消えない。
+/// 打鍵を、`cian.set_keymap` が受け取る綴りにする。
+///
+/// **`e.key` を見る。** ふだん窓版が物理キーを `e.code` で当てているのは、
+/// IME が握っているあいだも `j` を `j` として読むため ── ここで欲しいのは
+/// 逆で、**その人が打った文字**そのもの（`-` も `"` も割り当てられる）。
+///
+/// Shift は綴りに入れない。`keys.rs` の引き方が「大文字がすでに Shift を
+/// 運んでいる」からで、`shift+s` と `S` を別のものとして持つと、端末が
+/// どちらを送るかで結果が変わる。
+///
+/// 1文字にならないキー（F5、矢印、Enter）は `cian.set_keymap` が受け取らない。
+/// **黙って無視せず、そう言う** ── 押したのに何も起きない欄は、壊れて見える。
+function captureKey(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const action = settings.capturing;
+    if (e.key === 'Escape') {
+        settings.capturing = null;
+        drawSettings();
+        return;
+    }
+    // 修飾キーそのものは、押している途中。
+    if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) { return; }
+    // IME が握っているあいだは、文字がこちらに来ない。
+    if (e.key === 'Process' || e.isComposing) {
+        say(tr('the input method has this key. turn it off and press again',
+               '入力方式がこのキーを握っています。オフにしてもう一度押してください'), true);
+        return;
+    }
+    if ([...e.key].length !== 1) {
+        say(tr(`${e.key} cannot be bound. cian takes one character, with ctrl or alt in front`,
+               `${e.key} は割り当てられません。1文字か、ctrl / alt ＋1文字です`), true);
+        return;
+    }
+    const mods = [];
+    if (e.ctrlKey) { mods.push('ctrl'); }
+    if (e.altKey) { mods.push('alt'); }
+    const spec = mods.length ? `${mods.join('+')}+${e.key.toLowerCase()}` : e.key;
+    settings.touchedKeys.set(action, spec);
+    settings.capturing = null;
+    drawSettings();
+}
+
 async function saveSettings() {
     if (settings.error) { return; }
     const set = [...settings.touched].map(([name, value]) => ({ name, value }));
     const ai = [...settings.touchedAi].map(([key, value]) => ({ key, value }));
     const hosts = [...settings.touchedHosts].map(([name, row]) => ({ name, row }));
-    if (!set.length && !ai.length && !hosts.length) { return; }
+    const keys = [...settings.touchedKeys].map(([action, key]) => ({ action, key }));
+    if (!set.length && !ai.length && !hosts.length && !keys.length) { return; }
+    // キーも別の呼び出し ── 書く先が `keymap.lua` のことがある。
+    if (keys.length) {
+        const k = await ask('settings_keys_write', { keys });
+        if (!k) { return; }
+    }
     // **ホストは別の呼び出し。** 書く先が `init.lua` とは限らない
     // （`ssh.lua` があればそちら）ので、どちらに何を書くかを混ぜない。
     if (hosts.length) {

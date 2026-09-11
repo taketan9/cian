@@ -16221,6 +16221,61 @@ mod ctrl_r_redoes {
     }
 }
 
+/// 設定画面のキー割当の表が、**実装と1対1**であること。
+///
+/// 表は `cian-lua` にある（`cian-server` は `cian-tui` に依存しないので、
+/// エンジンから読める場所に置くしかない）。縛れる動作の真実は
+/// `theme::action_from_name` のほうなので、**二つがずれないことをここで見る**
+/// ── 動作を1つ足した日に、設定画面から縛れないまま気づかない、を防ぐ。
+///
+/// 本人（2026-09-11）:「実装とずれた設定画面になっていないか心配だ」。
+#[test]
+fn the_settings_keymap_table_matches_the_actions_cian_accepts() {
+    let src = include_str!("theme.rs");
+    let start = src.find("pub(crate) fn action_from_name").expect("action_from_name");
+    let body = &src[start..start + src[start..].find("\n}").expect("its end")];
+    // **別名がある。** `"mark_all" | "select_all" => Action::MarkAll` のように、
+    // 一つの動作に綴りが2つ3つ。表に要るのは**動作ごとに1行**で、その行の名前が
+    // 受け取ってもらえる綴りのどれかであること ── 別名のぶん行を並べると、
+    // 同じものが画面に3回出る。
+    let mut by_action: Vec<(&str, Vec<&str>)> = Vec::new();
+    for line in body.lines() {
+        let line = line.trim();
+        let Some((names, act)) = line.split_once("=> Action::") else { continue };
+        let act = act.trim().trim_end_matches(',');
+        let spellings: Vec<&str> = names
+            .split('|')
+            .filter_map(|s| s.trim().strip_prefix('"'))
+            .filter_map(|s| s.strip_suffix('"'))
+            .collect();
+        if !spellings.is_empty() {
+            by_action.push((act, spellings));
+        }
+    }
+    assert!(by_action.len() >= 40, "読めていない: {by_action:?}");
+
+    let in_table: Vec<&str> =
+        cian_lua::settings_keymap::binds().iter().map(|b| b.action).collect();
+    let missing: Vec<_> = by_action
+        .iter()
+        .filter(|(_, spell)| !spell.iter().any(|s| in_table.contains(s)))
+        .map(|(a, _)| *a)
+        .collect();
+    let accepted: Vec<&str> = by_action.iter().flat_map(|(_, s)| s.clone()).collect();
+    let invented: Vec<_> = in_table.iter().filter(|n| !accepted.contains(n)).collect();
+    assert!(missing.is_empty(), "設定画面から縛れない動作があります: {missing:?}");
+    assert!(invented.is_empty(), "cian が受け取らない名前が表にあります: {invented:?}");
+    // **動作ごとに1行**。別名で二重に出さない。
+    assert_eq!(in_table.len(), by_action.len(), "表の行数が動作の数と違います");
+
+    // **説明が空の行を作らない。** 画面に出るのは名前と説明で、
+    // 名前だけの行は「これは何？」に答えない。
+    for b in cian_lua::settings_keymap::binds() {
+        assert!(!b.label_ja.trim().is_empty(), "{}: 日本語の説明が無い", b.action);
+        assert!(!b.label_en.trim().is_empty(), "{}: 英語の説明が無い", b.action);
+    }
+}
+
 /// A refusal says **why**, not just what was attempted.
 ///
 /// `anyhow::Error`'s `Display` prints the outermost context and stops, so the

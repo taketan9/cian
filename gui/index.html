@@ -656,6 +656,18 @@ html, body {
   border: 1px solid var(--line); border-radius: 4px;
 }
 #settings .shelp code { color: var(--text); opacity: 0.8; }
+/* 押して決めるキーの欄。**入力欄ではなくボタン** ── 打つのではなく押す。 */
+#settings .skey {
+  width: 100%; font: inherit; text-align: left; cursor: pointer;
+  background: var(--pane-off); color: var(--text);
+  border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px;
+}
+#settings .skey:hover { border-color: var(--accent); }
+/* 待っているあいだ。**押していい**と分かる形に。 */
+#settings .skey.on {
+  border-color: var(--accent); color: var(--accent); font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
 #settings .srow { padding: 4px 2px 2px 14px; }
 /* 読めないファイルは**赤くして、保存を止める**。塗り潰すのが、設定画面の
    いちばん高い事故（crmaine で 5,399 バイトが 64 バイトになった）。 */
