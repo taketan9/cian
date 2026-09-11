@@ -4238,10 +4238,16 @@ function drawSettings() {
         const t2 = settings.touchedHosts;
         const cur = t2.has(h.name) ? (t2.get(h.name) || {}) : h;
         const gone = t2.has(h.name) && t2.get(h.name) === null;
-        const f = (k, label, ph) => `<div class="srow"><div class="slabel">${esc(label)}</div>`
-            + `<div class="sin"><input type="text" data-host="${esc(h.name || '')}" data-hk="${esc(k)}" `
-            + `data-hi="${i}" value="${esc(cur[k] ?? '')}" placeholder="${esc(ph || '')}" `
-            + 'autocomplete="off" spellcheck="false"></div></div>';
+        const f = (k, label, ph, many) => `<div class="srow"><div class="slabel">${esc(label)}</div>`
+            + '<div class="sin">'
+            + (many
+                ? `<textarea rows="${Math.min(6, Math.max(2, String(cur[k] ?? '').split('\n').length + 1))}" `
+                  + `data-host="${esc(h.name || '')}" data-hk="${esc(k)}" data-hi="${i}" `
+                  + `placeholder="${esc(ph || '')}" spellcheck="false">${esc(cur[k] ?? '')}</textarea>`
+                : `<input type="text" data-host="${esc(h.name || '')}" data-hk="${esc(k)}" `
+                  + `data-hi="${i}" value="${esc(cur[k] ?? '')}" placeholder="${esc(ph || '')}" `
+                  + 'autocomplete="off" spellcheck="false">')
+            + '</div></div>';
         return `<div class="shost${gone ? ' gone' : ''}">`
             + `<div class="shhead">${esc(h.name || tr('(new)', '（新規）'))}`
             + `<button class="sdrop" data-hdrop="${esc(h.name || '')}" data-hi="${i}">`
@@ -4249,7 +4255,7 @@ function drawSettings() {
             + f('name', tr('Name', '名前'), 'web1')
             + f('host', tr('Address', 'アドレス'), '10.0.1.11')
             + f('port', tr('Port', 'ポート'), '22')
-            + f('notes', tr('Notes (given to the AI)', 'メモ（AI に渡ります）'), '')
+            + f('notes', tr('Notes (given to the AI)', 'メモ（AI に渡ります）'), '', true)
             + (h.users
                 ? `<div class="shelp">${esc(tr('users: ', 'users: '))}<code>${esc(h.users)}</code>　`
                   + esc(tr('edited in init.lua. keys and passwords keep their shape there',
@@ -4329,10 +4335,19 @@ function drawSettings() {
         const key = s.name || `__new${i}`;
         const cur = t2.has(key) ? (t2.get(key) || {}) : s;
         const gone = t2.has(key) && t2.get(key) === null;
-        const f = (k, label, ph) => `<div class="srow"><div class="slabel">${esc(label)}</div>`
-            + `<div class="sin"><input type="text" data-snip="${esc(key)}" data-sk="${esc(k)}" `
-            + `data-si="${i}" value="${esc(cur[k] ?? '')}" placeholder="${esc(ph || '')}" `
-            + 'autocomplete="off" spellcheck="false"></div></div>';
+        // **コマンドは複数行。** エンジンは受け取った字をそのままシェルへ
+        // 書くので、`cd` してから `tail` のような二行がそのまま動く ──
+        // 一行の欄しか出していなかったので、書ける形になっていなかった。
+        const f = (k, label, ph, many) => `<div class="srow"><div class="slabel">${esc(label)}</div>`
+            + '<div class="sin">'
+            + (many
+                ? `<textarea rows="${Math.min(8, Math.max(2, String(cur[k] ?? '').split('\n').length + 1))}" `
+                  + `data-snip="${esc(key)}" data-sk="${esc(k)}" data-si="${i}" `
+                  + `placeholder="${esc(ph || '')}" spellcheck="false">${esc(cur[k] ?? '')}</textarea>`
+                : `<input type="text" data-snip="${esc(key)}" data-sk="${esc(k)}" `
+                  + `data-si="${i}" value="${esc(cur[k] ?? '')}" placeholder="${esc(ph || '')}" `
+                  + 'autocomplete="off" spellcheck="false">')
+            + '</div></div>';
         const flag = (k, label, help) => `<div class="srow"><div class="slabel">${esc(label)}</div>`
             + `<div class="sin"><select data-snip="${esc(key)}" data-sk="${esc(k)}" data-si="${i}">`
             + `<option value="true"${cur[k] ? ' selected' : ''}>${esc(tr('yes', 'はい'))}</option>`
@@ -4343,7 +4358,9 @@ function drawSettings() {
             + `<button class="sdrop" data-sdrop="${esc(key)}">`
             + esc(gone ? tr('undo', 'やめる') : tr('remove', '消す')) + '</button></div>'
             + f('name', tr('Name', '名前'), tr('what the picker shows', 'ピッカーに出る名前'))
-            + f('cmd', tr('Command', 'コマンド'), 'tail -f /var/log/messages')
+            + f('cmd', tr('Command', 'コマンド'), 'tail -f /var/log/messages', true)
+            + `<div class="shelp">${esc(tr('more than one line is fine. each line runs in turn',
+                  '複数行でも構いません。上から順に走ります'))}</div>`
             + flag('enter', tr('Run at once', 'すぐ走らせる'),
                    tr('no types it into the shell for you to look at first',
                       'いいえを選ぶと、シェルに打ち込むだけで走らせません'))

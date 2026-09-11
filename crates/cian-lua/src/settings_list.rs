@@ -70,8 +70,19 @@ fn value_at(rest: &str) -> String {
         let mut out = String::new();
         let mut i = 1;
         while i < chars.len() && chars[i] != q {
+            // **逃がした文字を、戻す。** `\\n` を「`n` という字」として読んで
+            // いたので、複数行のスニペットを書いて読み直すと `cd /var/logntail`
+            // になった ── 書く側だけ直しても、往復で壊れる。
             if chars[i] == '\\' && i + 1 < chars.len() {
                 i += 1;
+                out.push(match chars[i] {
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    other => other,
+                });
+                i += 1;
+                continue;
             }
             out.push(chars[i]);
             i += 1;
@@ -98,7 +109,24 @@ fn value_at(rest: &str) -> String {
     // `2222 }` と読んで、そのまま書き戻したことがある。
     rest.split([',', '\n', '}']).next().unwrap_or("").trim().to_string()
 }
-/// Lua の文字列に入れられる形に。**バックスラッシュを先に。**
+/// Lua の文字列に入れられる形に。**行をまたげないことを忘れない。**
 pub(crate) fn quote(s: &str) -> String {
-    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            // **改行を生のまま入れない。** Lua の `"…"` は行をまたげないので、
+            // 生の改行を書くと `unfinished string` で落ちる ── 複数行の
+            // スニペット（`cd /var/log` してから `tail -f`）や、複数行の
+            // サーバのメモが、そのまま壊れた設定になる。
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }

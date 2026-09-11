@@ -663,6 +663,10 @@ html, body {
   border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px;
 }
 #settings .skey:hover { border-color: var(--accent); }
+/* 複数行の欄。**等幅で** ── シェルへ送る字なので、桁が見えるほうがいい。 */
+#settings .sin textarea {
+  font-family: var(--mono, monospace); resize: vertical; line-height: 1.4;
+}
 /* 待っているあいだ。**押していい**と分かる形に。 */
 #settings .skey.on {
   border-color: var(--accent); color: var(--accent); font-weight: 600;

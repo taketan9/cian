@@ -253,6 +253,34 @@ cian.snippets {
         assert_eq!(snips_in(&out).last().unwrap().cmd, r#"grep -r "foo\bar" /var"#);
     }
 
+    /// **複数行のコマンドが、往復して同じもので戻る。**
+    ///
+    /// エンジンは受け取った字をそのままシェルへ書いて最後に改行を足すので、
+    /// 複数行はそのまま動く ── 書く側が壊していただけだった。生の改行を
+    /// Lua の `"…"` に入れると `unfinished string` で落ちる。
+    #[test]
+    fn a_multi_line_command_survives() {
+        let cmd = "cd /var/log\ntail -f messages";
+        let row = Snip { name: "追う".into(), cmd: cmd.into(), enter: true, ..Default::default() };
+        let out = set_snip_in(SN, "追う", Some(&row));
+        assert_eq!(crate::settings_edit::syntax_error(&out), None, "{out}");
+        // 書かれた字面は1行（`\n` で逃がしてある）。
+        assert!(out.contains("cmd = \"cd /var/log\\ntail -f messages\""), "{out}");
+        // 読み直すと、もとの複数行。
+        let back = snips_in(&out);
+        assert_eq!(back.last().unwrap().cmd, cmd, "{out}");
+    }
+
+    /// タブとバックスラッシュも。
+    #[test]
+    fn tabs_and_backslashes_survive() {
+        let cmd = "awk -F'\\t' '{print $1}'\nwc -l";
+        let row = Snip { name: "数える".into(), cmd: cmd.into(), enter: true, ..Default::default() };
+        let out = set_snip_in(SN, "数える", Some(&row));
+        assert_eq!(crate::settings_edit::syntax_error(&out), None, "{out}");
+        assert_eq!(snips_in(&out).last().unwrap().cmd, cmd, "{out}");
+    }
+
     #[test]
     fn crlf_stays_crlf() {
         let text = SN.replace('\n', "\r\n");
