@@ -107,7 +107,7 @@ fn look(line: &str, at: usize, name: &str) -> Option<Seen> {
 /// 見出し。**末尾に足した行が、どこから来たのか分かるように。**
 ///
 /// 手で書いた行と機械が書いた行が混ざると、次に人がこのファイルを読むとき
-/// 「自分が書いたのか」が分からなくなる ── この家では、頼まれて足した行を
+/// 「自分が書いたのか」が分からなくなる ── cian では、頼まれて足した行を
 /// 後のパスで自分の判断だと思って消した事故がある（`gui/REQUESTS.ja.md` の
 /// 1行目）。**出どころを書いておけば、消す前に訊ける。**
 pub const ADDED_HEAD: &str = "-- ここから下は設定画面が書きます（手で直しても構いません）";
@@ -794,7 +794,7 @@ cian.ai {
             .join("examples/init.lua");
         let before = std::fs::read_to_string(&path).expect("the sample init.lua");
         // 数ではなく**中身**で見る。数だけだと、1行消えて1行増えたときに
-        // 釣り合って通る ── この家の検査が黙る形。
+        // 釣り合って通る ── cian の検査が黙る形。
         let prose = |s: &str| -> Vec<String> {
             s.lines()
                 .map(|l| l.trim().to_string())

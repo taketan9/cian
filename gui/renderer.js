@@ -2705,7 +2705,7 @@ function contextRows() {
         run: () => setLang(lang === 'en' ? 'ja' : 'en'),
     });
     v.push({ label: tr("Full screen", '全画面'), value: 'F11', run: cmdFullscreen });
-    v.push({ label: tr("Zoom this surface", 'この面を広げる'), value: 'F12', run: zoomFocused });
+    v.push({ label: tr("Zoom this surface", 'この枠を広げる'), value: 'F12', run: zoomFocused });
     // The listing's own groups, and the OS group: both act on a file under a
     // cursor, so cian-tui leaves them out of the shell menu.
     if (!inShell) {
@@ -3202,7 +3202,7 @@ function helpRows() {
         ['F1-F8', tr("go straight to shell tab 1-8", 'シェルタブ 1-8 に切替')],
         [tr("Ctrl+Shift+arrows", 'Ctrl+Shift+矢印'), tr("move the dividers", '分割の境界を動かす')],
         ['Ctrl+S  /  :sync', tr("type into every pane at once (one command, four machines)", '全ペインに同時入力（同じコマンドを4台へ）')],
-        ['F12  /  :zoom', tr("zoom whichever surface has the keys", 'フォーカス中の面をズーム（トグル）')],
+        ['F12  /  :zoom', tr("zoom whichever surface has the keys", 'いま選んでいる枠を広げる（もう一度で戻る）')],
         ['Shift+F12', tr("show only this pane / back to the split", 'いまのペインだけを表示／分割に戻す')],
         [':sessionlog', tr("record the shell to a file (again stops it)", 'シェルの写しをファイルに取る（もう一度で止める）')],
         [tr("drag to select", 'ドラッグで選択'), tr("it is on the clipboard the moment you let go", '放した瞬間にクリップボードへ')],
@@ -3279,11 +3279,11 @@ function helpRows() {
     // The window and how it looks. Absent until 2026-08-31, which is why the
     // first person to run this asked whether themes could be chosen at all —
     // twenty-one of them, and `?` did not say the word once.
-    [tr("The window and how it looks", '窓と見た目'), [
+    [tr("The window and how it looks", 'ウィンドウと見た目'), [
         [tr(":theme  /  \u201cTheme\u201d in T\u2019s menu", ':theme  /  T のメニューの「配色」'), tr("twenty-one palettes \u2014 \u2191\u2193 dresses the window as you pass", '配色 21 種 ── ↑↓ で選ぶだけで着せ替わります')],
         [tr(":theme <name>", ':theme 名前'), tr("straight to one by name (dracula, nord, solarized-light \u2026)", '名前で直に（dracula, nord, solarized-light …）')],
         ['F11', tr("full screen, and back", '全画面／戻す')],
-        ['F12', tr("zoom whichever surface has the keys (files or shell)", 'キーのある面を広げる／戻す（ファイルでもシェルでも）')],
+        ['F12', tr("zoom whichever surface has the keys (files or shell)", 'キーのある枠を広げる／戻す（ファイルでもシェルでも）')],
         ['Ctrl+= / Ctrl+- / Ctrl+0', tr("bigger / smaller / back", '文字を大きく / 小さく / 戻す')],
         [tr("Ctrl+Shift+arrows", 'Ctrl+Shift+矢印'), tr("move the pane divider (dragging it works too)", 'ペインの境界を動かす（境界のドラッグでも）')],
         [':where', tr("where the config files being read actually are", 'いま読んでいる設定ファイルの場所')],
@@ -3985,7 +3985,7 @@ document.addEventListener('keydown', (e) => {
 /// unreadable; sending the label would make the follow-up meaningless.
 /// 設定画面。**正は `init.lua` ひとつ**（2026-09-11、本人の判断）── ここで
 /// 直すのは、その `init.lua` そのものだ。別の設定ファイルを増やせば「どちらが
-/// 勝つか」が生まれ、この家で最頻のバグ（設定を直したのに効かない）に新しい
+/// 勝つか」が生まれ、cian で最頻のバグ（設定を直したのに効かない）に新しい
 /// 水源を足すことになる。
 ///
 /// 作りは crmaine の設定画面に倣う（`~/workspace/crmaine/gui/settings.js`）。
@@ -4180,7 +4180,7 @@ function drawSettings() {
               + esc(tr('remove', '消す')) + '</button>'
             : '';
         // 片方でしか効かない設定は、そう言う。**効かない設定を効くふりで
-        // 並べない** ── この家で最頻のバグは「設定を直したのに効かない」。
+        // 並べない** ── cian で最頻のバグは「設定を直したのに効かない」。
         const only = f.applies === 'tui'
             ? `<span class="sonly">${esc(tr('terminal build only', '端末版だけ'))}</span>`
             : f.applies === 'gui'
@@ -4617,7 +4617,7 @@ async function saveSettings() {
         r = await ask('settings_write', { set, ai });
         if (!r) { return; }
     }
-    // **設定を直したら、読み直す。** この家で最頻のバグは「設定を直したのに
+    // **設定を直したら、読み直す。** cian で最頻のバグは「設定を直したのに
     // 効かない」で、書いたあと画面が古い値を出し続けるのはその一種。
     await openSettings();
     say(tr(`saved into ${r.path}. the previous file is ${r.backup}`,
@@ -5653,7 +5653,7 @@ function paintPicture(r) {
     }
     const size = n.naturalWidth ? `${n.naturalWidth} × ${n.naturalHeight}` : '';
     el.vAbout.textContent = pic.fit
-        ? tr(`${size}   fitted to the window`, `${size}   窓に合わせています`)
+        ? tr(`${size}   fitted to the window`, `${size}   ウィンドウに合わせています`)
         : `${size}   ${Math.round(pic.at * 100)}%`;
 }
 
@@ -5698,7 +5698,7 @@ async function openAsPicture(which) {
     el.vPic.replaceChildren(node);
     if (node.tagName === 'IMG') {
         fitPicture(node, r);
-        el.vFoot.textContent = tr('+ / − zoom   ·   0 actual size   ·   f fit   ·   drag to move   ·   E editor   ·   Shift+Enter where it is   ·   Esc ×3 closes', '+ / − 拡大・縮小   ·   0 原寸   ·   f 窓に合わせる   ·   ドラッグで移動   ·   E 外部エディタ   ·   Shift+Enter 場所   ·   Esc ×3 閉じる');
+        el.vFoot.textContent = tr('+ / − zoom   ·   0 actual size   ·   f fit   ·   drag to move   ·   E editor   ·   Shift+Enter where it is   ·   Esc ×3 closes', '+ / − 拡大・縮小   ·   0 原寸   ·   f ウィンドウに合わせる   ·   ドラッグで移動   ·   E 外部エディタ   ·   Shift+Enter 場所   ·   Esc ×3 閉じる');
     }
     el.vName.textContent = r.name;
     el.vAbout.textContent = human(r.len);
@@ -6695,7 +6695,7 @@ function buildCommands() {
     { name: 'discard', alias: ['revert', 'svnrevert'], about: tr("discard worktree changes", '作業ツリーの変更を破棄'), run: () => cmdVcs('discard') },
     { name: 'dup', alias: ['duplicate', 'dedup'], about: tr("find files with identical contents", '中身が同じファイルを探す'), run: cmdDedup },
     { name: 'redo', about: tr("redo what u undid", 'u で取り消した操作をやり直す'), run: redo },
-    { name: 'image', about: tr("how images are drawn (a window always draws them)", '画像の表示方式（窓では常に描画されます）'), run: () => say(tr('a window always draws images — just press F3', '窓では画像は常に表示されます — F3 でどうぞ')) },
+    { name: 'image', about: tr("how images are drawn (a window always draws them)", '画像の表示方式（ウィンドウ版では常に描画されます）'), run: () => say(tr('a window always draws images — just press F3', 'ウィンドウ版では画像は常に表示されます — F3 でどうぞ')) },
     // `finder` is NOT an alias here: it is `:files`'s, and a spelling that
     // lives on two commands reaches only the first — the fuzzy finder its own
     // about-text promised could never open. `:view finder` still works as an
@@ -6727,7 +6727,7 @@ function buildCommands() {
     { name: 'snip', alias: ['snippet'], about: tr("a saved command, to the shell (also Ctrl+Shift+Enter)", '保存したコマンドをシェルへ（Ctrl+Shift+Enter でも）'), run: cmdSnippets },
     { name: 'sessionlog', alias: ['log2'], about: tr("record the shell to a file, or stop", 'シェルの写しをファイルに取る／止める'), run: cmdShellLog },
     { name: 'shellname', alias: ['tabname'], about: tr("name this shell tab (double-clicking the tab does it too)", 'このシェルタブに名前を付ける（タブを二度押しでも）'), arg: tr('name', '名前'), optional: true, run: cmdShellName },
-    { name: 'zoom', about: tr("zoom whichever surface has the keys, and back (also F12)", 'いま操作している面を広げる／戻す（F12 でも）'), run: zoomFocused },
+    { name: 'zoom', about: tr("zoom whichever surface has the keys, and back (also F12)", 'いま選んでいる枠を広げる／戻す（F12 でも）'), run: zoomFocused },
     { name: 'df', about: tr("free space on the disk", 'ディスクの空き容量'), run: cmdDf },
     { name: 'wc', about: tr("lines / words / bytes", '行／単語／バイト数'), run: cmdWc },
     { name: 'head', about: tr("the first lines (:head -n 20)", '先頭だけ見る（:head -n 20）'), arg: tr('-n count', '-n 数'), optional: true, run: (a) => cmdPeek(a, false) },
@@ -9230,7 +9230,7 @@ async function cmdTheme(name) {
     // foot says "Esc 戻す" and a promise on the screen has to be kept.
     const was = palette ? { palette } : { look };
     const rows = themeRows();
-    show(tr('Themes', '配色'), tr(`${rows.length} — the top ${LOOKS.length} are this window's, the rest are cian-tui's`, `${rows.length} 種 — 上の ${LOOKS.length} つは窓のもの、あとは cian-tui のもの`),
+    show(tr('Themes', '配色'), tr(`${rows.length} — the top ${LOOKS.length} are this window's, the rest are cian-tui's`, `${rows.length} 種 — 上の ${LOOKS.length} つはウィンドウ版のもの、あとは cian-tui のもの`),
         rows, {
             filter: true,
             hint: tr('type to narrow (dracula, light, …)', '打って絞り込み（dracula, light, …）'),
@@ -9282,7 +9282,7 @@ function cmdPaneTheme() {
     const was = paneSkin[which].theme;
     const wear = (row) => { paneSkin[which].theme = row.palette || null; paintPane(which); };
     const rows = [{
-        label: tr('clear (back to the window’s theme)', '解除（窓ぜんたいの配色に戻す）'),
+        label: tr('clear (back to the window’s theme)', '解除（アプリ全体の配色に戻す）'),
         value: was ? '' : '●',
         palette: null,
         run: () => { closeMenuChosen(); say(tr('this pane’s theme cleared', 'このペインの配色を解除しました')); },
@@ -9933,7 +9933,7 @@ async function cmdVersion() {
         ? new Date(w.built_at * 1000).toLocaleString('ja-JP',
             { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
         : tr('(unknown)', '(不明)');
-    show('cian', tr(`${w.version || '1.1.10'} — a window on cian-core`, `${w.version || '1.1.10'} — cian-core の上の窓`), [
+    show('cian', tr(`${w.version || '1.1.10'} — a window on cian-core`, `${w.version || '1.1.10'} — cian-core の上のウィンドウ版`), [
         { label: tr('Built', 'ビルド日時'), sub: built + (w.commit ? `   ${w.commit}` : '') },
         { label: tr('Typeface', '書体'), sub: `${resolvedFace()}   ${FONT.at}px` },
         { label: tr('Config', '設定'), sub: w.config || tr('(none)', '(なし)') },

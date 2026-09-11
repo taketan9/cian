@@ -63,7 +63,7 @@
 いまは 0 件 ── だからこの節は**見張り**で、天井は 0。増えた日に鳴ります。
 
 **辞書に足すときは変異テストを。** 「指摘が消えた」ではなく「検査が黙った」を
-この家では5回やっています（`keycover.py` が 72 → 2 種に落ちたまま百分率を
+cian では5回やっています（`keycover.py` が 72 → 2 種に落ちたまま百分率を
 出し続けた件）。壊した版で鳴るのを見てから戻すこと。
 """
 
@@ -92,6 +92,8 @@ ENGLISH_ONLY_CEILING = 102  # 端末版。既定が日本語なのに英語し�
 ENGLISH_ONLY_JS_CEILING = 1  # 窓版。ここはほぼ片付いている
 DASH_CEILING_RS = 124        # 端末版。`tr()` の両方の言葉ぶんを数えるので、報せの数のほぼ倍
 DASH_CEILING_JS = 156        # 窓版
+# 硬い言い方。**ここは 0 を目指す** ── 数が少なく、直し方が一つに決まる。
+STIFF_CEILING = 0
 
 
 def strip_line_comments(text: str) -> str:
@@ -247,7 +249,7 @@ DASH = re.compile(r"[ 　](?:──|—|―)[ 　]")
 
 # **ダッシュが区切りとして正しいもの。理由が要ります。**
 WAIVED = {
-    # 題の中の区切り。二つの文ではなく、一つの名前と、その状態。
+    # タイトルの中の区切り。二つの文ではなく、一つの名前と、その状態。
     " コミットメッセージ生成 — 編集中 ",
     " commit message — editing ",
     # キーの表の左右。ダッシュは鍵と説明のあいだの罫線で、文ではない。
@@ -264,6 +266,52 @@ def dashes():
         and lit not in WAIVED
         and len(lit.strip()) >= 8
         and not set(lit.strip()) <= set("─—― ")
+    ]
+
+
+# ── 節④ 硬い言い方 ────────────────────────────────────────────────────
+#
+# 本人（2026-09-11）:「AI 独特の表現 『題』『釦』『綱』『たったの2つです』
+# みたいな違和感のある表現の洗い出しおよびリライト」。
+#
+# **日常語を、硬い一字の漢語で書く癖**だ。ボタンを「釦」、ページを「頁」、
+# タイトルを「題」。読めるが、**その人が声に出して言わない言い方**で、それが
+# 「機械が書いた」と感じさせる。
+#
+# 難しいのは、cian には**わざと一字の言葉がある**こと ── 枠・桁・ペイン・
+# パネルは別のものを指す言葉で、揃えて「きれいに」すると意味が死ぬ
+# （`skills/massara-check` に書いてある）。だから見るのは
+# **「ふつうの日本語アプリが別の言い方をするもの」だけ**にする。
+STIFF = {
+    "釦": "ボタン",
+    "頁": "ページ",
+    "卓": "テーブル",
+    "匣": "箱",
+    "燈": "明かり",
+    "綱": "ロープ / 一覧",
+    # **「面」は画面の一部を指す言葉として硬い。** cian が指しているのは
+    # 「画面上の四角」で、それは `枠`。`面` は端末版にも窓版にも出ていた
+    # （`F12` の説明）
+    "面をズーム": "枠をズーム",
+    "面を広げる": "枠を広げる",
+    "この面": "この枠",
+    # 「窓」は**窓版という家の言葉**としては正しいが、画面に出す言葉としては
+    # ふつうのアプリが「ウィンドウ」と言う
+    "窓に合わせ": "ウィンドウに合わせ",
+    "窓ぜんたい": "アプリ全体",
+    "窓のもの": "ウィンドウ版のもの",
+    "窓では": "ウィンドウ版では",
+    "上の窓": "上のウィンドウ版",
+    "窓と見た目": "ウィンドウと見た目",
+}
+
+
+def stiff_words():
+    return [
+        (path, line, lit, STIFF[w])
+        for path, line, lit in screen_strings()
+        for w in STIFF
+        if w in lit
     ]
 
 
@@ -324,6 +372,7 @@ def main() -> int:
     dash_rs = [d for d in dash if d[0].startswith("crates")]
     dash_js = [d for d in dash if d[0].startswith("gui")]
     stock = stock_phrases()
+    stiff = stiff_words()
 
     print("=" * 72)
     print("  画面に出る言葉 ── 規則は theme.rs の tr() の doc コメント")
@@ -351,6 +400,18 @@ def main() -> int:
         bad.append(f"② 端末版が {len(dash_rs)} 件に増えました（天井 {DASH_CEILING_RS}）")
     if len(dash_js) > DASH_CEILING_JS:
         bad.append(f"② 窓版が {len(dash_js)} 件に増えました（天井 {DASH_CEILING_JS}）")
+
+    print(f"\n  ④ 硬い言い方               {len(stiff)} 件（天井 {STIFF_CEILING}）")
+    print("     日常語を、その人が声に出して言わない一字の漢語で書いている")
+    if stiff:
+        for path, line, lit, better in (stiff if listing else stiff[:20]):
+            print(f"    {path}:{line}")
+            print(f"      {lit[:70]}")
+            print(f"      → {better}")
+        if not listing and len(stiff) > 20:
+            print(f"    …ほか {len(stiff) - 20} 件（--list で全部）")
+    if len(stiff) > STIFF_CEILING:
+        bad.append(f"④ 硬い言い方が {len(stiff)} 件に増えました（天井 {STIFF_CEILING}）")
 
     print(f"\n  ③ 型どおりの言い回し       {len(stock)} 件（天井 0 ── 見張り）")
     if stock:

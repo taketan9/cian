@@ -33,7 +33,7 @@ const NAMED = {
     Esc: 'Escape', Enter: 'Enter', Tab: 'Tab', Space: ' ',
     Down: 'ArrowDown', Up: 'ArrowUp', Left: 'ArrowLeft', Right: 'ArrowRight',
     Bksp: 'Backspace', F5: 'F5',
-    // 頁送りと行頭・行末。ヘルプが名前を挙げているのに、綴りが無いだけで
+    // ページ送りと行頭・行末。ヘルプが名前を挙げているのに、綴りが無いだけで
     // 押せなかった ── 押していないキーと、押せないキーは別のこと。
     PgUp: 'PageUp', PgDn: 'PageDown', Home: 'Home', End: 'End',
     Del: 'Delete',
@@ -674,7 +674,7 @@ async function main() {
 
         // 移動
         ['Shift+D', '10行下'], ['Shift+U', '10行上'],
-        ['PgDn', '1頁下'], ['PgUp', '1頁上'], ['Shift+PgUp', 'シェルの巻き戻し'],
+        ['PgDn', '1ページ下'], ['PgUp', '1ページ上'], ['Shift+PgUp', 'シェルの巻き戻し'],
         ['y', 'やり直し（別名）'], ['wait:400', ''],
         ['Shift+S', 'SSH ピッカー'], ['wait:900', ''], ['Esc', ''], ['wait:400', ''],
         ['Ctrl+n', '次の行'], ['Ctrl+p', '前の行'],
@@ -719,10 +719,10 @@ async function main() {
         ['read:\'名前で探す → \' + (report.rows||[]).length + \' 件\'', ''],
         ['top:#report', '結果が最前面'], ['Esc', '閉じる'], ['wait:400', ''],
         ['Ctrl+g', 'grep（別名）'], ['wait:500', ''], ['Esc', ''], ['wait:300', ''],
-        // 表題は `:grep` ではなく「何をするか」。横幅も見る ── 入力欄が
+        // 見出しは `:grep` ではなく「何をするか」。横幅も見る ── 入力欄が
         // 見切れていたのはここ。
         ['Ctrl+f', 'grep'], ['wait:500', ''],
-        ['read:\'表題: \' + document.querySelector(\'#ask .head\').textContent', ''],
+        ['read:\'見出し: \' + document.querySelector(\'#ask .head\').textContent', ''],
         ['read:\'欄の幅: \' + Math.round(document.querySelector(\'#ask .field\').getBoundingClientRect().width) + \'px\'', ''],
         ['shot:ask-grep@#ask .sheet', '入力シート'],
         ['type:行目'], ['Enter', ''], ['wait:1800', ''],
@@ -1233,7 +1233,7 @@ async function main() {
             }
             // `top:<css>` — その面が**本当にいちばん上に見えているか**。
             //
-            // 二度やった: 状態（`report.on === true`、題も正しい）だけ見て
+            // 二度やった: 状態（`report.on === true`、タイトルも正しい）だけ見て
             // 「出た」と判断し、実際には `#view` の**裏**に開いていた。
             // 同じ z-index の兄弟は文書順で重なるので、後に書いたほうが勝つ
             // ── index.html のコメントがその事故を書いている場所で、また

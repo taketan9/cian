@@ -708,7 +708,7 @@ enum Popup {
     /// `dir` is the repo the staged diff came from; `stat` summarises the files;
     /// `editing` toggles between preview and typing into `buffer`.
     /// コミットメッセージの編集。`drafted` は AI が下書きしたものかどうかで、
-    /// 枠の題だけが変わる ── 自分で書いた文に「生成」と出ると、誰が書いたのか
+    /// 枠のタイトルだけが変わる ── 自分で書いた文に「生成」と出ると、誰が書いたのか
     /// 分からなくなる。
     CommitMessage { buffer: String, stat: String, dir: PathBuf, editing: bool, drafted: bool },
     /// Proposed renames (old → new), each toggleable. Approving renames the
@@ -4148,7 +4148,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry("Shift+F9", None, "h-split (panes stacked)", "上下分割（ペインを縦に積む）"),
                 entry("Shift+F10", None, "close split pane (confirms)", "分割ペインを閉じる（確認あり）"),
                 entry("wheel / Shift+PgUp / Shift+↑", None, "scroll back through output that has gone past (Shift+Home / End for the two ends; typing returns to live)", "流れた出力をさかのぼる（Shift+Home / End で両端、入力すれば最新へ）"),
-                entry("F12", None, "zoom focused surface (toggle)", "フォーカス中の面をズーム（トグル）"),
+                entry("F12", None, "zoom the focused frame (again restores it)", "いま選んでいる枠を広げる（もう一度で戻る）"),
                 entry("Shift+F12", None, "zoom active split pane (toggle)", "アクティブな分割ペインをズーム（トグル）"),
                 entry(":shellname", None, "name this shell tab for what it is doing (empty puts the number back)", "このシェルタブに用途の名前を付ける（空で番号に戻る）"),
                 entry(":sync", None, "synchronize: type into all panes at once (also right-click)", "同時入力：全ペインへ一括入力（右クリックでも）"),

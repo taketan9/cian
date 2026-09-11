@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """init.lua に書いた設定のうち、窓版が実際に読んでいるのはどれか。
 
-**この家でいちばんよく出るバグに、物差しだけが無かった。**
+**cian でいちばんよく出るバグに、物差しだけが無かった。**
 
 「設定を直したのに効かない」は cian の最頻のバグで、renderer.js には
 その顛末が書いてある ── *the window was ignoring seventeen of the twenty
