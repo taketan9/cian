@@ -408,8 +408,43 @@ async function main() {
         }
     }
 
-    const keys = process.argv.slice(2);
-    const round = keys.length ? keys.map((k) => [k, '']) : [
+    const keys = process.argv.slice(2).filter((a) => a !== '--commands');
+    // `--commands` ── **辞書にある名前を、一つずつ全部打つ。**
+    //
+    // 端末版には `scripts/sweep.py` があって 151 個の verb を叩く。窓版には
+    // 何も無く、`drive.js` の一周が触るのはひと握りだった ── **配布は窓版
+    // 一本**なので、触ったことのない道がそのまま人の手元へ行く。
+    //
+    // 見るのは `例外 0 件` だけでいい。中身の良し悪しは端末版の掃引と
+    // `parity.py` が見ているので、ここで重ねない ── **同じことを二つの道具に
+    // 見させると、片方を直したときもう片方が黙る。**
+    const commandRound = () => {
+        const src = fs.readFileSync(path.join(__dirname, 'renderer.js'), 'utf8');
+        const names = new Set();
+        for (const m of src.matchAll(/\{\s*name:\s*'([^']+)'([\s\S]*?)\},?\n/g)) {
+            names.add(m[1]);
+            const al = /alias:\s*\[([^\]]*)\]/.exec(m[2]);
+            if (al) for (const a of al[1].matchAll(/'([^']+)'/g)) names.add(a[1]);
+        }
+        // この道具では見られないもの。**「危ないから」ではなく「見られない
+        // から」** ── 別の見方があるものは、そちらで見る。
+        const skip = new Set([
+            'q', 'quit',                                  // 窓を閉じる
+            'vi', 'vim', 'nvim', 'e', 'edit',             // 外部エディタ
+            'office', 'officelink',                       // OS の関連付け
+            'finder', 'revealos', 'showinfinder',         // Finder が開く
+            'ssh', 'sftp', 'remote',                      // 相手が要る
+        ]);
+        const out = [];
+        for (const name of [...names].sort()) {
+            if (skip.has(name)) continue;
+            out.push([':', ''], [`type:${name}`, ''], ['Enter', `:${name}`],
+                     ['wait:350', ''], ['Escape', ''], ['Escape', '']);
+        }
+        return out;
+    };
+    const round = process.argv.includes('--commands') ? commandRound()
+        : keys.length ? keys.map((k) => [k, '']) : [
         [',', 'ソート'], [',', 'ソートもう一度'],
         // The first row is 隠しファイル in both builds now (cian-tui's
         // `toggle_rows` order). It said 配色を送る and pressed whatever was

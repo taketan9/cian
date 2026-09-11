@@ -4007,7 +4007,7 @@ impl App {
         if let Some(t) = self.active_file_tabs_mut() { let _ = t.active_mut().reload(); }
         match result {
             Ok(msg) => self.message = Some(msg),
-            Err(e) => self.open_popup(Popup::Notice { lines: vec![e.to_string()] }),
+            Err(e) => self.open_popup(Popup::Notice { lines: crate::util::why(&e) }),
         }
         Ok(())
     }

@@ -105,9 +105,10 @@
 -- cian.set_option("show_hidden", true)
 
 -- Nerd Font glyphs — the file-type icons and the branch / disk symbols in the
--- status line. Default true. Set false on a terminal WITHOUT a Nerd Font so
--- those glyphs are dropped (no mojibake); folders are still marked by colour.
--- cian.set_option("nerd_fonts", false)
+-- status line. **Default false since 2026-09-11**: more terminals lack the
+-- font than have it, and a terminal without it draws a column of tofu. Set
+-- true where the font is installed. The window ships its own and ignores this.
+-- cian.set_option("nerd_fonts", true)
 
 -- The typeface — **the window build only.** A terminal's face is the
 -- emulator's, for the same reason its size is; the window draws through

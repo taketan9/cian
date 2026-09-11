@@ -58,6 +58,24 @@ WAIVED = {
     'format!("{:<10}: {}", "off", cfg.off.clone().unwrap_or(dash)),',
     'format!("{:<10}: {}", "restore", cfg.restore),',
     'format!("{:<10}: {}", "last", last),',
+    # ── render.rs の `chars().count()` のうち、**文字の位置**の話 ──
+    #
+    # どれも「画面の何桁目か」ではなく「文字列の何文字目か」。桁に直すと
+    # 逆に壊れる ── カーソルは文字の上に乗るもので、桁の上には乗らない。
+    #
+    # 伏字。1文字を1つの `•` に写している。数えているのは字の数そのもの。
+    'let shown: String = if secret { "•".repeat(buffer.chars().count()) } else { buffer.to_string() };',
+    # カーソルの位置を、その行の文字数で止める。
+    "let cur = cursor.min(shown.chars().count());",
+    "*col = (*col).min(view.lines.get(*line).map(|l| l.chars().count()).unwrap_or(0));",
+    # 行末の空白がどこから始まるか ── 空白は半角なので桁と字が一致する。
+    "l.chars().count() - l.chars().rev().take_while(|c| *c == ' ').count()",
+    # 選択範囲の長さ。`sel_cols` に渡すのは文字の添字。
+    "let len = l.chars().count();",
+    "if marks && len == l.chars().count() {",
+    # 桁の目盛りそのもの。中身は数字と `|` だけなので字数＝桁数。
+    "while scale.chars().count() < avail {",
+    "let c = scale.chars().count() + 1; // 1-based, as the corner reads",
     'let badge = format!("{:<6} ", c.mode().badge());',  # badge() は "simple" だけ
     'format!("{:<7} {} ", shown_hash, pad_to(&shown_who, 11)),',  # git のハッシュ
     'format!("{:08x}  {:<49}|{}|", index * 16, hex, ascii)',      # 16進ダンプ
@@ -72,6 +90,20 @@ RUST_SUSPECT = re.compile(
     # `cargo test` でも通る。右詰め `{:>N}` は数字に使う形なので見ない。
     r"|\{:[<^]\d+\}"
 )
+# **`as u16` が同じ行に無い字数。** 2026-09-10 に、この形で2件出た:
+#
+#   * トグルのメニュー ── `pad = w - (2 + label.chars().count() + …)` で右詰めして
+#     いたので、**日本語ではどのスイッチも ON / OFF が一つも見えていなかった**
+#     （枠の外へ押し出されていた）。英語では出ない
+#   * マクロの一覧 ── `widest = names.map(chars().count()).max()` を**次の行で**
+#     `as u16` していたので、上の regex に掛からなかった
+#
+# だから `render.rs` の中だけは、`chars().count()` をひとしく疑う ── ここは
+# 画面を描くファイルで、ここで数える「長さ」はたいてい桁のことだから。
+# **文字の位置**（カーソルの桁、選択の範囲、伏字の数）は桁の話ではないので、
+# 下の WAIVED に**行そのものと理由**を書いて外す。
+DRAW = ROOT / "crates" / "cian-tui" / "src" / "render.rs"
+DRAW_SUSPECT = re.compile(r"chars\(\)\.count\(\)")
 # **`slice` は外した。** 配列にも、送る前のバイト数の打ち切りにも使うので、
 # 7 件出て**そのどれも桁の話ではなかった**。当てにならない指摘が7件並ぶ検査は、
 # 読まれなくなる検査。
@@ -95,6 +127,12 @@ def hits():
                 continue
             if RUST_SUSPECT.search(line):
                 out.append((str(path.relative_to(ROOT)), n, t))
+    for n, line in enumerate(DRAW.read_text(encoding="utf-8").splitlines(), 1):
+        t = line.strip()
+        if t.startswith("//") or t in WAIVED:
+            continue
+        if DRAW_SUSPECT.search(line) and not RUST_SUSPECT.search(line):
+            out.append(("crates/cian-tui/src/render.rs", n, t))
     for n, line in enumerate(JS.read_text(encoding="utf-8").splitlines(), 1):
         t = line.strip()
         if t.startswith("//") or t.startswith("///") or t in WAIVED:

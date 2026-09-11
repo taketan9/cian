@@ -587,6 +587,72 @@ html, body {
    the editor should hide a list opened from inside it. */
 #view   { z-index: 10; }   /* a surface: it replaces the listing */
 #report { z-index: 11; }   /* a sheet: it is raised over whatever is beneath */
+/* 設定は、開いたら**それだけを見る**面。エディタの上に出る ── エディタから
+   右クリックで開くことがあり、その回だけ裏に回るのでは面が二つあるのと同じ。
+   `#ask`（30）より下なのは、設定画面が出す確認に答える必要があるから。 */
+#settings { z-index: 13; }
+
+/* 設定画面。**分類ごとに畳む** ── 20 項目をフラットに並べない（crmaine は
+   45 項目でそれをやって、初めて使う人が上から順に読めなくなった）。 */
+/* **`min-height: 0` が要る。** 縦並びの flex では、子の最小の高さは中身の
+   大きさ（`auto`）なので、`overflow-y: auto` を付けても縮まない ── 本文が
+   枠からあふれ、見出しの**下に潜って**スクロールした（実写: 「設定」と
+   ファイルの説明が重なった）。`.vbody` の2行上に同じ註がある。 */
+#settings .sbody {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px 14px 20px;
+}
+#settings .sgrp { border-bottom: 1px solid var(--line); }
+#settings .sgrp > summary {
+  padding: 8px 2px; cursor: pointer; font-weight: 600; color: var(--accent);
+  user-select: none;
+}
+#settings .sgrp > summary .snum { color: var(--dim); font-weight: 400; margin-left: 8px; }
+/* 「何件書いてあるか」は**ファイルに実際に書いてある数**。読み込んだあとの
+   値で数えると、何も書いていないのに「1件設定済み」と出る。 */
+#settings .sgrp > summary .sset { color: var(--k-exec); font-weight: 400; margin-left: 8px; }
+#settings .srow { display: flex; gap: 10px; padding: 6px 2px 6px 14px; align-items: baseline; }
+#settings .srow.set { box-shadow: inset 2px 0 0 var(--accent); }
+/* 16em。15em だと「クラウドファイルを対象とするか」が2行に折れた。 */
+#settings .slabel { flex: 0 0 16em; }
+#settings .sname { color: var(--dim); font-size: 0.85em; display: block; }
+#settings .sin { flex: 1 1 auto; min-width: 0; }
+#settings .sin input[type=text], #settings .sin select, #settings .sin textarea {
+  width: 100%; box-sizing: border-box; font: inherit;
+  background: var(--pane-off); color: var(--text);
+  border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px;
+}
+#settings .shelp { color: var(--dim); font-size: 0.9em; margin: 0 0 4px 14px; }
+/* **全角空白で離さない。** `　` を挟んだら Nerd Font がそこに箱を描いた ──
+   字間は字ではなく余白で作る。 */
+#settings .sdef { margin-left: 1.2em; opacity: 0.8; }
+/* 片方でしか効かない設定の印。 */
+#settings .sonly {
+  margin-left: 8px; padding: 0 5px; border-radius: 3px;
+  background: var(--pane-off); color: var(--dim); font-size: 0.9em;
+}
+/* 「消す」。書いてある行にだけ出る。 */
+#settings .sdrop {
+  flex: 0 0 auto; font: inherit; font-size: 0.9em; cursor: pointer;
+  background: none; color: var(--dim);
+  border: 1px solid var(--line); border-radius: 4px; padding: 0 8px;
+}
+#settings .sdrop:hover { color: var(--k-warn); border-color: var(--k-warn); }
+#settings .srow { padding: 4px 2px 2px 14px; }
+/* 読めないファイルは**赤くして、保存を止める**。塗り潰すのが、設定画面の
+   いちばん高い事故（crmaine で 5,399 バイトが 64 バイトになった）。 */
+#settings .sbad {
+  margin: 8px 0; padding: 8px 10px; border-radius: 4px;
+  background: color-mix(in srgb, var(--k-warn) 18%, transparent);
+  color: var(--text); white-space: pre-wrap;
+}
+#settings .sfoot { flex: 0 0 auto; }
+#settings .sfoot button {
+  font: inherit; padding: 2px 14px; margin-left: 8px; cursor: pointer;
+  background: var(--pane-off); color: var(--text);
+  border: 1px solid var(--line); border-radius: 4px;
+}
+#settings .sfoot button.go { background: var(--accent); color: var(--pane); font-weight: 600; }
+#settings .sfoot button[disabled] { opacity: 0.45; cursor: default; }
 
 /* The shell's sixteen. Named rather than fixed, so each look chooses them —
    a shell frozen to one palette would ignore 白磁 and 陰翳 alike. These are
@@ -932,7 +998,7 @@ html, body {
    answer. */
 #chat { z-index: 12; }
 
-#view, #report, #chat {
+#view, #report, #chat, #settings {
   /* They replace the listing, not the whole window: the hint and status bars
      stay visible underneath — the terminal build never covers them, and every
      say() from viewer code used to land on a bar nobody could see. */
@@ -941,7 +1007,7 @@ html, body {
   display: flex; flex-direction: column;
   background: var(--pane); color: var(--text);
 }
-#view[hidden], #report[hidden], #chat[hidden] { display: none; }
+#view[hidden], #report[hidden], #chat[hidden], #settings[hidden] { display: none; }
 
 /* The transcript scrolls; the turn being typed does not move. */
 .cbody { flex: 1 1 auto; overflow-y: auto; padding: 10px 12px; }
@@ -1353,6 +1419,16 @@ html, body {
     <input id="r-q" hidden autocomplete="off" spellcheck="false">
     <div class="hits" id="r-rows"></div>
     <div class="vfoot" id="r-foot"></div>
+  </div>
+
+  <!-- 設定画面。右クリック / Shift+Enter のメニューから開く（2026-09-11 の依頼）。
+       **正は init.lua ひとつ** ── ここで直すのは、その init.lua そのもの。 -->
+  <div id="settings" hidden>
+    <div class="vhead"><span id="se-name"></span><span id="se-about"></span></div>
+    <div class="sbody" id="se-body"></div>
+    <div class="vfoot sfoot"><span id="se-foot"></span>
+      <button id="se-cancel">Esc</button><button id="se-save" class="go">保存</button>
+    </div>
   </div>
 
   <!-- The viewer. `Enter` on a file, or F3. Draws a window of lines rather

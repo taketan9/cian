@@ -227,11 +227,12 @@ pub(crate) fn border_type() -> BorderType {
 }
 
 /// Whether Nerd Font glyphs may be used (file icons, branch/disk symbols). Set
-/// once at startup from `cian.set_option("nerd_fonts", …)`; defaults to true.
+/// once at startup from `cian.set_option("nerd_fonts", …)`; defaults to **false**
+/// (2026-09-11) — more terminals lack a Nerd Font than have one.
 static NERD: OnceLock<bool> = OnceLock::new();
 
 pub(crate) fn nerd_fonts() -> bool {
-    *NERD.get_or_init(|| true)
+    *NERD.get_or_init(|| false)
 }
 
 /// Pick rounded or square corners.

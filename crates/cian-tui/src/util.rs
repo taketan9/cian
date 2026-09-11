@@ -5,6 +5,31 @@
 use unicode_width::UnicodeWidthStr;
 use ratatui::layout::{Position, Rect};
 
+/// An error, as a person needs to read it: **the reason on its own line**.
+///
+/// `anyhow::Error`'s `Display` prints only the outermost context. So
+/// `rename_in_place`, which wraps the OS error in `rename {src} -> {dest}`,
+/// reached the 「お知らせ」 dialog as `rename /長い/パス/a.txt -> /長い/パス/a.txtx`
+/// and nothing else. **Two paths and no verb of failure** — it reads like a
+/// report that the rename happened. The reason (`Permission denied`) was in
+/// the chain the whole time and never left it. Found on 2026-09-10, driving
+/// the terminal build at a directory with the write bit off; the person on the
+/// other side of that dialog is being told a file operation failed and not
+/// told why, which on a managed Windows machine is the difference between
+/// "cian is broken" and "this needs administrator rights".
+///
+/// The links come back as separate lines rather than `{e:#}`'s single
+/// `outer: inner: innermost`, because the dialog wraps at its own width and a
+/// path in the first link would push the reason off the visible rows.
+pub(crate) fn why(e: &anyhow::Error) -> Vec<String> {
+    let mut out: Vec<String> = e.chain().map(|c| c.to_string()).collect();
+    out.dedup();
+    if out.is_empty() {
+        out.push(e.to_string());
+    }
+    out
+}
+
 /// Is the pointer inside this rectangle? Ratatui's own containment test, named
 /// for how the mouse code reads. It was written out by hand in twenty places,
 /// each spelling the same four comparisons; several also guarded on a non-zero

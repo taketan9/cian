@@ -16221,6 +16221,34 @@ mod ctrl_r_redoes {
     }
 }
 
+/// A refusal says **why**, not just what was attempted.
+///
+/// `anyhow::Error`'s `Display` prints the outermost context and stops, so the
+/// 「お知らせ」 dialog said `rename /長い/パス/a.txt -> /長い/パス/a.txtx`
+/// and nothing more — two paths, no verb of failure, and no `Permission
+/// denied` anywhere. It reads as a report that the rename happened. Found on
+/// 2026-09-10 by driving the terminal build at a directory with the write bit
+/// off; `tui-drive.py` の⑦ presses the keys, and this holds the shape of the
+/// answer without a filesystem.
+#[test]
+fn a_refusal_carries_its_reason() {
+    use anyhow::Context;
+    let io = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "Permission denied");
+    let err = Err::<(), _>(io).context("rename /a -> /b").unwrap_err();
+
+    assert_eq!(err.to_string(), "rename /a -> /b", "Display stops at the outermost context");
+
+    let lines = crate::util::why(&err);
+    assert_eq!(lines.first().map(String::as_str), Some("rename /a -> /b"), "what was attempted");
+    assert!(
+        lines.iter().any(|l| l.contains("Permission denied")),
+        "and why it did not happen: {lines:?}",
+    );
+    // Separate lines, not `{e:#}`'s one long `outer: inner`. A path in the
+    // first link would push the reason past the dialog's visible rows.
+    assert!(lines.len() >= 2, "one link per line: {lines:?}");
+}
+
 /// A popup that opens, scrolls or closes asks for the whole surface again.
 ///
 /// Every renderer under cian repaints only what changed, and a popup changes

@@ -31,6 +31,8 @@ use mlua::{Function, FromLua, Lua, Table, Value};
 pub mod count;
 pub mod macro_script;
 pub mod macros;
+pub mod settings_edit;
+pub mod settings_schema;
 pub mod shortcuts;
 
 /// A color spec exactly as the user wrote it: `"#rrggbb"`, a named color
@@ -88,8 +90,12 @@ pub struct Options {
     pub borders: Option<String>,
     /// Start with dotfiles visible. Defaults to true.
     pub show_hidden: Option<bool>,
-    /// Use Nerd Font glyphs (file-type icons, the branch/disk symbols). Default
-    /// true; set false on a terminal without a Nerd Font so nothing mojibakes.
+    /// Use Nerd Font glyphs (file-type icons, the branch/disk symbols).
+    ///
+    /// **Default false since 2026-09-11** — "無い人の方が多いと思うからね".
+    /// A terminal without the font draws a column of tofu where the icons go,
+    /// and that is the state most terminals are in. The window ships its own
+    /// Nerd Font and never reads this.
     pub nerd_fonts: Option<bool>,
     /// How many columns a tab reaches. Defaults to 4. Worth raising to 8 for
     /// tab-separated data, which lines up only when every field is narrower

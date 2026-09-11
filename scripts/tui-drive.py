@@ -52,6 +52,7 @@ import shutil
 import struct
 import sys
 import tempfile
+import unicodedata
 import termios
 import time
 
@@ -73,6 +74,13 @@ ESC = b"\x1b"
 ANSWERS = [
     (ESC + b"[c", ESC + b"[?62;1;2;6;9;15;22c"),
     (ESC + b"[5n", ESC + b"[0n"),
+    # カーソル位置（DSR-CPR）。**本物の端末は必ず答える。**
+    # 答えないままにしていたら、`:redraw` が `Terminal::clear()` →
+    # `crossterm::cursor::position()` で 2 秒待って諦め、その `Err` が
+    # `run_loop` の `?` を通って **cian が落ちた**（2026-09-11）。
+    # ここで答えるようにしたのは「落ちないこと」を測るためではなく、
+    # **本物の端末と同じ条件にする**ため ── 落ちないほうは cian 側で直した。
+    (ESC + b"[6n", ESC + b"[1;1R"),
     (ESC + b"[16t", ESC + b"[6;16;8t"),
     (ESC + b"[14t", ESC + b"[4;576;960t"),
     (ESC + b"[?u", ESC + b"[?0u"),
@@ -128,6 +136,20 @@ class Tui:
             os.execv(exe, [exe] + args)
         fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         self.dead = False
+
+    def resize(self, cols, rows, wait=0.6):
+        """窓の大きさを変える。**動いている最中に。**
+
+        起動時の幅を変えて見るのは②がやっている。こちらは**使っている途中**の
+        変形で、ポップアップも一覧も開いたまま桁が組み替わる ── 全角の片割れが
+        いちばん出やすいのがここ。`pyte` 側の画面も一緒に作り直さないと、
+        以降ずっと古い桁で読むことになる。
+        """
+        self.cols, self.rows = cols, rows
+        self.screen.resize(rows, cols)
+        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        os.kill(self.pid, __import__("signal").SIGWINCH)
+        self.pump(wait)
 
     def pump(self, secs=0.6):
         end = time.time() + secs
@@ -396,6 +418,188 @@ def check_shell_selection(d, bad):
     t.close()
 
 
+def cells_wide(line: str) -> int:
+    """その行が占める**桁**。全角は2つぶん。"""
+    return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in line)
+
+
+def half_cells(t) -> list:
+    """**全角の片割れが残っているところ。** `(y, x, なに)` の並び。
+
+    最初は「行の桁数が端末幅ちょうどか」で見ていた。枠の中では効くが、
+    **枠の無い行は端末幅まで埋まらない** ── 下のキー案内も状態行もシェルの
+    中身も短くて当たり前で、それを 14 件の「桁くずれ」として並べた。
+    当てにならない指摘が並ぶ検査は、読まれなくなる検査。
+
+    見るのは行の長さではなく、**セルの対**そのもの。`pyte` は全角文字を
+    「1つ目に字、2つ目に空の `data`」で持つので、崩れは二通りしかない:
+
+      ① 相方が潰れた ── 全角の次のセルに、別の字が書かれている
+      ② 片割れが残った ── 空の `data` の前が、全角ではない
+
+    どちらも「字は全部読めるのに行がずれる」形で、目でも `cargo test` でも
+    通る。**桁のある場所でしか出ない。**
+    """
+    out = []
+    for y in range(t.rows):
+        row = t.screen.buffer[y]
+        cells = [row[x].data for x in range(t.cols)]
+        for x, data in enumerate(cells):
+            if data and unicodedata.east_asian_width(data[0]) in "WF":
+                if x + 1 < t.cols and cells[x + 1] != "":
+                    out.append((y, x, f"{data!r} の相方が {cells[x + 1]!r} に潰れている"))
+            elif data == "" and (x == 0 or not (
+                cells[x - 1] and unicodedata.east_asian_width(cells[x - 1][0]) in "WF"
+            )):
+                out.append((y, x, "片割れだけが残っている"))
+    return out
+
+
+def check_columns(d, bad):
+    """⑥ どの行も端末の桁数ちょうどか ── **全角の片割れが残っていないか。**
+
+    2026-09-10 に、`T`（トグル）を開くと画面のうち1行だけ 119 桁になっていた。
+    ポップアップの右端が、後ろのシェル案内文の全角文字のまん中に刺さり、
+    **相方だけが端末に残っていた**。以降その行は右へ1桁ずつずれて、右端の枠が
+    1つ手前で終わる ── この家で「右上の角が消える」として何度か出た形の正体。
+
+    見つけにくいのは、**欠けているのが文字ではなく桁**だから。字は全部読める
+    ので、目でも `cargo test` でも通る。数えるのは桁だけでいい。
+
+    直したのは `render.rs` の `clear_popup`。ratatui は全角の2桁目を
+    `Cell::EMPTY`（記号は `" "`）で持つので、前の画面の片割れと**中身が
+    等しく**、差分に載らない ── 隣の桁を `CellDiffOption::AlwaysUpdate` に
+    して、空白を送り直させる。
+    """
+    t = start(d)
+    t.pump(3.0)
+    t.send("Esc", 0.5)
+    worst = []
+    for keys, what in [([], "起動直後"), (["T"], "トグル"), (["Esc", "?"], "ヘルプ"),
+                       (["Esc", ","], "ソート"), (["Esc", "F3"], "ビューア")]:
+        for k in keys:
+            t.send(k, 0.7)
+        rows = half_cells(t)
+        mark = "✓" if not rows else "✗"
+        print(f"⑥ 桁がそろう    : {what:<8} {mark}"
+              + (f"  崩れ {rows[:4]}" if rows else ""))
+        if rows:
+            worst.append(f"{what} で全角の片割れが {len(rows)} 個: {rows[:4]}")
+    for w in worst:
+        bad.append(w)
+    t.close()
+
+
+def notice_body(t):
+    """お知らせ（`Popup::Notice`）の**本文の行**。出ていなければ None。
+
+    枠の上端（題に「お知らせ」/「Notice」）から、ボタンの行までのあいだ。
+    枠の縦線を落として中身だけ返す ── 画面ぜんぶを対象にすると、後ろの
+    ペインの見出しが答えを混ぜる。
+    """
+    lines = t.text().splitlines()
+    top = next((i for i, l in enumerate(lines) if "お知らせ" in l or " Notice " in l), None)
+    if top is None:
+        return None
+    out = []
+    for l in lines[top + 1:]:
+        if "[ コピー ]" in l or "[ Copy ]" in l:
+            break
+        inner = l.strip().strip("│").strip()
+        if inner:
+            out.append(inner)
+    return out
+
+
+def check_resize(d, bad):
+    """⑧ **使っている途中で窓の大きさを変える。**
+
+    ②は起動時の幅を3通り見る。こちらは**開いたまま**組み替える ── 一覧も
+    ポップアップも桁を割り直すので、全角の片割れがいちばん出やすいのがここ。
+    cian をサーバ相手に使うということは、**窓を並べ替えながら使う**という
+    ことでもある。
+
+    大きさは端の値を混ぜる ── 41 桁（ペイン2枚には足りない）から 200 桁まで。
+    """
+    sizes = [(120, 36), (72, 20), (160, 48), (41, 12), (100, 30), (200, 60), (120, 36)]
+    for keys, what in [([], "素の一覧"), (["T"], "トグル"), (["Esc", "?"], "ヘルプ")]:
+        t = start(d)
+        t.pump(3.0)
+        t.send("Esc", 0.4)
+        for k in keys:
+            t.send(k, 0.7)
+        trouble = []
+        for c, r in sizes:
+            t.resize(c, r, 0.6)
+            if t.dead:
+                trouble.append(f"{c}×{r} で落ちた")
+                break
+            cells = half_cells(t)
+            if cells:
+                trouble.append(f"{c}×{r} で片割れ {len(cells)} 個 {cells[:2]}")
+        print(f"⑧ 大きさ変更    : {what:<8} "
+              + ("  ".join(trouble) if trouble else f"✓（{len(sizes)} 通り）"))
+        for x in trouble:
+            bad.append(f"{what} を開いたまま {x}")
+        t.close()
+
+
+def check_denied(d, bad):
+    """⑦ 断られたとき、**理由が画面に出るか。**
+
+    2026-09-10 の依頼:「管理者権限でないと操作できない挙動をした際にエラーに
+    気づきにくい」。書き込めないディレクトリで新規作成とリネームを試して、
+    画面に出るものを読む。
+
+    見るのは2つ:
+
+      ① **何かが出るか** ── 黙って何も起きないのが一番わるい
+      ② **理由が出るか** ── ここで一度落ちた。`anyhow` の `Display` は
+         いちばん外の文脈しか刷らないので、`rename A -> B` とだけ出て
+         `Permission denied` は鎖の中に残っていた。**二つのパスと、失敗した
+         という語が一つも無い知らせ**は、成功の報告に読める
+
+    `chmod 0o555` は Unix の話なので、Windows では別の形（ACL）になる。
+    ここで見ているのは**知らせ方**で、権限の仕組みではない。
+    """
+    # **砂場の名前に `denied` と書かない。** 最初そう名づけて、その名が
+    # ペインの見出しに出るので、`t.text()` に "denied" が常にあった ──
+    # 知らせから理由を落として走らせても ✓ のままだった。**検査が黙る**の
+    # いつもの形で、変異テストがそれを捕まえた。
+    tmp = tempfile.mkdtemp(prefix="cian-tui-readonly-")
+    os.makedirs(os.path.join(tmp, "from"))
+    os.makedirs(os.path.join(tmp, "to"))
+    os.makedirs(os.path.join(tmp, "config"))
+    open(os.path.join(tmp, "from", "a.txt"), "w").write("hello\n")
+    os.chmod(os.path.join(tmp, "from"), 0o555)
+    t = Tui([f"{tmp}/from", f"{tmp}/to"], env={"CIAN_CONFIG_DIR": f"{tmp}/config"})
+    try:
+        t.pump(3.0)
+        t.send("Esc", 0.5)
+        for keys, what in [(["a", "n", "e", "w", "Enter"], "新規ファイル"),
+                           (["Esc", "r", "x", "Enter"], "リネーム")]:
+            for k in keys:
+                t.send(k, 0.45)
+            # **知らせの中だけを読む。** 画面ぜんぶを見ると、後ろのペインに
+            # 出ているパスや見出しが答えを混ぜる（上の註）。
+            box = notice_body(t)
+            said = box is not None
+            why = bool(box) and any(
+                w in "\n".join(box) for w in ("denied", "Permission", "権限", "許可")
+            )
+            print(f"⑦ 断られた時    : {what:<12} 知らせが出る {'✓' if said else '✗'}"
+                  f"   理由が読める {'✓' if why else '✗'}")
+            if not said:
+                bad.append(f"{what}が断られても、画面に何も出ない")
+            elif not why:
+                bad.append(f"{what}が断られた知らせに、理由（Permission denied）が無い")
+            t.send("Esc", 0.5)
+    finally:
+        os.chmod(os.path.join(tmp, "from"), 0o755)
+        t.close()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main() -> int:
     args = sys.argv[1:]
     show_screen = "--screen" in args
@@ -425,6 +629,9 @@ def main() -> int:
         check_click(d, bad)
         check_round(d, bad, show_screen)
         check_shell_selection(d, bad)
+        check_columns(d, bad)
+        check_resize(d, bad)
+        check_denied(d, bad)
     finally:
         shutil.rmtree(d, ignore_errors=True)
     print("=" * 72)

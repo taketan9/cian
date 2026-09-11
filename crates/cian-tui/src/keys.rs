@@ -140,8 +140,20 @@ impl App {
                 KeyCode::Char(c) => format!("Char({c:?})"),
                 other => format!("{other:?}"),
             };
-            let mods = if mods.is_empty() { "no modifier".to_string() } else { mods.join("+") };
-            self.message = Some(format!("key: {what}  {mods}   (:keys to stop)"));
+            let mods = if mods.is_empty() {
+                tr(self.lang, "no modifier", "修飾キーなし").to_string()
+            } else {
+                mods.join("+")
+            };
+            // **`:keys` ではない。** 止めるのは `:key`（もう一度）で、
+            // `:keys` は「そんなコマンドはありません」と返る ── キーを見に
+            // 来た人に、出口として存在しない名を教えていた。151 個の verb を
+            // 一つずつ叩いていて見つけた（2026-09-11）。
+            self.message = Some(format!(
+                "{}: {what}  {mods}   {}",
+                tr(self.lang, "key", "キー"),
+                tr(self.lang, "(:key again to stop)", "（もう一度 :key で止まります）"),
+            ));
         }
         r
     }

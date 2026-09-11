@@ -76,6 +76,13 @@ const el = {
     stMsg: document.getElementById('st-msg'),
     stShell: document.getElementById('st-shell'),
     ask: document.getElementById('ask'),
+    settings: document.getElementById('settings'),
+    seName: document.getElementById('se-name'),
+    seAbout: document.getElementById('se-about'),
+    seBody: document.getElementById('se-body'),
+    seFoot: document.getElementById('se-foot'),
+    seSave: document.getElementById('se-save'),
+    seCancel: document.getElementById('se-cancel'),
     find: document.getElementById('find'),
     findHits: document.getElementById('find-hits'),
     findFoot: document.getElementById('find-foot'),
@@ -2740,6 +2747,10 @@ function contextRows() {
             return rows;
         }));
     }
+    // 設定。**右クリックと Shift+Enter から開ける**（2026-09-11 の依頼）──
+    // コマンドを覚えないと開けない設定画面は、設定画面を必要とする人には
+    // 開けない。
+    v.push({ label: tr("Settings\u2026", '設定…'), value: ':settings', run: openSettings });
     // cian-tui ends Quit then Manual — the way out, then the way to find out.
     v.push({ label: tr("Quit cian", 'cian を終了'), value: 'q', run: cmdQuit });
     v.push({ label: tr("Key manual", 'キー一覧'), value: '?', run: openHelp });
@@ -3719,6 +3730,13 @@ document.addEventListener('keydown', (e) => {
     // and not the other handlers on `document`, and a capture listener
     // silences the bubble phase on the same node. One receiver, one order.
     if (chat.on) { chatKey(e); return; }
+    // 設定画面は、開いているあいだ**それだけを見る**面。Esc で閉じ、
+    // それ以外は欄のものなので、一覧の 27 分岐へ回さない ── 回すと、
+    // エンドポイントに `j` と打っただけでカーソルが動く。
+    if (settings.on) {
+        if (e.key === 'Escape') { e.preventDefault(); closeSettings(); }
+        return;
+    }
     // Not while a file is open. The editor no longer stops every key on its
     // way past — it cannot, or its own bindings never fire — so the listing's
     // keys have to decline for themselves.
@@ -3964,6 +3982,258 @@ document.addEventListener('keydown', (e) => {
 /// asked: "summarise this file" reads better than the file, but a follow-up
 /// about line 30 needs the file. Showing the payload would make the transcript
 /// unreadable; sending the label would make the follow-up meaningless.
+/// 設定画面。**正は `init.lua` ひとつ**（2026-09-11、本人の判断）── ここで
+/// 直すのは、その `init.lua` そのものだ。別の設定ファイルを増やせば「どちらが
+/// 勝つか」が生まれ、この家で最頻のバグ（設定を直したのに効かない）に新しい
+/// 水源を足すことになる。
+///
+/// 作りは crmaine の設定画面に倣う（`~/workspace/crmaine/gui/settings.js`）。
+/// あちらが実機で転けて学んだことを、そのまま持ってきている:
+///
+///   * 項目は**スキーマから生成**する（cian では `cian-lua` の `Options`。
+///     エンジンが `settings_read` で渡す）。手で並べると、設定を足した日に
+///     取り残される
+///   * **元のファイルに重ねる。丸ごと書き直さない** ── 触った項目だけを
+///     エンジンへ送り、ほかの行は読みもしない
+///   * **読めなかったら保存させない**（5,399 バイトが 64 バイトになった日が
+///     ある）
+///   * **カテゴリごとに畳み、最初の1つだけ開く**
+///   * **「設定済み」はファイルに実際に書いてあるかで数える** ── 読み込んだ
+///     あとの値には計算した既定が混じっていて、何も書いていないのに
+///     「1件設定済み」と出る
+const settings = {
+    on: false,
+    /// エンジンが渡した項目の表。
+    fields: [],
+    /// AI のブロック。`endpoint` が空なら**未設定＝オフ**。
+    ai: {},
+    /// 画面で触った項目だけ。`null` は「書いてあるのを消す」。
+    touched: new Map(),
+    touchedAi: new Map(),
+    /// Lua として読めなかった訳。あるあいだは保存させない。
+    error: null,
+    path: '',
+};
+
+/// 書いてある字面を、欄に入れる形へ。`"nvim"` → `nvim`、`8` → `8`、
+/// `{ "bak", "dmp" }` → `bak, dmp`。
+function seShow(kind, written) {
+    if (written === null || written === undefined) { return ''; }
+    const s = String(written).trim();
+    if (kind === 'list') {
+        return [...s.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]).join(', ');
+    }
+    if (s.startsWith('"') && s.endsWith('"')) {
+        return s.slice(1, -1).replace(/\\(.)/g, '$1');
+    }
+    return s;
+}
+
+/// いま欄に入っている値（触っていなければ、書いてあるもの）。
+function seValue(f) {
+    if (settings.touched.has(f.name)) { return settings.touched.get(f.name) ?? ''; }
+    return seShow(f.kind, f.written);
+}
+
+async function openSettings() {
+    const r = await ask('settings_read', {});
+    if (!r) { return; }
+    settings.fields = r.fields || [];
+    settings.ai = r.ai || {};
+    settings.error = r.error || null;
+    settings.path = r.writes || r.path || '';
+    settings.touched = new Map();
+    settings.touchedAi = new Map();
+    setSettingsOn(true);
+    drawSettings();
+}
+
+/// **一つの扉。** 状態を持つ変数を二箇所から書くと、片方だけ直したときに
+/// 画面と状態がずれる（`setViewerOn` と同じ理由）。
+function setSettingsOn(on) {
+    settings.on = on;
+    el.settings.hidden = !on;
+    if (!on) { settings.touched.clear(); settings.touchedAi.clear(); }
+}
+
+function closeSettings() {
+    setSettingsOn(false);
+    drawHints();
+}
+
+function drawSettings() {
+    const L = lang === 'en' ? 'en' : 'ja';
+    el.seName.textContent = tr('Settings', '設定');
+    el.seAbout.textContent = settings.path;
+    const cats = [];
+    for (const f of settings.fields) {
+        const name = f.category[L];
+        let g = cats.find((c) => c.name === name);
+        if (!g) { g = { name, items: [] }; cats.push(g); }
+        g.items.push(f);
+    }
+    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    // **書いてあるものだけを「設定済み」と数える。**
+    // **「設定済み」は、ファイルに書いてあるかで数える。** 読み込んだあとの
+    // 値には計算した既定が混じっていて、何も書いていないのに「1件設定済み」に
+    // なる（crmaine が実機でそうなった）。画面で触ったぶんは、触ったほうが正。
+    const isSet = (f) => (settings.touched.has(f.name)
+        ? settings.touched.get(f.name) !== null && settings.touched.get(f.name) !== ''
+        : f.written !== null && f.written !== undefined);
+
+    // **「（既定）」と書かない**（2026-09-11、本人）。
+    //
+    // 既定が classic と分かっているものを「（既定）」と出すのは、答えを
+    // 持っているのに黙っているのと同じ。決まっているならその値を選んだ形で
+    // 出し、決まっていないもの（枠の角は端末ごと、メニューの言葉は画面に従う）
+    // だけ、先頭に**その事情を言葉で**置く。
+    const rowHtml = (f) => {
+        const v = seValue(f);
+        // 何も書いていないときに選ばれているもの。
+        const shown = v !== '' ? v : (f.default_value ?? '');
+        let input;
+        const pick = (opts) => `<select data-k="${esc(f.name)}">`
+            + (f.default_value ? ''
+                : `<option value=""${shown === '' ? ' selected' : ''}>${esc(f.default[L])}</option>`)
+            + opts.map(([val, label]) =>
+                `<option value="${esc(val)}"${shown === val ? ' selected' : ''}>${esc(label)}</option>`).join('')
+            + '</select>';
+        if (f.kind === 'bool') {
+            input = pick([['true', tr('on', '入')], ['false', tr('off', '切')]]);
+        } else if (f.kind === 'choice') {
+            // `{ value, label }` ── シェルだけは二つが違う（書くのは
+            // `powershell.exe`、出すのは「Windows PowerShell」）。
+            input = pick(f.choices.map((c) => [c.value, c.label]));
+        } else {
+            input = `<input type="text" data-k="${esc(f.name)}" value="${esc(v)}" `
+                + `placeholder="${esc(f.default[L])}" autocomplete="off" spellcheck="false">`;
+        }
+        // **書いてあるものは、消せる。** 「（既定）」を落とした代わりの道 ──
+        // 依頼は「更新・登録・削除」で、削除を落としてはいけない。
+        const drop = isSet(f)
+            ? `<button class="sdrop" data-drop="${esc(f.name)}" `
+              + `title="${esc(tr('remove this line from init.lua', 'この行を init.lua から消します'))}">`
+              + esc(tr('remove', '消す')) + '</button>'
+            : '';
+        // 片方でしか効かない設定は、そう言う。**効かない設定を効くふりで
+        // 並べない** ── この家で最頻のバグは「設定を直したのに効かない」。
+        const only = f.applies === 'tui'
+            ? `<span class="sonly">${esc(tr('terminal build only', '端末版だけ'))}</span>`
+            : f.applies === 'gui'
+                ? `<span class="sonly">${esc(tr('window build only', '窓版だけ'))}</span>`
+                : '';
+        return `<div class="srow${isSet(f) ? ' set' : ''}" data-row="${esc(f.name)}">`
+            + `<div class="slabel">${esc(f.label[L])}<span class="sname">${esc(f.name)}${only}</span></div>`
+            + `<div class="sin">${input}</div>${drop}</div>`
+            + `<div class="shelp">${esc(f.help[L])}</div>`;
+    };
+
+    // AI は既定オフ。**endpoint が書いてあるかどうかが「オン」**で、
+    // 別のスイッチを足さない ── 状態を持つものが二つあると、必ず食い違う。
+    const aiRow = (key, label, help) => {
+        const v = settings.touchedAi.has(key)
+            ? (settings.touchedAi.get(key) ?? '')
+            : seShow('text', settings.ai[key]);
+        return `<div class="srow${v ? ' set' : ''}">`
+            + `<div class="slabel">${esc(label)}<span class="sname">${esc(key)}</span></div>`
+            + `<div class="sin"><input type="text" data-ai="${esc(key)}" value="${esc(v)}" `
+            + 'autocomplete="off" spellcheck="false"></div></div>'
+            + `<div class="shelp">${esc(help)}</div>`;
+    };
+    const aiOn = Object.values(settings.ai).some((v) => v) || settings.touchedAi.size > 0;
+    const ai = `<details class="sgrp"${aiOn ? ' open' : ''}><summary>${esc(tr('AI', 'AI'))}`
+        + `<span class="snum">7</span>`
+        + (aiOn ? '' : `<span class="sset">${esc(tr('off until an endpoint is set', 'エンドポイントを入れるまでオフです'))}</span>`)
+        + '</summary>'
+        + aiRow('endpoint', tr('Endpoint', 'エンドポイント'),
+                tr('the gateway cian asks. empty means the AI stays off',
+                   'cian が訊きに行く先です。空のままなら AI はオフです'))
+        + aiRow('model', tr('Model', 'モデル'),
+                tr('on Azure and broker auth this is the deployment name, and it goes in the URL',
+                   'Azure とブローカー認証では、これはデプロイ名で、URL に入ります'))
+        + aiRow('auth_mode', tr('Auth', '認証'),
+                tr('broker (Windows AAD), apikey, or mock (for development)',
+                   'broker（Windows の AAD）、apikey、mock（開発者用）'))
+        + aiRow('api_version', tr('API version', 'API バージョン'), tr('for example 2025-04-01-preview', 'たとえば 2025-04-01-preview です'))
+        + aiRow('api_key', tr('API key', 'API キー'),
+                tr('only with apikey. written into init.lua in the clear, like every other setting',
+                   'apikey のときだけです。ほかの設定と同じく init.lua に平文で書かれます'))
+        + aiRow('api_base_url', tr('OpenAI-compatible base', 'OpenAI 互換のベース'),
+                tr('for a gateway that takes the model in the body rather than the path',
+                   'モデルをパスではなく本文で受けるゲートウェイ向けです'))
+        + aiRow('python', tr('Python', 'Python'), tr('the interpreter that runs the client', 'クライアントを動かすインタプリタです'))
+        + '</details>';
+
+    const bad = settings.error
+        ? `<div class="sbad">${esc(tr('init.lua does not read as Lua. nothing is saved until it does',
+              'init.lua が Lua として読めません。直すまで保存できません'))}\n${esc(settings.error)}</div>`
+        : '';
+    el.seBody.innerHTML = bad + cats.map((g, i) => {
+        const n = g.items.filter(isSet).length;
+        return `<details class="sgrp"${i === 0 ? ' open' : ''}>`
+            + `<summary>${esc(g.name)}<span class="snum">${g.items.length}</span>`
+            // 「通知 2 1 件」と読めてしまったので、何の数か言う。
+            + (n ? `<span class="sset">${esc(tr(`${n} set`, `${n} 件設定済み`))}</span>` : '')
+            + '</summary>' + g.items.map(rowHtml).join('') + '</details>';
+    }).join('') + ai;
+
+    for (const node of el.seBody.querySelectorAll('[data-k]')) {
+        node.addEventListener('input', () => {
+            settings.touched.set(node.dataset.k, node.value === '' ? null : node.value);
+            drawSettingsFoot();
+            node.closest('.srow').classList.toggle('set', node.value !== '');
+        });
+        node.addEventListener('change', () => node.dispatchEvent(new Event('input')));
+    }
+    for (const node of el.seBody.querySelectorAll('[data-drop]')) {
+        node.addEventListener('click', () => {
+            settings.touched.set(node.dataset.drop, null);
+            drawSettings();
+        });
+    }
+    for (const node of el.seBody.querySelectorAll('[data-ai]')) {
+        node.addEventListener('input', () => {
+            settings.touchedAi.set(node.dataset.ai, node.value === '' ? null : node.value);
+            drawSettingsFoot();
+        });
+    }
+    drawSettingsFoot();
+}
+
+// 面の下のボタン。**キーでも押せるものに、押せる形を添える** ── 設定画面を
+// 必要とする人は、Esc も Ctrl+S も覚えていない。
+el.seSave.addEventListener('click', () => saveSettings());
+el.seCancel.addEventListener('click', () => closeSettings());
+
+function drawSettingsFoot() {
+    const n = settings.touched.size + settings.touchedAi.size;
+    el.seFoot.textContent = settings.error
+        ? tr('read the file first', 'まず init.lua を直してください')
+        : n
+            ? tr(`${n} change(s). saved into init.lua`, `${n} 件の変更を init.lua に書きます`)
+            : tr('nothing changed yet', 'まだ何も変えていません');
+    el.seSave.textContent = tr('Save', '保存');
+    el.seCancel.textContent = tr('Close', '閉じる');
+    el.seSave.disabled = !!settings.error || n === 0;
+}
+
+/// 保存。**触った項目だけを送る。** 元のファイルに重ねるのはエンジンの仕事で、
+/// ここが知らない行は送りようがない ── だから消えない。
+async function saveSettings() {
+    if (settings.error) { return; }
+    const set = [...settings.touched].map(([name, value]) => ({ name, value }));
+    const ai = [...settings.touchedAi].map(([key, value]) => ({ key, value }));
+    if (!set.length && !ai.length) { return; }
+    const r = await ask('settings_write', { set, ai });
+    if (!r) { return; }
+    // **設定を直したら、読み直す。** この家で最頻のバグは「設定を直したのに
+    // 効かない」で、書いたあと画面が古い値を出し続けるのはその一種。
+    await openSettings();
+    say(tr(`saved into ${r.path}. the previous file is ${r.backup}`,
+           `${r.path} に保存しました。直前の中身は ${r.backup} にあります`));
+}
+
 const chat = { on: false, log: [], pending: false, title: '',
                /// Images pasted for the *next* question, as base64 PNG. Sent
                /// with it and cleared then, as cian-tui's `chat_attachments`
@@ -6083,6 +6353,9 @@ function buildCommands() {
     { name: 'step', about: tr("files and steps (same as :count)", 'ファイル数とステップ数（:count と同じ）'), run: cmdCount },
     { name: 'files', alias: ['finder'], about: tr("fuzzy-find a file below here (also //)", 'この下のファイルをあいまい検索（// でも）'), run: openFinder },
     { name: 'where', alias: ['config'], about: tr("where cian reads and writes its config", 'cian が読み書きする設定ファイルの場所'), run: cmdWhere },
+    // 設定画面。**開き口は右クリックと Shift+Enter のメニュー**で、これは
+    // その名前を知っている人のための近道（`:` を使う人はいる）。
+    { name: 'settings', alias: ['prefs'], about: tr("the settings screen (also right-click / Shift+Enter)", '設定画面（右クリック / Shift+Enter でも）'), run: openSettings },
     { name: 'mark', about: tr("mark by wildcard (:mark *.rs)", 'ワイルドカードでマーク（:mark *.rs）'), arg: tr('pattern', 'パターン'), run: (a) => cmdMarkGlob(a, true) },
     { name: 'unmark', alias: ['deselect'], about: tr("unmark by wildcard", 'ワイルドカードでマークを外す'), arg: tr('pattern', 'パターン'), run: (a) => cmdMarkGlob(a, false) },
     { name: 'copyto', about: tr("copy to a named place", '指定した場所へコピー'), arg: tr('where to', '行き先'), run: (a) => cmdTo('copyto', a) },

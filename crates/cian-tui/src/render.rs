@@ -287,7 +287,105 @@ fn draw_zoomed(f: &mut Frame, area: Rect, app: &mut App, ov: AnimOverride) {
     app.nav_rects = nav_rects;
 }
 
+/// 一枚の画面。描いたあと、**前の画面で全角だった桁を失った行**を送り直させる。
+///
+/// **観測**（2026-09-10、本物の pty）: `?` でマニュアルを開いて Esc で閉じると、
+/// その文字が一覧の上に残った。j も k も **F5 も**動かせず、そのセルに何か
+/// 書かれるまで居座る。翌日、151 個のコマンドを一つずつ叩いたら、同じものが
+/// **ポップアップ以外でも**出た ── `:shell` でシェル枠へ移ると、後ろにあった
+/// 日本語のファイル名の片割れが 27 個残る。状態行も、文言が短くなった回に
+/// 末尾の2桁が残る。
+///
+/// 見つけ方は**セルの対**を数えること（`tui-drive.py` の⑥）。全角は
+/// 「1つ目に字、2つ目に空」で持たれるので、崩れは「相方が潰れた」か
+/// 「片割れが残った」の二通りしかない。字はぜんぶ読めるので、目でも
+/// `cargo test` でも通る。**桁のある場所でしか出ない。**
+///
+/// **なぜ差分が送らないのか。** ratatui は前の画面と比べて、変わったセルだけを
+/// 送る。全角の2桁目は `Cell::EMPTY`（記号は `" "`）で持たれていて、次の画面の
+/// そこも空白なら**等しい**ので送られない ── ところが端末のほうには、前の
+/// 全角の右半分がまだ描かれている。だから「変わっていないから送らない」が、
+/// そのまま「消えない」になる。
+///
+/// 直し方は、**前の画面で全角だった桁を覚えておく**こと。そこが今回は全角で
+/// ないなら、**その行を丸ごと** `AlwaysUpdate`（変わっていなくても送れ）に
+/// する。覚えるのは桁ごとの真偽値ひとつで、120×36 で 4320 個。毎フレーム
+/// 画面ぜんぶを送り直す手もあるが、**cian はサーバ越しに使う**ので、送る量は
+/// 要るところにだけ払う（`j` を1回押して塗り直すのは2行）。
 pub(crate) fn draw(f: &mut Frame, app: &mut App) {
+    draw_frame(f, app);
+    // ポップアップが開いた・閉じた・形が変わったフレームは**画面ぜんぶ**を
+    // 送り直す。面の下は丸ごと入れ替わるので、桁ごとに繕うより確実で、
+    // 繕いが「まだ端末に残っている全角」の右半分だけ空白にしてしまう事故も
+    // 起きない（一度そうやって、マニュアルの「キー一覧」が半分だけ残った）。
+    mend_wide_leftovers(f, app.full_repaint);
+}
+
+thread_local! {
+    /// 前の画面で全角だった桁。添字は `y * width + x`。
+    static WAS_WIDE: std::cell::RefCell<(u16, Vec<bool>)> =
+        const { std::cell::RefCell::new((0, Vec::new())) };
+}
+
+/// 前の画面で全角だった桁を失った**行**を、送り直させる。`whole` のときは
+/// 画面ぜんぶ ── ポップアップの開け閉めは面の下が丸ごと入れ替わるので、
+/// 行ごとに繕うより確実。
+fn mend_wide_leftovers(f: &mut Frame, whole: bool) {
+    let buf = f.buffer_mut();
+    let (area, w) = (buf.area, buf.area.width);
+    let mut now = vec![false; (area.width as usize) * (area.height as usize)];
+    for y in 0..area.height {
+        for x in 0..area.width {
+            let at = (area.x + x, area.y + y);
+            now[(y as usize) * (w as usize) + x as usize] =
+                crate::util::width(buf[at].symbol()) > 1;
+        }
+    }
+    WAS_WIDE.with(|c| {
+        let mut slot = c.borrow_mut();
+        let (last_w, was) = &mut *slot;
+        if whole {
+            for y in 0..area.height {
+                for x in 0..area.width {
+                    buf[(area.x + x, area.y + y)]
+                        .set_diff_option(ratatui::buffer::CellDiffOption::AlwaysUpdate);
+                }
+            }
+        } else if *last_w == w && was.len() == now.len() {
+            // 幅が変わった直後は、覚えている桁の意味が違う（上の条件）。
+            // その回は繕わず、次のフレームから。
+            //
+            // **消えた全角のある行は、行ごと送り直す。**
+            //
+            // 最初は「消えた全角の右隣だけ」を送り直させた。5 件あった崩れは
+            // 1 件に減ったが、**別の崩れを1つ作った** ── 印を付けたセルは
+            // `diff_option` ごと次のフレームの「前の画面」になるので、次に
+            // そこが全角の2桁目になった回、中身が等しくないと見なされて
+            // **空白が右半分に書かれた**（`Backspace` で親へ上がると
+            // 「長い名前のファイル」の字が割れた）。
+            //
+            // 行ごとなら、その順番が存在しない。ratatui は左から送り、全角は
+            // 1つ送ったら2桁目を飛ばすので、片割れに空白が乗る道が無い。
+            // **値段は行1本ぶん** ── `j` を1回押して塗り直すのは2行で、
+            // 細い回線の向こうでも払える。画面ぜんぶを毎回送る案は、
+            // **cian をサーバ相手に使う**以上とれない。
+            for y in 0..area.height {
+                let row = (y as usize) * (w as usize);
+                let lost = (0..area.width as usize).any(|x| was[row + x] && !now[row + x]);
+                if lost {
+                    for x in 0..area.width {
+                        buf[(area.x + x, area.y + y)]
+                            .set_diff_option(ratatui::buffer::CellDiffOption::AlwaysUpdate);
+                    }
+                }
+            }
+        }
+        *last_w = w;
+        *was = now;
+    });
+}
+
+fn draw_frame(f: &mut Frame, app: &mut App) {
     let area = f.area();
     // What the popup covers is worked out afresh every frame, by the drawing
     // itself. See [`clear_popup`].
@@ -4232,7 +4330,10 @@ for (i, (_, label, state, on)) in rows.iter().enumerate() {
     let sel = i == cursor;
     let marker = if sel { "▶ " } else { "  " };
     // Right-align the state text on the row.
-    let pad = w.saturating_sub(2 + label.chars().count() + state.chars().count()).max(1);
+    // **桁で測る。** 字数で測っていたので、日本語のラベル（1字2桁）では
+    // 右詰めした状態の文字が枠の外へ押し出され、**どのスイッチも ON / OFF が
+    // 一つも見えていなかった**。英語は字数と桁数が同じなので出ない。
+    let pad = w.saturating_sub(2 + crate::util::width(label) + crate::util::width(state)).max(1);
     let label_style = if sel {
         Style::default().fg(readable_on(theme().selected_bg)).bg(theme().selected_bg).add_modifier(Modifier::BOLD)
     } else {
@@ -8081,7 +8182,7 @@ fn draw_macros(
     lang: Lang,
 ) {
     let Popup::Macros { cursor, names } = popup else { return };
-    let widest = names.iter().map(|n| n.chars().count()).max().unwrap_or(10);
+    let widest = names.iter().map(|n| crate::util::width(n)).max().unwrap_or(10);
     let w = (widest as u16 + 8).clamp(28, area.width);
     let h = (names.len() as u16 + 3).min(area.height);
     let inner = popup_frame(f, area, w, h, tr(lang, " run a macro ", " マクロを実行 "), "");

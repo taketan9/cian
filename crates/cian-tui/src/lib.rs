@@ -4664,7 +4664,10 @@ fn prepare_app(
     let theme_errors = theme::install(
         &config.theme,
         config.options.borders.as_deref(),
-        config.options.nerd_fonts.unwrap_or(true),
+        // **既定は切**（2026-09-11、本人）。「無い人の方が多いと思うからね」──
+        // Nerd Font を持っていない端末で既定を入にすると、アイコンの桁に
+        // 豆腐が並ぶ。窓版は書体を同梱しているので、この設定を読まない。
+        config.options.nerd_fonts.unwrap_or(false),
     );
     // A theme chosen via `:theme` in a previous session overrides init.lua's, so
     // the choice survives a restart. Unknown names are ignored (init.lua wins).
@@ -5058,10 +5061,32 @@ fn run_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>
             // outside the cell buffer, so only a real clear removes them.
             // ratatui 0.30's backend error is an associated type with no
             // Send + Sync bound, so `?` into anyhow needs it flattened.
-            let repaint = std::mem::take(&mut app.full_repaint);
+            let mut repaint = std::mem::take(&mut app.full_repaint);
             if std::mem::take(&mut app.full_clear) {
-                terminal.clear().map_err(|e| anyhow::anyhow!("{e}"))?;
-            } else if repaint {
+                // **消せなかったからといって、終わらない。**
+                // `Terminal::clear` は先に `ESC[6n` でカーソル位置を訊く。
+                // 答えが 2 秒で返らないと crossterm は
+                // 「The cursor position could not be read within a normal
+                // duration」を返し、それを `?` で上げると **cian が落ちる**。
+                // 答えない端末は珍しくないし、細い回線の向こうならなお遅い ──
+                // **cian はサーバ相手に使う道具**なので、画面を消せないことが
+                // 終了の理由になってはいけない。消せなければ塗り直す。
+                //
+                // 2026-09-11、151 個の verb を一つずつ叩いていて `:redraw` で
+                // 落ちた（`:refresh!` と `:image` も同じ道を通る）。
+                if let Err(e) = terminal.clear() {
+                    app.message = Some(format!(
+                        "{} ({e})",
+                        tr(
+                            app.lang,
+                            "the terminal did not answer; painted again instead",
+                            "端末が応答しないので、消さずに塗り直しました",
+                        )
+                    ));
+                    repaint = true;
+                }
+            }
+            if repaint {
                 // Every cell painted again, with no blank moment in between:
                 // resetting the buffer the next frame is compared against makes
                 // the whole surface differ, so all of it is written. `clear`

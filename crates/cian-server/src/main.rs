@@ -3622,6 +3622,147 @@ impl Session {
                 }
                 Ok(serde_json::json!({ "rows": rows }))
             }
+            // ---- 設定画面 ----
+            //
+            // **正は `init.lua` ひとつ。** 画面はそれを読んで並べ、保存も
+            // そこへ書く（2026-09-11、本人の判断）。設定ファイルを増やせば
+            // 「どちらが勝つか」が生まれ、この家で最頻のバグ（設定を直したのに
+            // 効かない）に新しい水源を足すことになる。
+            //
+            // 項目の表は `cian_lua::settings_schema` ── `Options` と1対1で
+            // あることを検査が見ているので、設定を足した日に取り残されない。
+            "settings_read" => {
+                let (path, text, bad) = cian_lua::settings_edit::read_init();
+                let rows: Vec<serde_json::Value> = cian_lua::settings_schema::fields()
+                    .iter()
+                    .map(|f| {
+                        use cian_lua::settings_schema::Kind;
+        // 選ぶ欄は `(init.lua に書く値, 画面に出す名前)`。**二つに分けて
+        // あるのはシェルのため** ── 画面は「Windows PowerShell」、書くのは
+        // `powershell.exe`。
+                        let (kind, choices) = match f.kind {
+                            Kind::Text => ("text", vec![]),
+                            Kind::Path => ("path", vec![]),
+                            Kind::Bool => ("bool", vec![]),
+                            Kind::Int => ("int", vec![]),
+                            Kind::List => ("list", vec![]),
+                            Kind::Choice(c) => (
+                                "choice",
+                                c.iter()
+                                    .map(|(v, label)| {
+                                        serde_json::json!({ "value": v, "label": label })
+                                    })
+                                    .collect::<Vec<_>>(),
+                            ),
+                        };
+                        use cian_lua::settings_schema::Applies;
+                        serde_json::json!({
+                            "name": f.name,
+                            "kind": kind,
+                            "choices": choices,
+                            // 既定が**一つの値に決まる**なら、その値。決まる
+                            // ものに「（既定）」と書くのはやめた（本人の指示）──
+                            // 答えを持っているのに黙っているのと同じ。
+                            "default_value": f.default_value,
+                            "applies": match f.applies {
+                                Applies::Both => "both",
+                                Applies::Tui => "tui",
+                                Applies::Gui => "gui",
+                            },
+                            "default": { "en": f.default_en, "ja": f.default_ja },
+                            "category": { "en": f.category_en, "ja": f.category_ja },
+                            "label": { "en": f.label_en, "ja": f.label_ja },
+                            "help": { "en": f.help_en, "ja": f.help_ja },
+                            // **ファイルに実際に書いてある字面。** 読み込んだ
+                            // あとの値ではない ── そこには計算で埋めた既定が
+                            // 混じっていて、何も書いていないのに「設定済み」
+                            // と数えてしまう（crmaine が実機でそうなった）。
+                            "written": cian_lua::settings_edit::get_option_in(&text, f.name),
+                        })
+                    })
+                    .collect();
+                // AI はブロックなので別に読む。**既定はオフ**で、endpoint が
+                // 書かれていなければ設定されていない。
+                let ai: serde_json::Map<String, serde_json::Value> =
+                    ["endpoint", "model", "auth_mode", "api_version", "api_key", "api_base_url", "python"]
+                        .iter()
+                        .map(|k| {
+                            (
+                                (*k).to_string(),
+                                match cian_lua::settings_edit::get_field_in(&text, "ai", k) {
+                                    Some(v) => serde_json::Value::String(v),
+                                    None => serde_json::Value::Null,
+                                },
+                            )
+                        })
+                        .collect();
+                Ok(serde_json::json!({
+                    "path": path.as_ref().map(|p| p.display().to_string()),
+                    "writes": cian_lua::config_write_path("init.lua").map(|p| p.display().to_string()),
+                    "portable": cian_lua::is_portable(),
+                    "exists": path.as_ref().map(|p| p.exists()).unwrap_or(false),
+                    // Lua として読めないなら、その訳。**画面はこのとき保存
+                    // させない** ── 壊れたファイルを塗り潰すのが、設定画面の
+                    // いちばん高い事故。
+                    "error": bad,
+                    "text": text,
+                    "fields": rows,
+                    "ai": ai,
+                }))
+            }
+            // 保存。**元のファイルに重ねる。丸ごと書き直さない。**
+            //
+            // 受け取るのは変えるものだけ ── 画面が知らない行、手で足した行、
+            // 説明、`if`、並び順は、触らないので残る。
+            "settings_write" => {
+                let (path, text, bad) = cian_lua::settings_edit::read_init();
+                if let Some(why) = bad {
+                    anyhow::bail!("init.lua が Lua として読めません。直してから保存してください: {why}");
+                }
+                let Some(write_to) = cian_lua::config_write_path("init.lua") else {
+                    anyhow::bail!("init.lua の書き込み先が分かりません");
+                };
+                let mut out = text;
+                // `[{ "name": "tab_width", "value": "8" }]` ── value が null
+                // なら、その行をコメントに戻す。
+                for change in req.params["set"].as_array().cloned().unwrap_or_default() {
+                    let Some(name) = change["name"].as_str() else { continue };
+                    let Some(field) = cian_lua::settings_schema::fields()
+                        .iter()
+                        .find(|f| f.name == name)
+                    else {
+                        anyhow::bail!("知らない設定です: {name}");
+                    };
+                    let lua = change["value"]
+                        .as_str()
+                        .and_then(|v| cian_lua::settings_schema::to_lua(field.kind, v));
+                    out = cian_lua::settings_edit::set_option_in(&out, name, lua.as_deref());
+                }
+                // AI のブロック。字面は画面が渡す型ではなく、ここで文字列と
+                // して包む ── endpoint も鍵も、Lua から見れば文字列。
+                for change in req.params["ai"].as_array().cloned().unwrap_or_default() {
+                    let Some(key) = change["key"].as_str() else { continue };
+                    let lua = change["value"].as_str().and_then(|v| {
+                        cian_lua::settings_schema::to_lua(
+                            cian_lua::settings_schema::Kind::Text,
+                            v,
+                        )
+                    });
+                    out = cian_lua::settings_edit::set_field_in(&out, "ai", key, lua.as_deref());
+                }
+                // 書く前にもう一度読めるか見る。**自分が壊した init.lua を
+                // 置いていかない。**
+                if let Some(why) = cian_lua::settings_edit::syntax_error(&out) {
+                    anyhow::bail!("書こうとした中身が Lua として読めません。保存しませんでした: {why}");
+                }
+                cian_lua::settings_edit::write_init(&write_to, &out)
+                    .map_err(|e| anyhow::anyhow!("{}: {e}", write_to.display()))?;
+                Ok(serde_json::json!({
+                    "path": write_to.display().to_string(),
+                    "backup": write_to.with_extension("lua.bak").display().to_string(),
+                    "was": path.map(|p| p.display().to_string()),
+                }))
+            }
             // Where cian reads and writes its settings — the question `:where`
             // exists to answer, because a portable copy beside the executable
             // wins and that is not where anybody looks first.
