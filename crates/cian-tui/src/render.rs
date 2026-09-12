@@ -2741,7 +2741,7 @@ pub(crate) fn key_hints(app: &App) -> Vec<(&'static str, &'static str)> {
             ("Esc", d("cancel", "取消")),
         ],
         Mode::Filter => vec![
-            ("type", d("narrow", "絞込")),
+            ("type", d("narrow", "フィルタ")),
             ("Enter", d("keep", "適用")),
             ("Esc", d("clear", "解除")),
         ],
@@ -2786,9 +2786,9 @@ pub(crate) fn key_hints(app: &App) -> Vec<(&'static str, &'static str)> {
         // in the manual: the state is easy to get into and used to be hard to
         // notice you were in.
         _ if app.active_pane().map(|p| !p.filter.is_empty()).unwrap_or(false) => vec![
-            ("⇦/Esc", d("clear filter", "絞込解除")),
+            ("⇦/Esc", d("clear filter", "フィルタ解除")),
             ("Space", d("mark", "マーク")),
-            ("/", d("filter", "絞込")),
+            ("/", d("filter", "フィルタ")),
             ("Enter", d("open", "開く")),
             ("F3", d("view", "閲覧")),
             ("M", d("menu", "メニュー")),
@@ -2797,7 +2797,7 @@ pub(crate) fn key_hints(app: &App) -> Vec<(&'static str, &'static str)> {
         _ if app.active_pane().map(|p| p.is_flat()).unwrap_or(false) => vec![
             ("b/Esc", d("leave", "戻る")),
             ("Space", d("mark", "マーク")),
-            ("/", d("filter", "絞込")),
+            ("/", d("filter", "フィルタ")),
             ("Enter", d("open", "開く")),
             ("F3", d("view", "閲覧")),
             ("?", d("help", "ヘルプ")),
@@ -2812,7 +2812,7 @@ pub(crate) fn key_hints(app: &App) -> Vec<(&'static str, &'static str)> {
             ("←→", d("panes", "ペイン")),
             ("S-J", d("shell", "シェル")),
             ("Space", d("mark", "マーク")),
-            ("/", d("filter", "絞込")),
+            ("/", d("filter", "フィルタ")),
             (",", d("sort", "並替")),
             ("S-F", d("find", "検索")),
             ("C-F", d("grep", "grep")),
@@ -5959,7 +5959,7 @@ fn draw_ssh_hosts(
     let footer_area =
         footer_row(inner);
     f.render_widget(
-        Paragraph::new(tr(lang, " type to filter  ↑↓ select  Enter next  Esc cancel ", " 入力で絞込  ↑↓ 選択  Enter 次へ  Esc 取消 ")).style(
+        Paragraph::new(tr(lang, " type to filter  ↑↓ select  Enter next  Esc cancel ", " フィルタ  ↑↓ 選択  Enter 次へ  Esc 取消 ")).style(
             accent_bar(),
         ),
         footer_area,
@@ -6009,7 +6009,7 @@ fn draw_snippets(
     let footer_area =
         footer_row(inner);
     f.render_widget(
-        Paragraph::new(tr(lang, " type to filter  ↑↓ select  Enter send  Esc cancel ", " 入力で絞込  ↑↓ 選択  Enter 送信  Esc 取消 ")).style(
+        Paragraph::new(tr(lang, " type to filter  ↑↓ select  Enter send  Esc cancel ", " フィルタ  ↑↓ 選択  Enter 送信  Esc 取消 ")).style(
             accent_bar(),
         ),
         footer_area,
@@ -8068,7 +8068,7 @@ fn draw_palette(
         );
     }
     f.render_widget(
-        Paragraph::new(tr(lang, " type to filter   ↑/↓ move   Enter run   Esc close ", " 入力で絞込   ↑/↓ 移動   Enter 実行   Esc 閉じる "))
+        Paragraph::new(tr(lang, " type to filter   ↑/↓ move   Enter run   Esc close ", " フィルタ   ↑/↓ 移動   Enter 実行   Esc 閉じる "))
             .style(accent_bar()),
         footer_row(inner),
     );

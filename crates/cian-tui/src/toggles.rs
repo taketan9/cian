@@ -53,7 +53,7 @@ impl App {
         let verify = self.verify_runtime.or(self.config.options.verify_transfers).unwrap_or(false);
         vec![
             (ToggleId::Dotfiles, tr(self.lang, "Dotfiles", "隠しファイル").into(), onoff(dotfiles), dotfiles),
-            (ToggleId::Sync, tr(self.lang, "Input sync (all shells)", "入力同期（全シェル）").into(), onoff(sync), sync),
+            (ToggleId::Sync, tr(self.lang, "Input sync (all shells)", "シンクロ入力（全シェル）").into(), onoff(sync), sync),
             (ToggleId::Notify, tr(self.lang, "Task-done notification", "完了通知").into(), onoff(notify), notify),
             (ToggleId::Verify, tr(self.lang, "Verify transfers", "転送後ベリファイ").into(), onoff(verify), verify),
             (
@@ -119,7 +119,7 @@ impl App {
                 let was = self.shell.is_broadcasting();
                 let on = self.shell.toggle_broadcast();
                 self.message = Some(if on {
-                    tr(self.lang, "⇄ input synchronize ON", "⇄ 入力同期 ON").into()
+                    tr(self.lang, "⇄ input synchronize ON", "⇄ シンクロ入力 ON").into()
                 } else if !was {
                     // It refused rather than turned off. `set_broadcast` will
                     // not switch on with nothing to synchronise *to*, and said
@@ -128,11 +128,11 @@ impl App {
                     tr(
                         self.lang,
                         "input sync needs two or more shell panes — Shift+F8 / Shift+F9 to split one",
-                        "入力同期にはシェルペインが2つ以上必要です — Shift+F8 / Shift+F9 で分割",
+                        "シンクロ入力にはシェルペインが2つ以上必要です — Shift+F8 / Shift+F9 で分割",
                     )
                     .into()
                 } else {
-                    tr(self.lang, "input synchronize off", "入力同期 OFF").into()
+                    tr(self.lang, "input synchronize off", "シンクロ入力 OFF").into()
                 });
             }
             // These two changed a value and said nothing, so the only sign

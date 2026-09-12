@@ -2137,9 +2137,9 @@ function hintsNow() {
             ['Enter', tr('confirm', '確定')], ['Esc', tr('cancel', '取消')]];
     }
     if (filter.on) {
-        if (filter.mode === 'cmd') return [[tr('type', '打つ'), tr('command', 'コマンド')], ['Enter', tr('run', '実行')], ['Esc', tr('cancel', '取消')], ['C', tr('from a list', '一覧から選ぶ')]];
-        if (filter.mode === 'find') return [[tr('type', '打つ'), tr('narrow', '絞込')], ['↑↓', tr('choose', '選ぶ')], ['Enter', tr('go there', 'そこへ')], ['Esc', tr('cancel', '取消')]];
-        return [[tr('type', '打つ'), tr('narrow', '絞込')], ['↑↓', tr('cursor', 'カーソル')], ['Enter', tr('keep', '適用')], ['Esc', tr('clear', '解除')], ['/', tr('search below', 'この下を探す')]];
+        if (filter.mode === 'cmd') return [[tr('type', '入力'), tr('command', 'コマンド')], ['Enter', tr('run', '実行')], ['Esc', tr('cancel', '取消')], ['C', tr('from a list', '一覧から選ぶ')]];
+        if (filter.mode === 'find') return [[tr('type', '入力'), tr('narrow', 'フィルタ')], ['↑↓', tr('choose', '選ぶ')], ['Enter', tr('go there', 'そこへ')], ['Esc', tr('cancel', '取消')]];
+        return [[tr('type', '入力'), tr('narrow', 'フィルタ')], ['↑↓', tr('cursor', 'カーソル')], ['Enter', tr('keep', '適用')], ['Esc', tr('clear', '解除')], ['/', tr('search below', 'この下を探す')]];
     }
     const pane = state[state.focus];
     if (pane && pane.archive) {
@@ -2151,10 +2151,10 @@ function hintsNow() {
             ['d', tr('delete', '削除')], ['Enter', tr('open', '開く')], ['?', tr('help', 'ヘルプ')]];
     }
     if (pane && pane.flat) {
-        return [['b/Esc', tr('out', '戻る')], ['Space', tr('mark', 'マーク')], ['/', tr('narrow', '絞込')],
+        return [['b/Esc', tr('out', '戻る')], ['Space', tr('mark', 'マーク')], ['/', tr('narrow', 'フィルタ')],
             ['Enter', tr('open', '開く')], ['F3', tr('view', '閲覧')], ['?', tr('help', 'ヘルプ')]];
     }
-    return [['←→', tr('panes', 'ペイン')], ['Shift+J', tr('shell', 'シェル')], ['Space', tr('mark', 'マーク')], ['/', tr('narrow', '絞込')],
+    return [['←→', tr('panes', 'ペイン')], ['Shift+J', tr('shell', 'シェル')], ['Space', tr('mark', 'マーク')], ['/', tr('narrow', 'フィルタ')],
         [',', tr('sort', '並替')], ['Shift+F', tr('search', '検索')], ['Ctrl+F', 'grep'], ['b', tr('branch', 'ブランチ')],
         ['F3', tr('view', '閲覧')], ['M', tr('menu', 'メニュー')], ['F1/F2', tr('prev/next tab', '前/次タブ')],
         ['F9', tr('new tab', '新規タブ')], ['F10', tr('close tab', 'タブを閉じる')], ['=', tr('diff', '差分')], ['?', tr('help', 'ヘルプ')]];
@@ -2233,7 +2233,7 @@ const TOGGLES = {
                 run: () => toggleHidden(),
             },
             {
-                label: tr("Input sync (all shells)", '入力同期（全シェル）'),
+                label: tr("Input sync (all shells)", 'シンクロ入力（全シェル）'),
                 value: onoff(term.sync),
                 run: async () => { await cmdSync(); drawMenu(); },
             },
@@ -2575,10 +2575,10 @@ function contextRows() {
             // off the group is a thing that does not exist yet, and narrowing
             // nothing is not an action.
             if (term.sync) {
-                v.push({ label: tr("Stop synchronize  \u21c4", '同時入力を停止  ⇄'), value: 'Ctrl+S', run: cmdSync });
-                v.push({ label: tr("Toggle this pane in sync group  \u21c4", 'このペインを同時入力に含める/外す  ⇄'), value: '', run: cmdSyncMember });
+                v.push({ label: tr("Stop synchronize  \u21c4", 'シンクロ入力を停止  ⇄'), value: 'Ctrl+S', run: cmdSync });
+                v.push({ label: tr("Toggle this pane in sync group  \u21c4", 'このペインをシンクロ入力に含める/外す  ⇄'), value: '', run: cmdSyncMember });
             } else {
-                v.push({ label: tr("Synchronize input  \u21c4", '同時入力を開始  ⇄'), value: 'Ctrl+S', run: cmdSync });
+                v.push({ label: tr("Synchronize input  \u21c4", 'シンクロ入力を開始  ⇄'), value: 'Ctrl+S', run: cmdSync });
             }
         }
         v.push({ label: tr("Back to the files", 'ファイルへ戻る'), value: 'Esc', run: () => { setShellFocus(false); say(tr('files', 'ファイル')); } });
@@ -2721,7 +2721,7 @@ function contextRows() {
             { label: tr("\u25a4 Details", '▤ 詳細一覧'), value: ':view details', run: () => { setView('details'); say(tr('listing: details', '一覧: 詳細一覧')); } },
             { label: tr("Show / hide dotfiles", 'ドットファイルの表示切替'), value: ':hidden', run: toggleHidden },
             { label: tr("Theme (this pane)", 'テーマ（このペイン）'), value: '', run: cmdPaneTheme },
-            { label: tr("Switches\u2026", '各種スイッチ…'), value: 'T', run: () => openMenu(TOGGLES) },
+            { label: tr("Switches\u2026", 'トグル…'), value: 'T', run: () => openMenu(TOGGLES) },
         ]));
         v.push(group(tr("Open / reveal  \u25b8", '開く / 場所 ▸'), () => {
             // cian-tui's OsMenu, row for row and gated the same way: a row that
@@ -2863,7 +2863,7 @@ function runMenuRow(row, spec) {
         });
         return;
     }
-    // What the row opened, if it opened anything. `各種スイッチ…` and the two
+    // What the row opened, if it opened anything. `トグル…` and the two
     // colour pickers all answer by raising another menu — and this line then
     // closed it again, one statement after it appeared. The switches menu was
     // therefore reachable by `T` and not by the menu row that names it.
@@ -3132,7 +3132,7 @@ function helpRows() {
         [tr("drop", 'ドラッグして落とす'), tr("from the desktop into a pane \u2014 it MOVES (it asks first)", 'デスクトップからペインへ ── 移動します（先に確認）')],
         ['Alt+← / Alt+→', tr("back / forward through this pane\u2019s history", '前 / 先のディレクトリへ')],
         [',', tr("sort by name / size / date / extension (n s d e go straight there; the same key reverses)", 'ソート：名前／サイズ／日時／拡張子（n s d e で直接、同じキーで昇降反転）')],
-        ['T', tr("the switches: dotfiles, input sync, notifications\u2026 (also :toggle)", 'UIトグルメニュー：隠しファイル/入力同期/通知…（:toggle でも）')],
+        ['T', tr("the switches: dotfiles, input sync, notifications\u2026 (also :toggle)", 'トグル：隠しファイル/シンクロ入力/通知…（:toggle でも）')],
     ]],
     [tr("Commands", 'コマンド'), [
         [':', tr("type a command (:count :du :grep \u2026)", 'コマンドを打つ（:count :du :grep …）')],
@@ -3201,7 +3201,7 @@ function helpRows() {
         ['Shift+F1 / Shift+F2', tr("previous / next pane", '前 / 次のペインへ')],
         ['F1-F8', tr("go straight to shell tab 1-8", 'シェルタブ 1-8 に切替')],
         [tr("Ctrl+Shift+arrows", 'Ctrl+Shift+矢印'), tr("move the dividers", '分割の境界を動かす')],
-        ['Ctrl+S  /  :sync', tr("type into every pane at once (one command, four machines)", '全ペインに同時入力（1回打てば全部のシェルへ）')],
+        ['Ctrl+S  /  :sync', tr("type into every pane at once (one command, four machines)", '全ペインにシンクロ入力（1回打てば全部のシェルへ）')],
         ['F12  /  :zoom', tr("zoom whichever surface has the keys", 'いま選んでいる枠を広げる（もう一度で戻る）')],
         ['Shift+F12', tr("show only this pane / back to the split", 'いまのペインだけを表示／分割に戻す')],
         [':sessionlog', tr("record the shell to a file (again stops it)", 'シェルの写しをファイルに取る（もう一度で止める）')],
@@ -6723,7 +6723,7 @@ function buildCommands() {
     { name: 'key', about: tr("report each key as received (again stops)", '受け取ったキーをそのまま表示（もう一度で止める）'), run: toggleKeyEcho },
     { name: 'bookmark', about: tr("bookmark where you are", 'いまの場所を登録する'), arg: tr('name', '名前'), optional: true, run: cmdBookmark },
     { name: 'macro', about: tr("run a macro (also @)", 'マクロを実行（@ でも）'), run: cmdMacros },
-    { name: 'sync', alias: ['broadcast'], about: tr("shell: type into every pane at once (also Ctrl+S)", 'シェル: 全ペインに同時入力（Ctrl+S でも）'), run: cmdSync },
+    { name: 'sync', alias: ['broadcast'], about: tr("shell: type into every pane at once (also Ctrl+S)", 'シェル: 全ペインにシンクロ入力（Ctrl+S でも）'), run: cmdSync },
     { name: 'snip', alias: ['snippet'], about: tr("a saved command, to the shell (also Ctrl+Shift+Enter)", '保存したコマンドをシェルへ（Ctrl+Shift+Enter でも）'), run: cmdSnippets },
     { name: 'sessionlog', alias: ['log2'], about: tr("record the shell to a file, or stop", 'シェルの写しをファイルに取る／止める'), run: cmdShellLog },
     { name: 'shellname', alias: ['tabname'], about: tr("name this shell tab (double-clicking the tab does it too)", 'このシェルタブに名前を付ける（タブを二度押しでも）'), arg: tr('name', '名前'), optional: true, run: cmdShellName },
@@ -6825,7 +6825,7 @@ function buildCommands() {
     // Here they were aliases of each other, both landing on the switches — so
     // `:menu` opened something else entirely.
     { name: 'menu', about: tr("the right-click menu", '右クリックメニュー'), run: () => openMenu(CONTEXT) },
-    { name: 'toggle', about: tr("the switches menu (T)", 'UIトグルメニュー（T）'), run: () => openMenu(TOGGLES) },
+    { name: 'toggle', about: tr("the switches menu (T)", 'トグル（T）'), run: () => openMenu(TOGGLES) },
     { name: 'help', alias: ['h'], about: tr("the key manual", 'キー一覧'), run: openHelp },
   ];
 }
@@ -10725,8 +10725,8 @@ async function cmdSyncMember() {
     if (!r) return;
     takeShell(r);
     say(r.members
-        ? tr(`sync: only the ${r.members} chosen panes`, `同時入力: 選んだ ${r.members} ペインだけに送ります`)
-        : tr('sync: every pane', '同時入力: 全ペインに送ります'));
+        ? tr(`sync: only the ${r.members} chosen panes`, `シンクロ入力: 選んだ ${r.members} ペインだけに送ります`)
+        : tr('sync: every pane', 'シンクロ入力: 全ペインに送ります'));
 }
 
 async function cmdShellLog() {
@@ -10778,7 +10778,7 @@ async function cmdSync() {
     const r = await ask('shellsync', {});
     if (!r) return;
     takeShell(r);
-    say(r.sync ? tr('sync: every pane', '同期入力: 全ペインに送ります') : tr('sync stopped', '同期入力を止めました'));
+    say(r.sync ? tr('sync: every pane', 'シンクロ入力: 全ペインに送ります') : tr('sync stopped', 'シンクロ入力を止めました'));
 }
 
 async function splitShell(down) {
@@ -11146,7 +11146,7 @@ document.addEventListener('keydown', (e) => {
         ask('shellsync', {}).then((r) => {
             if (!r) return;
             takeShell(r);
-            say(r.sync ? tr('sync: every pane', '同期入力: 全ペインに送ります') : tr('sync stopped', '同期入力を止めました'));
+            say(r.sync ? tr('sync: every pane', 'シンクロ入力: 全ペインに送ります') : tr('sync stopped', 'シンクロ入力を止めました'));
         });
         return;
     }
