@@ -207,6 +207,43 @@ function installMenu() {
 /// `main.js` creates exactly one `BrowserWindow` (the `activate` handler only
 /// fires when there are none), so a second Electron *window* was never
 /// possible — whatever the taskbar was showing, it was showing it twice.
+/// 共有マシンの初回だけ、みんなの設定を配る。
+///
+/// **これは `run.bat` が持っていた仕事**だった ── Program Files に置いた
+/// `default-config\*.lua` を、その人がまだ設定を持っていないときだけ
+/// `~/.config/cian` に写す。同梱版は `cian.exe` を直に叩くので run.bat を
+/// 通らず、この仕事だけが落ちる。**入口が増えたら、入口ごとに書かない。**
+/// ここに1つ置いて、run.bat の側は何もしなくても同じことが起きる。
+///
+/// 規則は一つ: **初回だけ**。あとは全部その人のもので、`ssh.lua` も含めて
+/// 二度と触らない。使っている最中に書き換わる設定は、信用できない設定になる。
+///
+/// **写す先は `~/.config/cian`。** exe の隣には置かない ── cian は隣の設定を
+/// 読み書き両方で優先するので、Program Files に置いた瞬間、全員のしおりが
+/// 書けない場所へ保存されに行く（`packaging/windows/DEPLOY.ja.txt`）。
+function seedConfig() {
+    const home = app.getPath('home');
+    const mine = process.env.CIAN_CONFIG_DIR || path.join(home, '.config', 'cian');
+    const seeds = [
+        path.join(__dirname, 'default-config'),
+        path.join(__dirname, '..', 'default-config'),
+        path.join(__dirname, '..', '..', 'default-config'),
+    ].filter((d) => fs.existsSync(d));
+    if (!seeds.length) return;
+    try {
+        fs.mkdirSync(mine, { recursive: true });
+        for (const name of fs.readdirSync(seeds[0])) {
+            if (!name.endsWith('.lua')) continue;
+            const to = path.join(mine, name);
+            if (fs.existsSync(to)) continue;
+            fs.copyFileSync(path.join(seeds[0], name), to);
+        }
+    } catch (e) {
+        // 設定が配れなかっただけで、cian は開ける。黙らせはしない。
+        console.error(`default-config を配れませんでした: ${e.message}`);
+    }
+}
+
 function nameSelf() {
     app.setName('cian');
     if (process.platform === 'win32') app.setAppUserModelId('jp.cian.cian');
@@ -214,6 +251,7 @@ function nameSelf() {
 
 app.whenReady().then(async () => {
     nameSelf();
+    seedConfig();
     nameTheDock();
     installMenu();
     // The first plain argument is where to start; anything beginning with a

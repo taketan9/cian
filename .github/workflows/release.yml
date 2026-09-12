@@ -318,6 +318,48 @@ jobs:
           name: cian-gui-win-x64
           path: cian-gui-win-x64.zip
 
+      # **Electron ごと同梱した版** (2026-09-12, his call: "やっぱり exe を
+      # 叩かせるのがいちばんやりやすい"). The zip above is the front end only
+      # and needs an Electron already on the machine, found by `run.bat`; this
+      # one carries Electron, is launched by double-clicking `cian.exe`, and
+      # so never asks where Electron is. Both ship: the big one is the first
+      # install, the small one is every update after it.
+      #
+      # **No electron-builder.** crmaine reached the same conclusion and wrote
+      # down why: a tool that fetches while it builds leaves half-made output
+      # when the network drops, and that output looks finished. `gui/pack.js`
+      # copies and renames, then checks what it made.
+      - name: Fetch Electron and rcedit
+        shell: pwsh
+        run: |
+          # The earlier install was --omit=dev, which skips Electron — it is a
+          # devDependency because from a checkout it is the thing you run, not
+          # a thing you ship. Here it *is* the thing we ship.
+          cd gui
+          npm install --no-audit --no-fund
+          cd ..
+          # The icon has to be burned into the exe: it is a PE resource, and
+          # nothing in Node can write one. rcedit is a 1MB single exe from
+          # electron/rcedit — the same tool crmaine uses for crmaine.exe.
+          Invoke-WebRequest -Uri "$env:RCEDIT_URL" -OutFile rcedit.exe
+        env:
+          RCEDIT_URL: https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
+
+      - name: Pack the bundled build
+        shell: pwsh
+        run: |
+          node gui/pack.js --out dist --platform win32 `
+            --electron gui/node_modules/electron/dist `
+            --engine target/release/cian-server.exe `
+            --rcedit (Resolve-Path rcedit.exe).Path --zip
+          "{0:N0} MB" -f ((Get-Item dist/cian-win-x64.zip).Length / 1MB)
+
+      - name: Upload the bundled build
+        uses: actions/upload-artifact@v6
+        with:
+          name: cian-win-x64
+          path: dist/cian-win-x64.zip
+
   # The whole of cian as one file that builds with no network at all: the
   # source, and every crate it depends on already downloaded. This is what
   # goes in-house, where the point is to change cian rather than to run it.

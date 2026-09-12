@@ -47,6 +47,19 @@ cian の設定は「持ち歩ける」ことを優先していて、**exe の隣
 
   C:\Users\Public\Desktop\cian.lnk   ← gui\run.bat へのショートカット
 
+**Electron 同梱版（cian-win-x64.zip）を配るときは、もっと短くなります。**
+
+  C:\Program Files\cian\
+      cian.exe                       ← 共通デスクトップのショートカットはこれ
+      resources\app\                cian 本体
+      default-config\                ← 同じ。初回だけ配られる
+          init.lua  keymap.lua  ssh.lua
+
+Electron を置く場所も `electron.txt` も要りません。**初回に配る仕事は
+`run.bat` ではなく cian 自身（`gui/main.js` の `seedConfig`）がやります** ──
+`cian.exe` を直に叩くと run.bat を通らないので、入口ごとに書くのをやめて
+中に1つ置きました。どちらの配り方でも、配られるものと規則は同じです。
+
 規則は**1つだけ**です:
 
   **その人がまだ持っていないファイルだけを配る。**
