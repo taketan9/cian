@@ -39,18 +39,39 @@ is who supplies Chromium.** cian-win-x64.zip carries it: one folder, one
 machines are getting cian and they already share an Electron, the small
 one is 14 MB each; if they are not, the big one asks nobody anything.
 
-**To build the Rust side**, one thing or four, depending on which
-programs you want:
+**To build the Rust side**, three things or four, depending on which
+programs you want — and possibly none, if you only need the engine:
 
-  cian-server.exe alone — the engine, and all the Electron front end
-  needs — compiles no C at all. Its ninety crates are pure Rust. So the
-  GNU toolchain, which brings its own linker, is enough on its own:
+  **First: you may not have to build the engine at all.** Every release
+  carries it prebuilt — `cian-server-win-x64.exe`, 10 MB, one file — and
+  `gui\pack.js --engine <that file>` takes it as it is, giving it the name
+  the front end looks for. Downloading one file is cheaper than three
+  gigabytes of compiler, and it is the same binary the release was cut
+  from. Build it yourself when you are changing it.
 
-     rust-<version>-x86_64-pc-windows-gnu.msi   (about 350 MB)
+  cian-server.exe — the engine, and all the Electron front end needs —
+  **does compile C**, because `cian-lua` brings mlua and mlua builds Lua
+  from source. This paragraph used to say the opposite, and it was true
+  when the engine held no config of its own; the settings screen ended
+  that (see the comment in crates/cian-server/Cargo.toml). So a C
+  compiler has to be on the machine, and which one follows the Rust
+  flavour:
+
+     rust-<version>-x86_64-pc-windows-msvc.msi  (about 290 MB)
+       + Visual Studio Build Tools (several GB — the layout command is
+         under cian-tui.exe below, and one install serves both)
 
      From https://forge.rust-lang.org/infra/other-installation-methods.html
      — the standalone .msi, not rustup-init.exe, which wants the network.
      BUILT-WITH.txt records the version this package was verified with.
+
+  Then, from the root of this package:
+
+     cargo build --release --offline -p cian-server
+
+  and the file lands at target\release\cian-server.exe. `--offline` is
+  not politeness: it tells cargo to use vendor\ and to fail loudly rather
+  than quietly reaching for crates.io.
 
   cian-tui.exe needs three more, because it carries SFTP and Lua, and
   those build C:
@@ -80,7 +101,8 @@ programs you want:
 Building
 --------
 
-For the engine alone, on the GNU toolchain, any command prompt will do:
+For the engine alone, open the same MSVC prompt — mlua compiles Lua from
+source, so the engine needs a C compiler like everything else here:
 
     cargo build --release --offline -p cian-server
 

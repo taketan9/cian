@@ -160,10 +160,18 @@ function layApp(appDir, platform) {
     copyDir(__dirname, appDir, SKIP_IN_GUI);
     const engine = engineFile(platform);
     if (engine) {
-        const to = path.join(appDir, path.basename(engine));
+        // **名前は中で決める。** `engine.js` が探すのは `cian-server[.exe]` の
+        // 一つだけなので、リリースの資材をそのまま渡せるようにする ──
+        // 落としたものは `cian-server-win-x64.exe` という名前で、素直に写すと
+        // 「エンジンが無い」で組み立てが止まる。ビルドしないで済ませたい人
+        // （エンジンは焼くのに Rust が要る）がいちばん通る道がこれ。
+        const want = platform === 'win32' ? 'cian-server.exe' : 'cian-server';
+        const to = path.join(appDir, want);
         fs.copyFileSync(engine, to);
         if (platform !== 'win32') fs.chmodSync(to, 0o755);
-        console.log(`  + ${path.basename(engine)}（${mb(fs.statSync(engine).size)}）`);
+        const from = path.basename(engine);
+        const renamed = from === want ? '' : `  ← ${from}`;
+        console.log(`  + ${want}（${mb(fs.statSync(engine).size)}）${renamed}`);
     }
     // 窓の絵。`main.js` は**自分の隣**を先に見るので、同梱版ではここに要る。
     for (const n of ['cian.ico', 'cian.png']) {
