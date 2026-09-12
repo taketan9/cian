@@ -5,8 +5,8 @@ This package is the whole of cian: the source, and every crate it depends
 on, already downloaded. Nothing in a build of it reaches the network.
 
 It is the package to bring in-house when the point is to change cian, not
-just to run it. To only run it, take cian-windows-x64.zip instead — that
-one is already built.
+just to run it. To only run it, take cian-win-x64.zip instead — that one is
+already built, and starts by double-clicking cian.exe.
 
 
 What has to be on the machine first
@@ -21,20 +21,23 @@ a pipe. Take that one file (9 MB, `cian-server-win-x64.exe` on the
 releases page) and a standalone Electron, and you can edit and restart
 all day. See "The Electron front end" below.
 
-Measured, v1.1.0, so that what to carry in can be decided before
+Measured, v3.2.0, so that what to carry in can be decided before
 carrying it:
 
-    cian-tui.exe              13 MB   the terminal build, one file
-    cian-server.exe            9 MB   the engine, one file
-    cian-windows-x64.zip      25 MB   both, compressed, plus docs
+    cian-server.exe           10 MB   the engine, one file
+    cian-gui-win-x64.zip      14 MB   the front end, needs an Electron here
+    cian-win-x64.zip         124 MB   Electron included; double-click cian.exe
+                                      (307 MB once unzipped)
 
-    gui\ + gui\vendor\        29 MB   the Electron front end's own files
+    gui\ + gui\vendor\        29 MB   the front end's own files
     Electron itself          247 MB   unzipped; ~100 MB as its own zip
 
-**So the Electron front end is not "an exe".** It is about 285 MB of
-files, or roughly 110 MB zipped, because Chromium comes with it. If the
-constraint is what fits on the way in, cian-tui.exe is one file and
-cian-server.exe is one file; the Electron build is a folder.
+**The Electron front end is either an exe or a folder, and the difference
+is who supplies Chromium.** cian-win-x64.zip carries it: one folder, one
+`cian.exe`, nothing to find. cian-gui-win-x64.zip does not: 14 MB, and
+`run.bat` looks for an Electron already on the machine. If several
+machines are getting cian and they already share an Electron, the small
+one is 14 MB each; if they are not, the big one asks nobody anything.
 
 **To build the Rust side**, one thing or four, depending on which
 programs you want:
@@ -146,6 +149,55 @@ release wins** — a morning's release build sitting beside an afternoon of
 
 Editing gui\*.js or index.html and restarting Electron is the whole
 development loop. Nothing is compiled.
+
+
+Building the bundled cian.exe, by hand, on this machine
+-------------------------------------------------------
+
+The releases page carries this already built (`cian-win-x64.zip`, 124 MB):
+Electron, the front end and the engine in one folder, started by
+double-clicking `cian.exe`. This is how to make that folder yourself —
+the same script the release workflow runs, with nothing else involved.
+
+    node gui\pack.js --out dist --platform win32 ^
+        --electron C:\electron-v33.4.11-win32-x64 ^
+        --engine target\release\cian-server.exe ^
+        --rcedit C:\tools\rcedit-x64.exe --zip
+
+What each part is for, and what happens without it:
+
+  --electron   The unzipped Electron distribution (the folder holding
+               electron.exe). Omit it and the script looks where run.bat
+               looks, and stops if it finds none.
+  --engine     Defaults to target\release\ then target\debug\. The
+               engine goes *inside* the package: a bundled build cannot
+               reach back into target\.
+  --rcedit     Burns cian.ico and the version strings into cian.exe. A PE
+               resource cannot be written from Node, so without this the
+               exe keeps Electron's icon in Explorer — everything else
+               still works, and the window and taskbar are cian's own.
+               One file, about 1 MB:
+               https://github.com/electron/rcedit/releases
+  --zip        Wraps the folder as cian-win-x64.zip. Leave it off to look
+               at dist\cian\ first.
+
+**It checks what it made and stops if anything is missing** — Monaco, the
+bundled font, the engine, Electron's own default app still in the way, and
+**any .lua that has crept into resources\app**. That last one is not
+tidiness: a config file beside the executable wins over the user's own, for
+*writing* as well as reading, so one stray init.lua sends everybody's
+bookmarks to a folder they cannot write. `:where` inside cian says where it
+is reading from and where it would write.
+
+`--app-only` rebuilds just resources\app in a folder that is already
+packed (about 38 MB, no Electron touched) — which is what a second version
+on the same machine costs.
+
+There is no electron-builder here and there is not meant to be. A tool that
+downloads while it builds leaves half-made output when the network drops,
+and half-made output looks finished. This copies files and then checks
+them, which is the same reason `cargo vendor` put every crate in this
+package instead of leaving them to be fetched.
 
 
 What is in gui\vendor\, and when you have to rebuild it
