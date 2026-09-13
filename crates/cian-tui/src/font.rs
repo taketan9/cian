@@ -64,7 +64,7 @@ impl App {
             return;
         }
         self.font_level = want;
-        crate::state_set("font_level", &want.to_string());
+        let _ = crate::state_set("font_level", &want.to_string());
         self.run_font_command(&cfg, want, step);
     }
 

@@ -1327,16 +1327,27 @@ pub fn state_get_in(text: &str, key: &str) -> Option<String> {
     None
 }
 
-/// Set one value, keeping the others. Best-effort: a read-only config dir
-/// just means the choice does not stick, which is not worth interrupting
-/// anyone over.
-pub fn state_set(key: &str, value: &str) {
-    let Some(path) = config_write_path(STATE_FILE) else { return };
+/// Set one value, keeping the others. Returns where it was written.
+///
+/// **黙って捨てない。** ここは長いあいだ「best-effort、書けなければ選択が
+/// 残らないだけ」だった ── そして実機で「`:theme` が次の起動で戻る」が出た
+/// とき、**書けなかったのか、読めていないのか、誰にも分からなかった**
+/// （2026-09-14）。書けなかったことは、書けなかったと言えるようにする。
+/// 呼ぶ側が黙るのは自由だが、黙ると決められるのは呼ぶ側だけだ。
+pub fn state_set(key: &str, value: &str) -> Result<PathBuf, String> {
+    let Some(path) = config_write_path(STATE_FILE) else {
+        return Err("設定の保存場所が分かりません（HOME も USERPROFILE も無い）".into());
+    };
     if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
+        if let Err(e) = std::fs::create_dir_all(dir) {
+            return Err(format!("{} を作れません: {e}", dir.display()));
+        }
     }
     let old = std::fs::read_to_string(&path).unwrap_or_default();
-    let _ = std::fs::write(path, state_with(&old, key, value));
+    match std::fs::write(&path, state_with(&old, key, value)) {
+        Ok(()) => Ok(path),
+        Err(e) => Err(format!("{} に書けません: {e}", path.display())),
+    }
 }
 
 /// The state file's text with `key` set to `value` — replacing the line it

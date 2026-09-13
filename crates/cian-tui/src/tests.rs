@@ -4463,7 +4463,7 @@ use crate::ai::StoredChatExt;
             // protocol here, every step falls back to half-blocks.
             assert!(painted(&mut app) > 20, "still a picture: {:?}", app.message);
         }
-        crate::state_set("images", before.as_deref().unwrap_or("auto"));
+        let _ = crate::state_set("images", before.as_deref().unwrap_or("auto"));
         assert_eq!(seen.len(), 5);
         assert!(
             seen.iter().any(|m| m.contains("half-block") || m.contains("半角")),

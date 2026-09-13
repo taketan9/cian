@@ -6,6 +6,21 @@
 //! lib.rs as an `impl App` block.
 use super::*;
 
+/// 配色を覚えた／覚えられなかった、の一行。**扉は1つにする** ── `:theme` と
+/// ギャラリーの2か所で同じことを言うので、片方だけ直すと食い違う。
+///
+/// **「保存しました」と言い切れるのは、書けたときだけ。** 書けなかったのに
+/// 書けたと言うのがいちばん高くつく（2026-09-14、実機で「選んでも次の起動で
+/// 戻る」が出て、書けていないのか読めていないのかが分からなかった）。
+fn theme_said(lang: Lang, name: &str, why: Option<String>) -> String {
+    match why {
+        None if lang == Lang::Ja => format!("配色: {name}（覚えました）"),
+        None => format!("theme: {name} (saved)"),
+        Some(e) if lang == Lang::Ja => format!("⚠ 配色 {name} を覚えられません: {e}"),
+        Some(e) => format!("⚠ cannot remember theme {name}: {e}"),
+    }
+}
+
 impl App {
     /// Send the clipboard's text to the shell, as typing it would. Raw, with
     /// newlines: pasting a command line into a shell is meant to run it, and
@@ -385,7 +400,7 @@ impl App {
             Some("sixel") => "blocks",
             _ => "auto",
         };
-        state_set("images", next);
+        let _ = state_set("images", next); // 画面の形は次の行で言う
         self.gfx_picker = image_picker(next);
         self.gfx_failed = false;
         self.preview_gfx = None;
@@ -2697,8 +2712,10 @@ impl App {
                         set_theme(t);
                     }
                     self.theme_name = name.to_string();
-                    save_theme_pref(name); // persist so the next launch keeps it
-                    self.message = Some(format!("theme: {name} (saved)"));
+                    // 「(saved)」と言い切らない ── 書けていないのに書けたと
+                    // 言うのがいちばん高くつく（2026-09-14、実機）。
+                    let why = save_theme_pref(name);
+                    self.message = Some(theme_said(self.lang, name, why));
                 }
                 ThemeScope::Pane { side, .. } => {
                     let s = *side;
@@ -2768,8 +2785,8 @@ impl App {
             Some(t) => {
                 set_theme(t);
                 self.theme_name = theme_name_of(&t).unwrap_or("custom").to_string();
-                save_theme_pref(&self.theme_name); // persist across restarts
-                self.message = Some(format!("theme: {} (saved)", self.theme_name));
+                let why = save_theme_pref(&self.theme_name);
+                self.message = Some(theme_said(self.lang, &self.theme_name, why));
                 self.drop_highlight_cache();
             }
             None => {

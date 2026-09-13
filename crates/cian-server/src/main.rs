@@ -2974,8 +2974,14 @@ impl Session {
                 {
                     anyhow::bail!("覚えられない項目です: {key}");
                 }
-                cian_lua::state_set(key, value);
-                Ok(serde_json::json!({ "key": key, "value": value }))
+                // **書けなかったら、そう言う。** 黙って捨てていたので、
+                // 「配色を選んでも次の起動で戻る」を実機で出したとき、
+                // 書けていないのか読めていないのかが分からなかった
+                // （2026-09-14）。`ask()` は失敗をそのまま状態行に出す。
+                let where_ = cian_lua::state_set(key, value).map_err(anyhow::Error::msg)?;
+                Ok(serde_json::json!({
+                    "key": key, "value": value, "wrote": where_.display().to_string(),
+                }))
             }
             // ---- The AI, where a site has configured one ----
             //

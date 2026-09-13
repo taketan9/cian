@@ -5048,7 +5048,11 @@ function show(title, about, rows, opts = {}) {
     // nothing turns "mostly right" into "start again by hand".
     report.checks = !!opts.checks;
     if (report.checks) for (const r of rows) if (r.on === undefined) r.on = true;
-    report.at = 0;
+    // **開いた場所は「いま選ばれているもの」。** 既定の0行目のままだと、配色の
+    // 一覧が白磁にカーソルを置いて開くのに画面は別の配色、という食い違いが
+    // 出る（2026-09-14、実機）── 一覧の中で一度離れて戻らないと、自分が
+    // どこに居るのか分からない。
+    report.at = Math.max(0, Math.min(rows.length - 1, Number.isInteger(opts.at) ? opts.at : 0));
     report.pick = opts.pick || null;
     report.act = opts.act || null;
     // Called as the cursor passes, not on Enter. For a list whose rows *are*
@@ -9233,6 +9237,8 @@ async function cmdTheme(name) {
     show(tr('Themes', '配色'), tr(`${rows.length} — the top ${LOOKS.length} are this window's, the rest are cian-tui's`, `${rows.length} 種 — 上の ${LOOKS.length} つはウィンドウ版のもの、あとは cian-tui のもの`),
         rows, {
             filter: true,
+            // いま着ているものの上で開く。`●` と同じ行。
+            at: Math.max(0, rows.findIndex((r) => r.n === '●')),
             hint: tr('type to narrow (dracula, light, …)', 'フィルタ（dracula, light, …）'),
             foot: tr('type to narrow   ↑↓ dresses the window as you pass   Enter keep   Esc put it back', 'フィルタ   ↑↓ 選ぶとその場で変わります   Enter 決定   Esc 戻す'),
             // Live, as the terminal build's gallery is: a palette is a thing

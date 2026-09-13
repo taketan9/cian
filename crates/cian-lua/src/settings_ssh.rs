@@ -37,7 +37,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::settings_edit::{braces, live_block};
-use crate::settings_list::{field_of, quote};
+use crate::settings_list::{field_of, quote, quote_block};
 
 /// 一覧に出す、ホスト1つぶん。
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -180,7 +180,9 @@ fn render(h: &HostRow, indent: &str) -> String {
         parts.push(format!("users = {}", h.users.trim()));
     }
     if !h.notes.trim().is_empty() {
-        parts.push(format!("notes = {}", quote(&h.notes)));
+        // メモも複数行が書ける欄なので、同じ扱い（AI に渡る文章で、
+        // 手で書く人は行を分ける）。
+        parts.push(format!("notes = {}", quote_block(&h.notes)));
     }
     format!("{indent}{{ {} }},", parts.join(", "))
 }

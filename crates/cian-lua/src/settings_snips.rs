@@ -23,7 +23,7 @@
 use std::path::PathBuf;
 
 use crate::settings_edit::live_block;
-use crate::settings_list::{entries_in, field_of, quote};
+use crate::settings_list::{entries_in, field_of, quote, quote_block};
 
 /// スニペット1つ。
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -76,7 +76,11 @@ pub fn snips_in(text: &str) -> Vec<Snip> {
 
 /// スニペット1つを、1行の Lua に。
 fn render(s: &Snip, indent: &str) -> String {
-    let mut parts = vec![format!("name = {}", quote(&s.name)), format!("cmd = {}", quote(&s.cmd))];
+    // **`cmd` だけ長括弧を許す。** 複数行のコマンドは手で書く人の形が
+    // `[[ … ]]` で、そこを1行の逃がし字に畳むと、設定画面から1つ直した
+    // だけで触っていない見た目まで変わる（2026-09-14、本人の init.lua）。
+    let mut parts =
+        vec![format!("name = {}", quote(&s.name)), format!("cmd = {}", quote_block(&s.cmd))];
     // 既定と違うときと、もとから書いてあったときだけ。
     if !s.enter || s.wrote_enter {
         parts.push(format!("enter = {}", s.enter));
@@ -184,6 +188,59 @@ cian.snippets {
     ///
     /// crmaine が実機で踏んだ形 ── 「書いてある既定値」は明示であって、
     /// 既定と同じだからと落とすと機能が勝手に戻る。
+    /// **手で書く人は長括弧を使う。** 本人の init.lua（2026-09-14、実機）が
+    /// この形で、設定画面には `[[` の2文字だけが出ていた ── 3行のコマンドが
+    /// 画面から消えて見えた。`[[` の直後の改行は Lua が1つ落とす。
+    #[test]
+    fn a_long_bracket_command_is_read_whole() {
+        const LONG: &str = "\
+cian.snippets {
+  { name = \"hoge\", cmd = [[
+export hoge=hoge
+sqplus /nolog
+connect GKSUSR/GKSUSR@db01
+]] },
+}
+";
+        let got = snips_in(LONG);
+        assert_eq!(got.len(), 1, "{got:#?}");
+        assert_eq!(
+            got[0].cmd,
+            "export hoge=hoge\nsqplus /nolog\nconnect GKSUSR/GKSUSR@db01\n",
+            "長括弧の中身をそのまま: {:?}", got[0].cmd
+        );
+    }
+
+    /// 読んで、書き戻して、また読む。**複数行は長括弧のまま**に保つ ──
+    /// `"…\n…"` に畳むと、触っていない見た目まで変わる。
+    #[test]
+    fn a_multi_line_command_survives_the_round_trip() {
+        const LONG: &str = "\
+cian.snippets {
+  { name = \"hoge\", cmd = [[
+one
+two
+]] },
+}
+";
+        let row = snips_in(LONG)[0].clone();
+        let out = set_snip_in(LONG, "hoge", Some(&row));
+        assert!(out.contains("[["), "長括弧のまま書き戻す: {out}");
+        assert!(!out.contains("\\n"), "逃がし字に畳まない: {out}");
+        let again = snips_in(&out);
+        assert_eq!(again[0].cmd, row.cmd, "往復して同じ: {out}");
+    }
+
+    /// 中に `]]` があっても閉じられる（`=` を足す。Lua の規則）。
+    #[test]
+    fn a_command_holding_the_closing_bracket_still_closes() {
+        let mut row = snips_in(SN)[0].clone();
+        row.cmd = "echo a]]b\necho c".into();
+        let out = set_snip_in(SN, "ログ", Some(&row));
+        let again = snips_in(&out);
+        assert_eq!(again[0].cmd, "echo a]]b\necho c", "{out}");
+    }
+
     #[test]
     fn a_written_default_is_kept_when_the_row_is_edited() {
         let mut row = snips_in(SN)[2].clone();
@@ -258,14 +315,20 @@ cian.snippets {
     /// エンジンは受け取った字をそのままシェルへ書いて最後に改行を足すので、
     /// 複数行はそのまま動く ── 書く側が壊していただけだった。生の改行を
     /// Lua の `"…"` に入れると `unfinished string` で落ちる。
+    ///
+    /// **2026-09-14 に字面を変えた。** ここは `cmd = "…\n…"` の1行だと
+    /// 主張していたが、手で書く人は `[[ … ]]` を使う（本人の init.lua が
+    /// そうで、設定画面には `[[` の2文字しか出ていなかった）。守るものは
+    /// 「1行であること」ではなく **Lua として読めること**と**往復して同じ
+    /// ものが戻ること**なので、そちらを見る。
     #[test]
     fn a_multi_line_command_survives() {
         let cmd = "cd /var/log\ntail -f messages";
         let row = Snip { name: "追う".into(), cmd: cmd.into(), enter: true, ..Default::default() };
         let out = set_snip_in(SN, "追う", Some(&row));
         assert_eq!(crate::settings_edit::syntax_error(&out), None, "{out}");
-        // 書かれた字面は1行（`\n` で逃がしてある）。
-        assert!(out.contains("cmd = \"cd /var/log\\ntail -f messages\""), "{out}");
+        // 書かれた字面は長括弧。**逃がし字に畳まない。**
+        assert!(out.contains("cmd = [[\ncd /var/log\ntail -f messages]]"), "{out}");
         // 読み直すと、もとの複数行。
         let back = snips_in(&out);
         assert_eq!(back.last().unwrap().cmd, cmd, "{out}");

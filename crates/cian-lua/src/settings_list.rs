@@ -89,6 +89,31 @@ fn value_at(rest: &str) -> String {
         }
         return out;
     }
+    // Lua の長括弧 `[[ … ]]`（`[=[ … ]=]` も）。**手で書く人はこれを使う。**
+    // 本人の init.lua がそうだった（2026-09-14）── 設定画面は `[[` の2文字
+    // だけを値として見せていて、複数行のスニペットが丸ごと消えて見えた。
+    // 開き括弧の**直後の改行は1つだけ落とす**（Lua の規則）。
+    if chars.first() == Some(&'[') {
+        let mut eq = 0;
+        while chars.get(1 + eq) == Some(&'=') {
+            eq += 1;
+        }
+        if chars.get(1 + eq) == Some(&'[') {
+            let open = 2 + eq;
+            let close: String = std::iter::once(']')
+                .chain(std::iter::repeat('=').take(eq))
+                .chain(std::iter::once(']'))
+                .collect();
+            let rest_str: String = chars[open..].iter().collect();
+            let body = match rest_str.find(&close) {
+                Some(at) => &rest_str[..at],
+                // 閉じていないものは、そこまで。**空を返さない** ── 書いた
+                // 人には見えているものが、画面から消えるのがいちばん困る。
+                None => &rest_str[..],
+            };
+            return body.strip_prefix("\r\n").or_else(|| body.strip_prefix('\n')).unwrap_or(body).to_string();
+        }
+    }
     if chars.first() == Some(&'{') {
         let mut depth = 0i32;
         let mut out = String::new();
@@ -109,6 +134,38 @@ fn value_at(rest: &str) -> String {
     // `2222 }` と読んで、そのまま書き戻したことがある。
     rest.split([',', '\n', '}']).next().unwrap_or("").trim().to_string()
 }
+/// 複数行を、手で書く人の形のまま書き戻す ── `[[ … ]]`。
+///
+/// **`quote` と分けてある。** 長括弧は行をまたぐので、使えるのは
+/// **読む側も行をまたげるところだけ**だ ── `{ … }` が並ぶ表（スニペットと
+/// SSH ホスト）は釣り合う括弧で範囲を取るので、またげる。`cian.set_option`
+/// は1行1設定で書き換えるので、またいだ瞬間に次の書き換えが行を半分だけ
+/// 置き換えて設定ファイルを壊す。だから options 側は `quote` のまま。
+///
+/// 中に `]]` があるときは `=` を足して避ける（Lua の規則）。
+pub(crate) fn quote_block(s: &str) -> String {
+    if !(s.contains('\n') || s.contains('\r')) {
+        return quote(s);
+    }
+    let mut eq = 0;
+    loop {
+        let close: String = std::iter::once(']')
+            .chain(std::iter::repeat('=').take(eq))
+            .chain(std::iter::once(']'))
+            .collect();
+        if !s.contains(&close) {
+            let open: String = std::iter::once('[')
+                .chain(std::iter::repeat('=').take(eq))
+                .chain(std::iter::once('['))
+                .collect();
+            // 開き括弧の直後の改行は Lua が1つ落とすので、こちらから1つ
+            // 足す ── 足さないと、読み直すたびに先頭の行が詰まる。
+            return format!("{open}\n{s}{close}");
+        }
+        eq += 1;
+    }
+}
+
 /// Lua の文字列に入れられる形に。**行をまたげないことを忘れない。**
 pub(crate) fn quote(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);

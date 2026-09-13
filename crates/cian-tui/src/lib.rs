@@ -3543,11 +3543,13 @@ fn load_saved_theme() -> Option<String> {
     state_get("theme")
 }
 
-/// Persist the chosen whole-app theme so the next launch keeps it. Best-effort:
-/// a read-only config dir just means it does not stick, which is not worth
-/// interrupting the user over.
-pub(crate) fn save_theme_pref(name: &str) {
-    state_set("theme", name);
+/// Persist the chosen whole-app theme so the next launch keeps it.
+///
+/// **書けなかったら言う。** 前は黙っていて、「選んだのに次の起動で戻る」が
+/// 出たときに、書けていないのか読めていないのかが誰にも分からなかった
+/// （2026-09-14）。返すのは知らせの一行で、呼ぶ側が状態行に混ぜる。
+pub(crate) fn save_theme_pref(name: &str) -> Option<String> {
+    state_set("theme", name).err()
 }
 
 // `os_reveal` / `os_open_with` / `os_properties` moved to `cian_core::os`.
