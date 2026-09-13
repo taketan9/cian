@@ -2,11 +2,18 @@
 
 | 使いたいもの | 落とすもの |
 |---|---|
-| **Windows で窓版（Electron）** | **`cian-gui-win-x64.zip`** — Electron 本体だけ別途必要 |
-| **Mac で窓版（Electron）** | **`cian-gui-macos.zip`** — 同上。エンジンは Intel と Apple Silicon の両方入り |
+| **Windows で、とにかく動かしたい** | **`cian-win-x64.zip`**（124MB）── Electron ごと入っています。展開して **`cian.exe` をダブルクリック**。用意するものはありません |
+| Windows で、社内にある Electron を使いたい | `cian-gui-win-x64.zip`（14MB）── 前面だけ。`run.bat` が Electron を探します |
+| **Mac で窓版（Electron）** | **`cian-gui-macos.zip`** — Electron 本体は別途必要。エンジンは Intel と Apple Silicon の両方入り |
 | エンジンだけ差し替えたい | `cian-server-win-x64.exe`（10MB）／`cian-server-macos.bin` |
 | **`.exe` が社内の網に止められる** | **`cian-server-win-x64.exe.zip`**（4MB）／`cian-server-macos.bin.zip` — 中身は同じものが1つだけ |
 | 壊れずに届いたかの確認 | `SHA256SUMS` — `sha256sum -c SHA256SUMS` / `Get-FileHash` |
+
+**Windows の zip は2つあって、違いは「Chromium を誰が持ってくるか」だけです。**
+`cian-win-x64.zip` は中に Electron を抱えているので 124MB（展開 307MB）、
+そのかわり何も探しません。`cian-gui-win-x64.zip` は 14MB で、機械に既にある
+Electron を `run.bat` が探します ── 何台にも配るなら、そちらが1台 14MB です。
+**前面の中身は同じものです。**
 
 **zip 版のエンジンは、中身も名前も生のものと同じです。** 会社の運用端末で
 `.exe` の直接ダウンロードが止められることがあり、実際に止まったので置いています。
@@ -34,7 +41,8 @@ zip を右クリック →「プロパティ」→ 下に「セキュリティ: 
 外さないと展開後の全ファイルに印が残り、`.exe` が黙って起動しません
 （窓は出るのに中身が空、という形で出ます）。
 
-窓版の詳しい手順は zip の中の `GUI.txt` にあります。
+詳しい手順は zip の中にあります ── 同梱版は `START.ja.txt`、前面だけの方は
+`GUI.txt` です。
 
 ### Mac で落としたら
 
