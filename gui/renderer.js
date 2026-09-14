@@ -2034,6 +2034,10 @@ function tellFrame() {
 
 function setLook(i, remember = true) {
     look = (i + LOOKS.length) % LOOKS.length;
+    // 窓の見た目を選んだら、配色は選んでいないことになる。**変数もここで
+    // 落とす** ── `:theme 陰翳` は `pickTheme` を通らないので、そちらだけで
+    // 落としていると `●` が配色の行に残ったままになる。
+    palette = null;
     clearPaneSkins();
     const [value] = LOOKS[look];
     // At the look's own base size, follow the new look's base — 端末譲り is
@@ -2045,7 +2049,18 @@ function setLook(i, remember = true) {
     if (wasBase) setFont(baseFont(), false);
     if (viewer.ed) viewer.ed.updateOptions({ theme: editorTheme() });
     tellFrame();
-    if (remember) ask('remember', { key: 'gui_look', value: LOOKS[look][0] || 'hakuji' });
+    if (remember) {
+        ask('remember', { key: 'gui_look', value: LOOKS[look][0] || 'hakuji' });
+        // **覚えていた配色を、ここで消す。**
+        //
+        // `setPalette` は逆向きに `gui_look` を白磁へ戻している。片側しか
+        // やっていなかったので、白磁を選んだ人の state.toml は
+        // `theme = "nord"` と `gui_look = "hakuji"` が同居し、**起動のたびに
+        // 残っていた配色が勝って**暗いまま開いていた（2026-09-14、実機。
+        // 「theme を選んでも次の起動で永続しない」の正体がこれ）。
+        // 空で覚えさせる ── `state_get` は空を「無い」と読む。
+        ask('remember', { key: 'theme', value: '' });
+    }
 }
 
 /// One of the eighteen. Same key, same list, same file the terminal build
