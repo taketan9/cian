@@ -1,6 +1,6 @@
-cian（窓版）— macOS
+cian（ウィンドウ版）— macOS
 
-これは cian の窓版です。Electron の front end と、その相手をするエンジン
+これは cian のウィンドウ版です。Electron の front end と、その相手をするエンジン
 （cian-server）が入っています。
 
 ■ 動かす

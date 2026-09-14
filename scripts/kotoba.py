@@ -394,6 +394,41 @@ STIFF = {
 }
 
 
+def doc_words(listing=False):
+    """**画面の外の読み物も、同じ言葉で書く。**
+
+    README・CHECK・GUI.txt は画面の字をそのまま引用する ── そこが古いと、
+    読んだ人は画面に無い言葉を探すことになる（2026-09-15、`CHECK.ja.txt` が
+    `「この端末を経由して」` を、`ROADMAP` が `この面を広げる` を探させていた。
+    どちらも、その字を画面から消した日に置き去りになっていた）。
+
+    天井では見ない ── 辞書は「画面でこう言い換えた」の記録で、読み物の中には
+    **その言い換えを説明している行**（この節、`REQUESTS` の依頼 194、
+    `massara-check`）が必ずあるから。数えると、説明が毎回鳴る。
+    `--docs` で一覧を出し、直すかどうかは人が決める。
+    """
+    out = []
+    for rel in DOC_FILES:
+        path = ROOT / rel
+        if not path.exists():
+            continue
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for w, better in STIFF.items():
+                if w in line:
+                    out.append((rel, n, line.strip(), better))
+    return out
+
+
+DOC_FILES = (
+    "README.ja.md",
+    "packaging/windows/GUI.txt",
+    "packaging/windows/START.ja.txt",
+    "packaging/windows/CHECK.ja.txt",
+    "packaging/windows/DEPLOY.ja.txt",
+    "packaging/macos/GUI.ja.txt",
+)
+
+
 def stiff_words():
     return [
         (path, line, lit, STIFF[w])
@@ -454,6 +489,18 @@ def show(rows, listing, limit=20):
 
 def main() -> int:
     listing = "--list" in sys.argv
+    if "--docs" in sys.argv:
+        rows = doc_words()
+        print("=" * 72)
+        print("  画面の外の読み物 ── 画面で言い換えた言葉が残っていないか")
+        print("=" * 72)
+        for rel, n, line, better in rows:
+            print(f"    {rel}:{n}")
+            print(f"      {line[:88]}")
+            print(f"      → {better}")
+        print(f"\n  {len(rows)} 件。**天井は無い** ── 言い換えを説明している行も混ざるので、")
+        print("  直すかどうかは読んで決める（`kotoba.py` 本体は画面の字だけを見る）")
+        return 0
     eng_rs = english_only_rs()
     eng_js = english_only_js()
     dash = dashes()
