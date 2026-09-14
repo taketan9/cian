@@ -736,9 +736,13 @@ html, body {
    missing, which was exactly right: they were never drawn.
    A pseudo-element above the contents, as the file panes use, so the panel's
    own scrollbars and grids cannot paint over it. */
+/* **3px。ファイル枠と同じ太さ。** ここだけ 2px で、実機で「シェルの枠が
+   若干細く見える」と指摘された（2026-09-14）。枠が「キーがどちらにあるか」
+   を言う道具である以上、面ごとに太さが違うと、太い方が強く見える ──
+   言っていることは同じなのに。上の `.pane.active::after` と同じ値にする。 */
 #work[data-focus="shell"] #shell::after {
   content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none;
-  border: 2px solid var(--mode-accent);
+  border: 3px solid var(--mode-accent);
 }
 
 /* F12 — the *focused* surface fills the window, which is what the terminal

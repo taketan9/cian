@@ -10475,6 +10475,8 @@ function zoomFocused() {
 function afterZoom() {
     if (term.on) ask('shellresize', shellSize());
     measureFoot();
+    // 掴み手も、埋めている面が変わったら置き直す（広げているあいだは隠れる）。
+    placeGrips();
 }
 
 /// The two dividers, moved by Ctrl+Shift+arrow.
@@ -10515,8 +10517,15 @@ function placeGrips() {
     el.gripPanes.style.top = `${panes.top}px`;
     el.gripPanes.style.height = `${panes.height}px`;
     el.gripPanes.style.left = `${left.right - 4}px`;
-    el.gripPanes.hidden = el.panes.classList.contains('one');
-    const shellShown = term.on && !el.shell.hidden && !el.work.dataset.zoom;
+    // **広げているあいだは、境界を掴めない。**
+    //
+    // F12 で1面が窓を埋めているとき、動かす境界はもう画面に無い ── それでも
+    // 掴めたままで、シェルを広げると `#panes` は `display: none` なのに、その
+    // 上を縦の掴み手が横切っていた（2026-09-14、実機）。見えない境界を
+    // 動かすと、戻したときに知らない割り方になっている。
+    const zoomed = !!el.work.dataset.zoom;
+    el.gripPanes.hidden = zoomed || el.panes.classList.contains('one');
+    const shellShown = term.on && !el.shell.hidden && !zoomed;
     el.gripMain.hidden = !shellShown;
     if (shellShown) {
         el.gripMain.style.top = `${el.shell.getBoundingClientRect().top - 4}px`;
@@ -11148,6 +11157,16 @@ document.addEventListener('keydown', (e) => {
         e.stopPropagation();
         e.preventDefault();
         zoomFocused();
+        return;
+    }
+    // **F11 も窓の話。** F12 はここに書いてあったのに F11 は無く、シェルに
+    // キーがあるあいだ全画面にできなかった ── そのまま子プロセスへ流れて
+    // いた（2026-09-14、実機）。窓そのものを動かすキーは、どちらの面に
+    // キーがあっても同じように効く、が筋。
+    if (e.key === 'F11') {
+        e.stopPropagation();
+        e.preventDefault();
+        cmdFullscreen();
         return;
     }
     if (e.key === 'F10' && !e.shiftKey) { e.stopPropagation(); e.preventDefault(); shellCloseTab(); return; }

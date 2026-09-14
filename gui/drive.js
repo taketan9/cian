@@ -235,10 +235,24 @@ class Cdp {
         return cdp;
     }
 
-    send(method, params = {}) {
+    /// **返事に上限を付ける。** ここには何も無かったので、返ってこない呼び
+    /// 出しが1つあると走行全体がそこで止まる ── 2026-09-14 に2回、
+    /// `Page.captureScreenshot` が返らないまま18分立ち往生した（この機械の
+    /// 画面側の癖で、cian は生きていた）。**道具が黙ると、観測が止まる。**
+    /// 落ちるのではなく、そこだけ諦めて先へ進めるように、投げる。
+    send(method, params = {}, ms = 30000) {
         const id = ++this.id;
         this.ws.send(JSON.stringify({ id, method, params }));
-        return new Promise((ok, no) => this.waiting.set(id, { ok, no }));
+        return new Promise((ok, no) => {
+            const bell = setTimeout(() => {
+                this.waiting.delete(id);
+                no(new Error(`${method} が ${ms}ms 返しません`));
+            }, ms);
+            this.waiting.set(id, {
+                ok: (r) => { clearTimeout(bell); ok(r); },
+                no: (e) => { clearTimeout(bell); no(e); },
+            });
+        });
     }
 
     async press(spec) {
@@ -1017,6 +1031,8 @@ async function main() {
     }
 
     let bad = 0;
+    // 撮れなかった写真。`bad` とも `crashes` とも別に数える。
+    let unshot = 0;
     let said = [];
     try {
         const cdp = await Cdp.open(await target());
@@ -1084,8 +1100,19 @@ async function main() {
                     }
                     clip = { ...box, scale: 3 };
                 }
-                const png = await cdp.send('Page.captureScreenshot',
-                    clip ? { format: 'png', clip, captureBeyondViewport: true } : { format: 'png' });
+                // 撮れなくても走行は続ける。**写真は証拠であって、検査では
+                // ない** ── 撮れないことと cian が壊れていることは別の話で、
+                // 混ぜると「今日は画面が撮れないから全部赤」になる。
+                let png;
+                try {
+                    png = await cdp.send('Page.captureScreenshot',
+                        clip ? { format: 'png', clip, captureBeyondViewport: true } : { format: 'png' },
+                        20000);
+                } catch (e) {
+                    console.log(`  shot    ${what || name} を撮れません（${e.message}）`);
+                    unshot++;
+                    continue;
+                }
                 // Not in the sandbox: that is deleted when the run ends, and
                 // a picture you cannot open afterwards is not evidence.
                 const dir = path.join(os.tmpdir(), 'cian-shots');
@@ -1330,7 +1357,8 @@ async function main() {
     }
     // A key that changed nothing is not always wrong — pressing `,` twice only
     // reverses — so this reports rather than fails. The crashes are the failure.
-    console.log(`\n動かなかったキー ${bad} 件、例外 ${crashes.length} 件`);
+    console.log(`\n動かなかったキー ${bad} 件、例外 ${crashes.length} 件`
+        + (unshot ? `、撮れなかった写真 ${unshot} 件` : ''));
     process.exit(crashes.length ? 1 : 0);
 }
 
