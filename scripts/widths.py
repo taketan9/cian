@@ -79,6 +79,16 @@ WAIVED = {
     'let badge = format!("{:<6} ", c.mode().badge());',  # badge() は "simple" だけ
     'format!("{:<7} {} ", shown_hash, pad_to(&shown_who, 11)),',  # git のハッシュ
     'format!("{:08x}  {:<49}|{}|", index * 16, hex, ascii)',      # 16進ダンプ
+    # ── `{:<w$}` のうち、詰める中身が**作りからして半角**のもの ──
+    #
+    # 2026-09-16 に幅を変数で渡す形も見るようにした。実際に崩れていた6か所は
+    # 直したが、この2つは中身が動かない。
+    #
+    # マーメイドの帯。詰めているのは即値の英字で、`lang` すら通らない。
+    'format!("{:<w$}", " mermaid flow ", w = width),',
+    # 差分の「N 行同じ」。英字と数字だけで、`tr()` を通っていない ── `⋯` は
+    # East Asian Width が曖昧で `unicode-width` は1桁と答えるので、字＝桁。
+    'format!("{:^w$}", format!("⋯ {} identical lines", lines), w = inner.width as usize),',
 }
 
 RUST_SUSPECT = re.compile(
@@ -89,6 +99,14 @@ RUST_SUSPECT = re.compile(
     # 鍵にくっついていた。**英語では字数と桁数が同じ**なので、目でも
     # `cargo test` でも通る。右詰め `{:>N}` は数字に使う形なので見ない。
     r"|\{:[<^]\d+\}"
+    # **幅を変数で渡す形も同じ。** `{:<w$}` は `{:<14}` と一字も違わない
+    # 振る舞いで、**字**で詰める。ここを見ていなかったので、`render.rs` の
+    # 4か所と `markdown.rs` の2か所が、この検査の目の前を素通りしていた
+    # （2026-09-16、別のセッションがソースを読んで見つけた ── **機械が
+    # 見ていない所は、人が読むまで出てこない**）。`truncate()` と組にして
+    # あっても救われない: 切るのは桁、詰めるのは字で、**単位が違う**。
+    # 揃えるには `fit()`（= `pad_to(&truncate(s, w), w)`）を使う。
+    r"|\{:[<^][A-Za-z_][A-Za-z0-9_]*\$\}"
 )
 # **`as u16` が同じ行に無い字数。** 2026-09-10 に、この形で2件出た:
 #
@@ -103,7 +121,10 @@ RUST_SUSPECT = re.compile(
 # **文字の位置**（カーソルの桁、選択の範囲、伏字の数）は桁の話ではないので、
 # 下の WAIVED に**行そのものと理由**を書いて外す。
 DRAW = ROOT / "crates" / "cian-tui" / "src" / "render.rs"
-DRAW_SUSPECT = re.compile(r"chars\(\)\.count\(\)")
+# `chars().take(n)` も同じ ── **桁の予算を字で切っている**。`render.rs:7351` の
+# blame 欄はこれで「11桁のつもりの欄が22桁」になり、註だけ残して直してあった
+# のに、`draw_git_log` の author と subject は同じ形のまま残っていた。
+DRAW_SUSPECT = re.compile(r"chars\(\)\.count\(\)|chars\(\)\.take\(")
 # **`slice` は外した。** 配列にも、送る前のバイト数の打ち切りにも使うので、
 # 7 件出て**そのどれも桁の話ではなかった**。当てにならない指摘が7件並ぶ検査は、
 # 読まれなくなる検査。

@@ -10815,6 +10815,25 @@ use crate::ai::StoredChatExt;
         for name in ["report_final.txt", "第四四半期の報告書.txt", "設計メモ.md", "a"] {
             assert_eq!(width(&fit(name, 12)), 12, "column width for {name}");
         }
+
+        // **`truncate_middle` のほうの組も同じ。** パレット・書庫・`:du`・
+        // `git log` の4つは `format!("{:<w$}", truncate*(…), w = …)` で書かれて
+        // いて、**切るのは桁・詰めるのは字**という食い違いを持っていた
+        // （2026-09-16）。`{:<w$}` は `{:<14}` と同じで字で詰めるのに、
+        // `scripts/widths.py` は数字の形しか見ていなかったので素通りしていた。
+        //
+        // ここで押さえるのは組の約束 ── 「切ってから詰めたものは、ちょうど
+        // その桁」。呼び出し側がこの組を通っているかは `widths.py` が見る。
+        for name in ["deploy.log", "第四四半期の報告書.txt", "会議メモ.txt", "ｶﾞｷﾞｸﾞ"] {
+            assert_eq!(
+                width(&pad_to(&truncate_middle(name, 12), 12)),
+                12,
+                "middle-truncated column width for {name}",
+            );
+        }
+
+        // 混ざっていても同じ。半角カナ・その濁点（0桁）・全角・半角英数。
+        assert_eq!(width(&fit("ｱｲｳ ｶﾞｷﾞ あaＡ1 の長い名前", 16)), 16);
     }
 
     /// Paths identify themselves at the end, URLs at the start. Cutting either

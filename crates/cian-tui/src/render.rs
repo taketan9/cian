@@ -7985,7 +7985,10 @@ fn draw_archive(
             Paragraph::new(Line::from(vec![
                 Span::styled(if sel { " ▸ " } else { "   " }, base),
                 Span::styled(
-                    format!("{:<w$}", truncate_middle(&m.name, name_w), w = name_w),
+                    // **桁で詰める。** `{:<w$}` は `truncate_middle` が桁で
+                    // 切ったものを**字**で詰め直すので、日本語のファイル名の
+                    // 行だけ後ろが右へ流れる（7351 の blame 欄と同じ形）。
+                    pad_to(&truncate_middle(&m.name, name_w), name_w),
                     if m.is_dir {
                         base.fg(text_tone(FileKind::Directory.color(), row_bg(sel))).add_modifier(Modifier::BOLD)
                     } else {
@@ -8048,7 +8051,9 @@ fn draw_palette(
             Paragraph::new(Line::from(vec![
                 Span::styled(if sel { " ▸ " } else { "   " }, base),
                 Span::styled(
-                    format!("{:<w$}", truncate(&it.label, label_w), w = label_w),
+                    // `fit` は「桁で切って桁で詰める」ひと組。label は `tr()`
+                    // を通るので、日本語では**必ず**ずれていた。
+                    fit(&it.label, label_w),
                     base.fg(if sel {
                         readable_on(theme().selected_bg)
                     } else {
@@ -8122,7 +8127,7 @@ fn draw_disk_usage(
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(if sel { " ▸ " } else { "   " }, base),
-                Span::styled(format!("{:<w$}", truncate_middle(&name, name_w), w = name_w), name_style),
+                Span::styled(pad_to(&truncate_middle(&name, name_w), name_w), name_style),
                 Span::styled(bar, base.fg(text_tone(theme().accent, row_bg(sel)))),
                 Span::styled(format!(" {:>8}", cian_core::human_size(e.size)), base.fg(readable_on(row_bg(sel)))),
                 Span::styled(format!(" {:>4.0}%", pct), base.fg(muted_on(row_bg(sel)))),
@@ -8178,12 +8183,17 @@ fn draw_git_log(
         .take(body_h)
         .map(|(i, c)| {
             let sel = i == *cursor;
-            let author: String = c.author.chars().take(author_w).collect();
-            let subject: String = c.subject.chars().take(subj_w).collect();
+            // **桁で切って、桁で詰める。** ここは二重に崩れていた ──
+            // `chars().take(author_w)` が**字**で切り（14字の日本語は 28桁）、
+            // そのうえ `{:<aw$}` が**字**で詰め直す。blame 欄（7351）は同じ形を
+            // 直してあったのに、ここまで届いていなかった。
+            // hash と date は英数字なので桁＝字だが、`pad_to` に揃えておく ──
+            // 同じ行の中で二つの単位が混ざっているほうが、あとで読み違える。
+            let author = fit(&c.author, author_w);
+            let subject = truncate(&c.subject, subj_w);
             let line = format!(
-                "{:<hw$} {:<dw$} {:<aw$} {}",
-                c.hash, c.date, author, subject,
-                hw = hash_w, dw = date_w, aw = author_w,
+                "{} {} {} {}",
+                pad_to(&c.hash, hash_w), pad_to(&c.date, date_w), author, subject,
             );
             let style = if sel {
                 Style::default().fg(readable_on(theme().accent)).bg(theme().accent)
