@@ -949,6 +949,42 @@ async function main() {
             + 'return w===term.at.col;})()', '★ 全角の行でもカーソルの桁が合う'],
         ['read:(async()=>{await window.cian.call(\'shellinput\',{text:\'\\r\'});return \'read を終わらせた\';})()', ''],
         ['wait:600', ''],
+
+        // **全角と半角が混ざった行で、カーソルが打った字の後ろに居るか。**
+        //
+        // 上の `must` は `.cur` の手前を `cellWidth` で数え直してエンジンの
+        // 桁と比べている ── **同じやり方で測り直しているので、`cellWidth`
+        // 自身が間違っていても必ず ok になる**。実際そうなっていた:
+        // 手書きの表がエンジンの `unicode-width` と 11350 個の符号点で
+        // 食い違っていたのに、上は5通りとも通った（2026-09-15）。
+        //
+        // だから**別のやり方**で測る。`printf` の直後で `read` が行を
+        // 止めているので、カーソルは必ず「打った字のすぐ後ろ」＝最初の
+        // 空白に居る。手前の字が打った字とそのまま同じか、を見る。
+        // 表そのものは `cell_width_matches_unicode_width`（cian-core）が
+        // 全符号点で確かめる。こちらは**画面に出た結果**を見る。
+        //
+        // 混ぜてあるもの ── 半角カナ（`ｱ`）/ 半角カナの濁点（`ｶﾞ` は2符号点
+        // で1桁）/ 絵文字（`✅` は1符号点で2桁）/ 全角（`あ` `Ａ`）/ 半角英数。
+        // **この5つが同じ行に居ることが要点**で、どれか1つだけの行は
+        // 壊れた版でも通ってしまう。
+        ['read:(async()=>{const q=String.fromCharCode(39);const bs=String.fromCharCode(92);'
+            + 'await window.cian.call("shellinput",{text:"printf "+q+bs+"033[31mｱｲｳ ｶﾞｷﾞ ✅ あaＡ1"+bs+"033[0m"+q'
+            + '+"; read x"+String.fromCharCode(13)});'
+            + 'return "全角と半角を混ぜた行を出して、その行で止めた";})()', ''],
+        ['wait:1500', ''],
+        ['must:(()=>{const g=el.sPanes.querySelector(".sgrid");const c=g&&g.querySelector(".cur");'
+            + 'if(!c)return false;const line=c.parentElement;let before="";'
+            + 'for(const n of line.childNodes){if(n===c)break;before+=n.textContent;}'
+            + 'return before==="ｱｲｳ ｶﾞｷﾞ ✅ あaＡ1" && c.textContent===" ";})()',
+            '★ 全角と半角が混ざってもカーソルは打った字の後ろ'],
+        ['read:(()=>{const g=el.sPanes.querySelector(".sgrid");const c=g&&g.querySelector(".cur");'
+            + 'if(!c)return "cur が無い";const line=c.parentElement;let before="";'
+            + 'for(const n of line.childNodes){if(n===c)break;before+=n.textContent;}'
+            + 'return "手前=" + JSON.stringify(before) + "  カーソルの字=" + JSON.stringify(c.textContent)'
+            + ' + "  エンジンの桁=" + term.at.col + "  窓の桁=" + cellWidth(before);})()', ''],
+        ['read:(async()=>{await window.cian.call("shellinput",{text:String.fromCharCode(13)});return "read を終わらせた";})()', ''],
+        ['wait:600', ''],
         // 帯に出した `Ctrl+Q`（中断）も、一度は押しておく ── `keycover.py`
         // は「ヘルプが名前を挙げたキー」を数えていて、押していないキーは
         // 「動く証拠が無いキー」として並ぶ。

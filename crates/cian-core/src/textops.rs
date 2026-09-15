@@ -226,6 +226,115 @@ fn indent_width(line: &str) -> usize {
 mod tests {
     use super::*;
 
+    /// 窓版の `cellWidth` が、エンジンと同じ桁を答えるか。
+    ///
+    /// **二つの前端が別々に幅を数えていた。** 端末版とエンジンは
+    /// `unicode-width` を引き、窓版は `gui/renderer.js` に East Asian Width の
+    /// 主な帯を手で並べていた ── 2026-09-15 に全符号点を突き合わせたら
+    /// **11350 個で食い違っていた**。目に見えたのは2つで、どちらも実機の
+    /// 「全角と半角が混ざるとおかしい」の正体だった:
+    ///
+    ///   * `ｶﾞｷﾞｸﾞ` ── 半角カナの濁点 `U+FF9E` を窓が1桁と数えていた
+    ///     （エンジンは0桁）。シェルのカーソルが3字ぶん手前に落ちた
+    ///   * `✅` ── `U+2705` を窓が1桁と数えていた（エンジンは2桁）。
+    ///     カーソルが1桁右へ流れた
+    ///
+    /// `scripts/widths.py` は「**桁を測る道具を通しているか**」を見ていて、
+    /// その道具が**同じ答えを返すか**は誰も見ていなかった。ここで見る。
+    ///
+    /// 直すのは表だけでいい ── 窓版の `cellWidth` は、この表を引くほかに
+    /// 何も判断していない。
+    ///
+    /// 読むのは表そのもの ── `renderer.js` の `W_ZERO` と `W_WIDE` は
+    /// `始まりの間隔.長さ` を16進で並べた文字列なので、JS を動かさなくても
+    /// 復号できる。表がずれたら、ここが落ちる。
+    ///
+    /// 直し方: `unicode-width` の版を上げたら、この表を作り直す。作り方は
+    /// `renderer.js` の `W_ZERO` の上に書いてある。
+    #[test]
+    fn cell_width_matches_unicode_width() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../gui/renderer.js");
+        if !path.exists() {
+            eprintln!("gui/renderer.js not found at {}; skipping", path.display());
+            return;
+        }
+        let src = std::fs::read_to_string(&path).unwrap();
+
+        /// `const NAME = unpackWidths(  '…' + '…' );` の中の文字列をつなぐ。
+        fn table(src: &str, name: &str) -> Vec<(u32, u32)> {
+            let head = format!("const {name} = unpackWidths(");
+            let at = src.find(&head).unwrap_or_else(|| panic!("{name} が無い"));
+            let rest = &src[at + head.len()..];
+            let end = rest.find(");").expect("閉じ括弧が無い");
+            let mut packed = String::new();
+            let mut chars = rest[..end].chars();
+            while let Some(c) = chars.next() {
+                if c != '\'' {
+                    continue;
+                }
+                for c in chars.by_ref() {
+                    if c == '\'' {
+                        break;
+                    }
+                    packed.push(c);
+                }
+            }
+            let mut out = Vec::new();
+            let mut at: i64 = -1;
+            for part in packed.split_whitespace() {
+                let (d, n) = part.split_once('.').expect("始まり.長さ の形");
+                let a = at + i64::from_str_radix(d, 16).unwrap() + 1;
+                let b = a + i64::from_str_radix(n, 16).unwrap();
+                out.push((a as u32, b as u32));
+                at = b;
+            }
+            assert!(!out.is_empty(), "{name} が空");
+            out
+        }
+
+        let zero = table(&src, "W_ZERO");
+        let wide = table(&src, "W_WIDE");
+        // **表が急に縮んでいないか。** 数を数える検査には下限を書く ──
+        // 覆いが減っても百分率は出せてしまう（`keycover.py` は 72 → 2 種に
+        // 減ったあとも、百分率だけは出し続けた）。
+        assert!(zero.len() >= 390, "幅0の表が縮んでいる: {} 範囲", zero.len());
+        assert!(wide.len() >= 120, "幅2の表が縮んでいる: {} 範囲", wide.len());
+
+        let has = |t: &[(u32, u32)], c: u32| t.binary_search_by(|&(a, b)| {
+            if c < a { std::cmp::Ordering::Greater }
+            else if c > b { std::cmp::Ordering::Less }
+            else { std::cmp::Ordering::Equal }
+        }).is_ok();
+
+        let mut bad = Vec::new();
+        for c in 0u32..=0x10FFFF {
+            let Some(ch) = char::from_u32(c) else { continue };
+            let want = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+            // `renderer.js` の `cellWidth` と同じ順で決める。
+            let got = if (0x20..0x7f).contains(&c) {
+                1
+            } else if c == 0x17d8 {
+                3
+            } else if has(&zero, c) {
+                0
+            } else if has(&wide, c) {
+                2
+            } else {
+                1
+            };
+            if got != want {
+                bad.push((c, got, want));
+            }
+        }
+        assert!(
+            bad.is_empty(),
+            "窓版の cellWidth がエンジンと食い違う符号点が {} 個: {:x?}",
+            bad.len(),
+            &bad[..bad.len().min(8)],
+        );
+    }
+
     fn blk(top: usize, bottom: usize, left: usize, right: usize) -> Block {
         Block { top, bottom, left, right }
     }

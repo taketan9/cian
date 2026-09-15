@@ -4365,8 +4365,15 @@ impl Session {
                 let src = std::path::PathBuf::from(req.params["src"].as_str().unwrap_or(""));
                 let dest_dir = std::path::PathBuf::from(req.params["dest"].as_str().unwrap_or(""));
                 let name = arg(req, "name");
-                if name.is_empty() || name.contains('/') || name.contains('\\') {
-                    anyhow::bail!("名前が正しくありません");
+                // **断る理由を分けて言う。** 「正しくありません」は、空だった
+                // のか区切り文字が入っていたのかを言っていない ── 直すのに
+                // 要るのはそこ。どちらの言い方も、この前端に既にある
+                // （`名前を入れてください` / `名前に区切り文字は使えません`）。
+                if name.is_empty() {
+                    anyhow::bail!("名前を入れてください");
+                }
+                if name.contains('/') || name.contains('\\') {
+                    anyhow::bail!("名前に区切り文字は使えません: {name}");
                 }
                 if !src.exists() {
                     anyhow::bail!("{} がありません", src.display());
@@ -4417,8 +4424,15 @@ impl Session {
             "writefile" => {
                 let which = req.params["pane"].as_str().unwrap_or("left").to_string();
                 let name = arg(req, "name");
-                if name.is_empty() || name.contains('/') || name.contains('\\') {
-                    anyhow::bail!("名前が正しくありません");
+                // **断る理由を分けて言う。** 「正しくありません」は、空だった
+                // のか区切り文字が入っていたのかを言っていない ── 直すのに
+                // 要るのはそこ。どちらの言い方も、この前端に既にある
+                // （`名前を入れてください` / `名前に区切り文字は使えません`）。
+                if name.is_empty() {
+                    anyhow::bail!("名前を入れてください");
+                }
+                if name.contains('/') || name.contains('\\') {
+                    anyhow::bail!("名前に区切り文字は使えません: {name}");
                 }
                 let at = self.pane_mut(&which)?.cwd.join(&name);
                 if at.exists() {
