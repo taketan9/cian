@@ -917,6 +917,42 @@ async function main() {
         ['must:window.getSelection().toString().length === 2', 'Shift+← ×3 と → ×1 で 2 文字'],
         ['Escape', '解除 ── シェルには留まる'], ['wait:500', ''],
         ['read:\'Esc のあと: \' + (window.getSelection().toString().length) + \' 文字 / シェルに居る=\' + term.focused', ''],
+
+        // **全角のあとのカーソルは、桁で置く。**
+        //
+        // エンジンは端末の桁で数える（全角は2桁）のに、窓は字数で歩いて
+        // いたので、日本語を含むパスを貼ると**その字数ぶん右へずれた**
+        // （2026-09-15、実機）。画面の見た目では言えないので、`.cur` の
+        // 手前にある字の**桁数**とエンジンの言う桁が合うかを直接訊く。
+        //
+        // **色を付けて出させる。** ここは最初 `echo にほんご` だった ──
+        // それでは**壊した版でも通った**。エンジンは同じ見た目の連なりを
+        // 1つの run にして送るので、素のプロンプトだと行が1本の run になり、
+        // 字数で歩いても同じ場所に落ちてしまう。ずれるのは**カーソルより
+        // 前で run が切れているとき**だけ（本人の PowerShell は色付きの
+        // プロンプトで、そこで切れていた）。だから色で run を割ってから測る。
+        // `read` で行を止めておく ── `printf` だけだと、出したあとに
+        // プロンプトが**次の行に**描き直されて、カーソルの居る行から全角が
+        // 消える。実際にそれで2回、壊した版が素通りした。
+        // **ESC そのものを打たない。** `\u001b` を送ると zsh の行編集が食って
+        // しまい、色が付かないまま「mにほんごm」という1本の run になる ──
+        // 1本の run では**壊した版でも通る**（実際に2回素通りした）。
+        // バックスラッシュを字として送り、`printf` に解釈させる。
+        ['read:(async()=>{const q=String.fromCharCode(39);const bs=String.fromCharCode(92);'
+            + 'await window.cian.call(\'shellinput\',{text:\'printf \'+q+bs+\'033[31mにほんご\'+bs+\'033[0m\'+q'
+            + '+\'; read x\'+String.fromCharCode(13)});'
+            + 'return \'色つきの全角を出して、その行で止めた\';})()', ''],
+        ['wait:1500', ''],
+        ['must:(()=>{const g=el.sPanes.querySelector(\'.sgrid\');const cur=g&&g.querySelector(\'.cur\');'
+            + 'if(!cur)return false;const line=cur.parentElement;let w=0;'
+            + 'for(const n of line.childNodes){if(n===cur)break;w+=cellWidth(n.textContent);}'
+            + 'return w===term.at.col;})()', '★ 全角の行でもカーソルの桁が合う'],
+        ['read:(async()=>{await window.cian.call(\'shellinput\',{text:\'\\r\'});return \'read を終わらせた\';})()', ''],
+        ['wait:600', ''],
+        // 帯に出した `Ctrl+Q`（中断）も、一度は押しておく ── `keycover.py`
+        // は「ヘルプが名前を挙げたキー」を数えていて、押していないキーは
+        // 「動く証拠が無いキー」として並ぶ。
+        ['Ctrl+q', '中断を送る'], ['wait:600', ''],
         ['Escape', 'ファイルへ戻る'], ['wait:600', ''],
 
         // **F12 で広げた面は、キーと一緒に動く。**

@@ -2141,6 +2141,9 @@ function hintsNow() {
             // of itself.
             ['Shift+←', tr('select left', '左へ選択')], ['Shift+→', tr('select right', '右へ選択')],
             ['Ctrl+V', tr('paste', '貼り付け')],
+            // **走っているものを止める手。** `Ctrl+C` をコピーに割り当てると
+            // 中断がメニューの中にしか無くなるので、帯にも出す。
+            ['Ctrl+Q', tr('interrupt', '中断')],
             ...(split ? [['Shift+F1/F2', tr('prev/next pane', '前/次のペイン')]] : []),
             ['F9', tr('new tab', '新規タブ')], ['F10', tr('close tab', 'タブを閉じる')], ['Shift+F8', tr('v-split', '左右分割')],
             ['Shift+F9', tr('h-split', '上下分割')],
@@ -2554,7 +2557,7 @@ function contextRows() {
         // clipboard now, which is what hands coming from Windows expect —
         // so the interrupt needs somewhere to live, and this is the menu
         // that is already one keystroke away. Right-click opens the same one.
-        v.push({ label: tr("Interrupt  (sends Ctrl+C)", '中断  （Ctrl+C を送る）'), value: '', run: () => ask('shellinput', { text: '\x03' }) });
+        v.push({ label: tr("Interrupt  (sends Ctrl+C)", '中断  （Ctrl+C を送る）'), value: 'Ctrl+Q', run: () => ask('shellinput', { text: '\x03' }) });
         v.push(group(tr('Session ▸', 'セッション ▸'), () => [
             // Named for what it will do, as cian-tui names it (`StartLog` /
             // `StopLog`, chosen in `submenu_children` from whether this pane is
@@ -3205,6 +3208,7 @@ function helpRows() {
         ['Shift+J  /  :shell', tr("the shell panel (it lives in the lower half)", 'シェルパネル（下半分に出る）')],
         ['Esc', tr("back to the files (twice hands Esc to the shell)", 'ファイルへ戻る（Esc 2回でシェルへ渡る）')],
         ['Shift+PgUp / PgDn', tr("back through the output that scrolled past", '流れた出力を遡る')],
+        ['Ctrl+Q', tr("interrupt what is running (the same \u005cx03 as Ctrl+C)", '走っているものを中断（Ctrl+C と同じものを送る）')],
         [tr(":!command", ':!コマンド'), tr("run in the shell \u2014 % the selection, %f the file, %d the folder", 'シェルで実行 — % 選択、%f ファイル、%d ディレクトリ')],
         ['Ctrl+Shift+Enter / :snip', tr("a saved command, sent to the shell (cian.snippets)", '保存したコマンドを選んでシェルへ（cian.snippets）')],
         [':vi / :vim / :nvim', tr("open the file in that editor, in a shell tab of its own", 'そのエディタを新しいシェルタブで開く')],
@@ -8993,7 +8997,7 @@ async function cmdJump() {
 // them is a job with twenty years of edge cases in it, and a second answer to
 // any of them is how two front ends stop looking like one program.
 // ─────────────────────────────────────────────────────────────────────────
-const term = { on: false, focused: false, rows: 24, cols: 80, tabs: 1, tab: 0, showing: null, names: [] };
+const term = { on: false, focused: false, rows: 24, cols: 80, tabs: 1, tab: 0, showing: null, names: [], at: { row: 0, col: 0 } };
 
 /// How many cells fit. Measured from a real character rather than assumed:
 /// the font is whatever the machine had, and three of the four looks disagree
@@ -10881,6 +10885,10 @@ function drawShell(screen, into) {
     if (screen.id === term.showing) {
         term.rows = screen.rows;
         term.cols = screen.cols;
+        // エンジンが言った最後のカーソルの**桁**。画面に出ている位置と
+        // 突き合わせられるように残す ── 桁と字数の取り違えは目では言えず、
+        // `drive.js` が「`.cur` の手前の桁数がこれと同じか」で見る。
+        term.at = { row: screen.cursor.row, col: screen.cursor.col };
         // The tab strip, spelled the way the terminal build spells it, and
         // drawn even for one tab — the strip is where you learn that F9 makes
         // another, which a heading reading "シェル" never told anybody.
@@ -10911,23 +10919,38 @@ function drawShell(screen, into) {
         // The cursor is drawn by splitting the run it lands in, because a cell
         // is not an element here — runs are, and a run is however many cells
         // looked the same.
+        // **桁で数える、字数ではなく。** エンジンは端末の桁で数えていて
+        // （全角は2桁、続きのセルは飛ばす）、カーソルの位置も桁で来る。ここが
+        // `text.length`（UTF-16 の単位）で歩いていたので、行に全角があると
+        // その字数ぶんカーソルが右へずれた ── 日本語を含むパスを貼り付けると
+        // 目に見えてずれる（2026-09-15、実機）。`cellWidth` は端末版の
+        // `unicode-width` に当たるもので、この窓ではもう1か所で使っている。
         let col = 0;
         for (const run of runs) {
             const text = run.t;
+            const wide = cellWidth(text);
             const onThisRun = !screen.hidden && screen.cursor.row === row
-                && screen.cursor.col >= col && screen.cursor.col < col + text.length;
+                && screen.cursor.col >= col && screen.cursor.col < col + wide;
             if (!onThisRun) {
                 div.append(styled(run, text));
-                col += text.length;
+                col += wide;
                 continue;
             }
-            const at = screen.cursor.col - col;
-            if (at > 0) div.append(styled(run, text.slice(0, at)));
-            const cur = styled(run, text.slice(at, at + 1) || ' ');
+            // カーソルの桁に当たる**字**を探す。`[...text]` は符号点ごとに
+            // 回すので、代用対（絵文字など）も1字として扱える。
+            const chars = [...text];
+            let seen = 0;
+            let i = 0;
+            while (i < chars.length && seen + cellWidth(chars[i]) <= screen.cursor.col - col) {
+                seen += cellWidth(chars[i]);
+                i += 1;
+            }
+            if (i > 0) div.append(styled(run, chars.slice(0, i).join('')));
+            const cur = styled(run, chars[i] || ' ');
             cur.classList.add('cur');
             div.append(cur);
-            if (at + 1 < text.length) div.append(styled(run, text.slice(at + 1)));
-            col += text.length;
+            if (i + 1 < chars.length) div.append(styled(run, chars.slice(i + 1).join('')));
+            col += wide;
         }
         if (!div.childNodes.length) div.append(document.createTextNode(' '));
         frag.append(div);
@@ -11176,6 +11199,21 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         if (e.key === 'F10') closePane();
         else splitShell(e.key === 'F9');
+        return;
+    }
+    // **Ctrl+Q は中断。** `Ctrl+C` をコピーに割り当てた人は、走っているものを
+    // 止める手が右クリックのメニューしか無くなる（2026-09-15、本人）。
+    // 送るのは `Ctrl+C` と同じ `\x03` ── シェルにとっては同じ1バイトで、
+    // 端末が持つ「止めろ」はこれひとつ。
+    //
+    // 端末の流れ制御（XOFF/XON）の `Ctrl+Q` は、ここで止めるので届かない。
+    // `Ctrl+S` を送って画面を止める道がそもそも無い（下で同時入力に使って
+    // いる）ので、対になる `Ctrl+Q` も要らない。
+    if (e.key === 'q' && mod(e) && !e.shiftKey) {
+        e.stopPropagation();
+        e.preventDefault();
+        ask('shellinput', { text: '\x03' });
+        say(tr('interrupt sent (Ctrl+C)', '中断を送りました（Ctrl+C）'));
         return;
     }
     // Ctrl+S here is not save — there is nothing to save in a shell — it is
