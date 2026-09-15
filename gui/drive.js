@@ -626,7 +626,7 @@ async function main() {
         ['o', 'ペインを揃える'],
         ['Space', 'ひとつ持つ'], ['Ctrl+c', 'クリップボードへ'],
         ['Tab', '反対ペインへ'],
-        ['z', 'パスで移動'], [`type:${sand}/to`, ''], ['Enter', 'to へ'],
+        ['z', 'パスで移動'], ['wait:600', ''], [`type:${sand}/to`, ''], ['Enter', 'to へ'],
         ['Ctrl+v', '貼り付け'],
         // Back to the left, marks cleared by the copy that just finished, and
         // onto `c.rs` by name rather than by counting rows.
@@ -1017,8 +1017,8 @@ async function main() {
         // どれが当たるのか言わないなら、y と a のどちらを押すかは結局
         // 決められない。
         ['Tab', '右へ'],
-        ['z', 'パスで移動'], [`type:${sand}/to`, ''], ['Enter', 'to へ'], ['wait:800', ''],
-        ['Tab', '左へ'], ['z', 'パスで移動'], [`type:${sand}/from`, ''], ['Enter', 'from へ'], ['wait:800', ''],
+        ['z', 'パスで移動'], ['wait:600', ''], [`type:${sand}/to`, ''], ['Enter', 'to へ'], ['wait:800', ''],
+        ['Tab', '左へ'], ['z', 'パスで移動'], ['wait:600', ''], [`type:${sand}/from`, ''], ['Enter', 'from へ'], ['wait:800', ''],
         ['Ctrl+a', '全部マーク'], ['wait:400', ''],
         ['c', '反対ペインへコピー'], ['wait:700', ''],
         ['must:(() => { const t = document.querySelector(\'#ask .body\').textContent; const n = (t.match(/^うち (\\d+) 件は既に/) || [])[1]; const marks = t.split(\'\\n\').filter(l => l.startsWith(\'↑ \')).length; return Number(n) > 0 && Number(n) === marks; })()', '衝突の件数と ↑ 印の行数が一致'],
@@ -1028,7 +1028,7 @@ async function main() {
         // いて、land:from で from の行を選ぶ」前提で書かれている。ここで
         // from の中に立ったまま渡すと land が外れ、Enter が別のものを開いて、
         // コピーの検査が黙って 0 行を数える ── 実際に一度そうした。
-        ['z', 'パスで移動'], [`type:${sand}`, ''], ['Enter', '根へ戻る'], ['wait:800', ''],
+        ['z', 'パスで移動'], ['wait:600', ''], [`type:${sand}`, ''], ['Enter', '根へ戻る'], ['wait:800', ''],
 
         ['Tab', '右へ'],
         ['A', 'ディレクトリを作る'], ['type:undo'], ['Enter', ''], ['wait:900', ''],
@@ -1137,6 +1137,32 @@ async function main() {
                 : null;
             return vst + (asking ?? rep ?? menu ?? view ?? sh
                 ?? (after.marks.length ? `  [${after.marks.join(' ')}]` : ''));
+        };
+
+        // **打った字が、開くはずだった欄に入ったか。**
+        //
+        // `z` の入力欄は非同期に開く（`goToPath` → `askFor`）。開く前に打つと、
+        // パスの字が**窓そのものへの打鍵**になる ── そして砂場のパスは
+        // mac では `/var/folders/…/T/cian-drive-XXXXXX` で、**`/T/` の `T` が
+        // トグルを開く**。あとの字はメニューの中を歩き（`j` が下、`k` が上）、
+        // 次の `Enter` がそこの行を実行する。実際に「言語」の行に当たって
+        // 表示が英語になり、**40 手あとの衝突シートの件数が合わない**という
+        // 顔で出た（2026-09-16）。日本語の正規表現が当たらないだけで、
+        // 衝突の数え方はどこも壊れていなかった。
+        //
+        // **砂場の名前は毎回違うので、当たる行も毎回違う。** だから「たまに
+        // 落ちる検査」に見える。打ち終わった時点でメニューが開いていないかを
+        // 見る ── 開いていたら、その字は欄ではなく窓が食べている。
+        //
+        // `:` の入力欄は `menu.spec` を使わない（`openPrompt`）ので、
+        // コマンドを打つ手はここに掛からない。
+        const typedIntoAMenu = async (spec) => {
+            const open = await cdp.read('menu.spec ? (menuRows()[0]?.label ?? "(名前なし)") : null');
+            if (!open) return false;
+            // **`例外` に数える。** `bad`（動かなかったキー）は普段から 44 件
+            // あるので、そこへ混ぜると見えない ── 基準は `例外 0 件` のほう。
+            crashes.push(`打った字がメニューに入った: ${JSON.stringify(spec.slice(5, 40))} → 「${open}」が開いている`);
+            return true;
         };
 
         for (const [key, what] of round) {
@@ -1376,6 +1402,8 @@ async function main() {
             }
             const before = await cdp.read(LOOK);
             await cdp.press(key);
+            // 打ち終わった直後に見る ── あとで見ると、次の手が閉じてしまう。
+            if (key.startsWith('type:')) await typedIntoAMenu(key);
             const after = await cdp.read(LOOK);
             // **A wait is not a key.** It was counted with them, so the
             // number at the bottom grew by one for every `wait:` in the round

@@ -8959,16 +8959,47 @@ use crate::ai::StoredChatExt;
         assert!(app.file_clip.is_none(), "c does not touch the file clipboard");
     }
 
+    /// `y` と `Ctrl+V` がどちらも `paste_clip` へ行くこと。**見ているのは
+    /// 道筋であって、クリップボードの中身ではない** ── 中身の規則
+    /// （自前の register が OS より強い・切り取りは paste で尽きる・同じ
+    /// ディレクトリへは貼らない）は `cian-core` の `clip::plan` が、OS 側を
+    /// 差し替えられる形で持っている。
+    ///
+    /// **本物のクリップボードを見に行かせない。** ここは最初「何も入って
+    /// いなければ『clipboard has no files』と言う」で見ていて、それは
+    /// **この機械のペーストボードに何が載っているか**で通ったり落ちたり
+    /// する。`drive.js` を一周させるとコピーが走って実際にファイルが載るので、
+    /// `cargo test` → `drive.js` → `cargo test` の順に踏むと「さっきまで
+    /// 緑だったテストが落ちた」に見える（2026-09-16 に実際にそうなった）。
+    ///
+    /// 自前の register を埋めておけば OS 側は**引かれない**（`plan` は
+    /// `own` が空のときだけ `os()` を呼ぶ）。行き先に既にある1本を入れて、
+    /// `AlreadyHere` の言葉が出ることで道筋を見る ── この言葉は
+    /// `paste_clip` からしか出ないので、コピーや転送に逸れれば落ちる。
     #[test]
     fn y_and_ctrl_v_both_paste() {
         let ctrl_v = KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL);
         for trigger in [key('y'), ctrl_v] {
             let (_l, _r, mut app) = app_two_dirs(&["a.txt"], &[]);
             app.focus(FocusedPane::Right); // paste into the (empty) right pane
-            // Nothing on the clipboard yet → paste reports it (proves it routed
-            // to paste_clip rather than a copy/transfer).
+            // **行き先に在ることにする。** `plan` は親を見比べるだけで
+            // ディスクを見ないので、置く必要はない ── 右ペインは空のまま
+            // でよく、`y` が「カーソルの行」に逸れる余地も残らない。
+            //
+            // 親は**ペインに訊く**。`TempDir` の `/var/…` と、ペインが持って
+            // いる `/private/var/…` は mac では別の文字列で、`r.path()` から
+            // 組むと親が一致せず `Go` に落ちる（実際に落ちた）。
+            let dest = app.active_pane().unwrap().cwd.clone();
+            app.file_clip = Some(FileClipboard {
+                paths: vec![dest.join("ghost.txt")],
+                op: ClipOp::Copy,
+            });
             app.handle_key(trigger).unwrap();
-            assert_eq!(app.message.as_deref(), Some("clipboard has no files"), "paste ran for {trigger:?}");
+            assert_eq!(
+                app.message.as_deref(),
+                Some("already in this directory"),
+                "paste ran for {trigger:?}",
+            );
         }
     }
 
