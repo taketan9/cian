@@ -118,10 +118,10 @@ jobs:
       # **Both architectures**, because his Mac is Intel and the runner is
       # not — a single-slice binary does not fail to run on the other one, it
       # fails to *open*, with nothing on screen to say which Mac it was for.
-      - name: Build the engine (both architectures)
+      - name: Build the engine and the terminal build (both architectures)
         run: |
           for target in aarch64-apple-darwin x86_64-apple-darwin; do
-            cargo build --release --target "$target" --bin cian-server
+            cargo build --release --target "$target" --bin cian-server --bin cian-tui
           done
 
       # One binary that holds both, where the window's zip expects to find
@@ -157,6 +157,33 @@ jobs:
           path: |
             cian-server-macos.bin
             cian-server-macos.bin.zip
+
+      # **端末版も同じ扱いで出す。** ここまで `cian-tui` は
+      # `source-offline-check`（`everything` のときだけ走るビルド確認）にしか
+      # 出てこず、**資材に一度も入っていなかった** ── 端末版の直しを実機で
+      # 試す道が「ソースから cargo build」しか無かった（2026-09-16、本人）。
+      # 窓版と違って Electron も書体も要らない一本の実行ファイルなので、
+      # エンジンと同じ形（生と zip の2つ）で置く。
+      - name: Make the terminal build universal
+        run: |
+          lipo -create \
+            target/aarch64-apple-darwin/release/cian-tui \
+            target/x86_64-apple-darwin/release/cian-tui \
+            -output target/release/cian-tui
+          lipo -info target/release/cian-tui
+
+      - name: Stage the terminal build
+        run: |
+          cp target/release/cian-tui cian-tui-macos.bin
+          zip -X -q cian-tui-macos.bin.zip cian-tui-macos.bin
+
+      - name: Upload the terminal build
+        uses: actions/upload-artifact@v6
+        with:
+          name: cian-tui-macos
+          path: |
+            cian-tui-macos.bin
+            cian-tui-macos.bin.zip
 
       # The window front end for macOS — the same contents as the Windows
       # one, with the universal engine beside it. Everything except Electron
@@ -228,8 +255,8 @@ jobs:
 
       # The engine, always: it is what the window in the zip talks to, and it
       # is the fastest of the three to build.
-      - name: Build the engine
-        run: cargo build --release --bin cian-server
+      - name: Build the engine and the terminal build
+        run: cargo build --release --bin cian-server --bin cian-tui
 
       # The engine on its own, nine megabytes.
       #
@@ -262,6 +289,22 @@ jobs:
           path: |
             cian-server-win-x64.exe
             cian-server-win-x64.exe.zip
+
+      # 端末版。macOS 側と同じ理由で、生と zip の2つ ── 会社の網は裸の
+      # `.exe` を断ることがあり、実際に断られた（エンジンの註にある形）。
+      - name: Stage the terminal build
+        shell: pwsh
+        run: |
+          Copy-Item target/release/cian-tui.exe cian-tui-win-x64.exe
+          Compress-Archive -Path cian-tui-win-x64.exe -DestinationPath cian-tui-win-x64.exe.zip
+
+      - name: Upload the terminal build
+        uses: actions/upload-artifact@v6
+        with:
+          name: cian-tui-win-x64
+          path: |
+            cian-tui-win-x64.exe
+            cian-tui-win-x64.exe.zip
 
       # The window front end, ready to run. cian-windows-x64.zip carries the
       # three exes and nothing of `gui/`, so until now the only way to get the

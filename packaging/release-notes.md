@@ -5,9 +5,16 @@
 | **Windows で、とにかく動かしたい** | **`cian-win-x64.zip`**（124MB）── Electron ごと入っています。展開して **`cian.exe` をダブルクリック**。用意するものはありません |
 | Windows で、社内にある Electron を使いたい | `cian-gui-win-x64.zip`（14MB）── 前面だけ。`run.bat` が Electron を探します |
 | **Mac で窓版（Electron）** | **`cian-gui-macos.zip`** — Electron 本体は別途必要。エンジンは Intel と Apple Silicon の両方入り |
+| **端末で使いたい（端末版）** | **`cian-tui-win-x64.exe`／`cian-tui-macos.bin`** ── 一本の実行ファイルだけ。Electron も書体も要りません。お使いの端末（WezTerm・iTerm2・Windows Terminal）で走らせます |
 | エンジンだけ差し替えたい | `cian-server-win-x64.exe`（10MB）／`cian-server-macos.bin` |
-| **`.exe` が社内の網に止められる** | **`cian-server-win-x64.exe.zip`**（4MB）／`cian-server-macos.bin.zip` — 中身は同じものが1つだけ |
+| **`.exe` が社内の網に止められる** | **`cian-server-win-x64.exe.zip`**（4MB）／`cian-server-macos.bin.zip`／`cian-tui-win-x64.exe.zip`／`cian-tui-macos.bin.zip` — 中身は同じものが1つだけ |
 | 壊れずに届いたかの確認 | `SHA256SUMS` — `sha256sum -c SHA256SUMS` / `Get-FileHash` |
+
+**端末版（`cian-tui`）は 2026-09-16 から資材に入りました。** それまでは
+`release.yml` のビルド確認にしか出てこず、実機で試すにはソースから
+`cargo build` するしかありませんでした。**窓版と同じ機能を、端末の中で動かす
+もの**です ── 設定（`init.lua`）も配色も両方で同じものを読みます。
+Mac 版は Intel と Apple Silicon の両方が一本に入っています。
 
 **Windows の zip は2つあって、違いは「Chromium を誰が持ってくるか」だけです。**
 `cian-win-x64.zip` は中に Electron を抱えているので 124MB（展開 307MB）、
