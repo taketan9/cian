@@ -1644,7 +1644,7 @@ impl App {
     }
 
     /// A scrolling report reads like the manual, except Esc puts back whatever
-    /// it was raised over (the chat, for a `Ctrl+D` retrieval trace).
+    /// it was raised over (the file being viewed, for the viewer's `?`).
     fn report_key(&mut self, key: KeyEvent) -> Result<()> {
         if matches!(key.code, KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q')) {
             if let Popup::Report { back, .. } = &mut self.popup {

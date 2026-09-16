@@ -375,9 +375,11 @@ enum Popup {
     Notice { lines: Vec<String> },
     /// A read-only report too tall for a `Notice`, so it scrolls like the
     /// manual but carries its own title.
-    /// `back` is the popup to put back on Esc — a report raised over the chat
-    /// with `Ctrl+D` drops the user straight back into the conversation it
-    /// explains.
+    /// `back` is the popup to put back on Esc — the report is raised over
+    /// whatever was already open, so Esc drops the user straight back into the
+    /// file it explains. The only thing that raises one now is `?` in the
+    /// viewer, listing the viewer's own keys (`draw_report` carries the rest
+    /// of that history).
     Report { title: String, lines: Vec<String>, scroll: usize, back: Box<Popup> },
     /// A fuzzy picker over commands or directories: type to filter, Enter runs
     /// or jumps. `shown` holds the indices of `items` currently matching `query`,

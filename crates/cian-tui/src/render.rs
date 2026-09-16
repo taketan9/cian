@@ -5744,8 +5744,8 @@ fn draw_manual(f: &mut Frame, area: Rect, popup: &mut Popup, lang: Lang) {
 fn draw_report(f: &mut Frame, area: Rect, popup: &mut Popup, lang: Lang) {
     let Popup::Report { title, lines, scroll, .. } = popup else { return };
     let title = title.clone();
-    // Wider than the manual: a report is a table of keys or of scores, and a
-    // truncated row is a row that has to be guessed at.
+    // Wider than the manual: a report is a table of keys, and a truncated row
+    // is a row that has to be guessed at.
     draw_scrolling_text(f, area, lines, scroll, &title, 92, lang);
 }
 
