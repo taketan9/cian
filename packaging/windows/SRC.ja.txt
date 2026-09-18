@@ -1,0 +1,55 @@
+cian — ソース一式（社内で組み立てる） Windows x64
+===================================
+
+社内で cian.exe を組み立てるための一式です。crmaine の crmaine-src と
+同じ考え方で、持ち込むのはこの zip とエンジン 1 個だけです。
+
+  cian-src-win.zip           この一式（約 30MB）
+  cian-server-win-x64.exe    エンジン。別の資材として置いてあります
+
+エンジンだけは社内で作れません（Rust と C コンパイラが要ります）。
+前面は JavaScript なので、Node があれば組み立てられます。
+
+同梱しているもの
+  gui\                       前面一式と vendor\（Monaco・monaco-vim・
+                             mermaid・同梱フォント）。npm install は要りません
+  examples\init.lua          設定の見本
+  packaging\windows\         この読み物一式
+  Cargo.toml                 版番号をここから読みます
+
+同梱していないもの
+  Electron 本体。社内にあるものを使ってください。
+  rcedit.exe。exe のアイコンを焼くだけで、無くても動きます。
+    https://github.com/electron/rcedit/releases から 1 個落とせます。
+
+組み立て
+  1. 好きな場所に展開する
+       tar -xf cian-src-win.zip -C C:\work
+  2. その中で 1 行
+       cd C:\work\cian-src-win
+       node gui\pack.js --out dist --platform win32 ^
+         --electron C:\electron\electron-v38.0.0-win32-x64 ^
+         --engine C:\落とした場所\cian-server-win-x64.exe ^
+         --rcedit C:\道具\rcedit.exe --zip
+
+  dist\cian\cian.exe ができます。--zip を付けると
+  dist\cian-win-x64.zip も並びます。配るのはそちらです。
+
+  --electron はフォルダを指します（中に electron.exe があるもの）。
+  --engine は落とした名前のまま渡して構いません。中で cian-server.exe に
+  改名します。
+
+  何を入れるかだけ見たいときは
+       node gui\pack.js --where --platform win32
+
+うまくいかないとき
+  「cian-server not found」   --engine を渡していないか、綴りが違います
+  一覧の字が等幅にならない   gui\vendor\fonts\cian.ttf が欠けています。
+                             zip を展開し直してください
+  版が 0.0.0 になる          Cargo.toml と同じ階層で叩いていません
+
+エンジンも社内で作りたいとき
+  この一式に Rust のソースは入っていません。必要なら
+  cian-source-offline.zip（約 180MB）を使ってください。そちらは
+  vendor 済みで、ネットワーク無しで cargo build が通ります。
+  作り方は同梱の packaging\offline\README.txt にあります。

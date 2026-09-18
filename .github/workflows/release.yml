@@ -372,6 +372,52 @@ jobs:
       # down why: a tool that fetches while it builds leaves half-made output
       # when the network drops, and that output looks finished. `gui/pack.js`
       # copies and renames, then checks what it made.
+      # **社内で組み立てるための一式。** crmaine の `crmaine-src` と同じ考えで、
+      # 持ち込むのはこれ（約30MB）とエンジン1個だけ ── 社内で
+      # `node gui/pack.js` を叩けば `cian.exe` ができる。
+      #
+      # **`npm install` は要らない。** `pack.js` が要るのは `gui/vendor/` が
+      # 埋まっていることだけで、それは上の「Fetch the editor's runtime」が
+      # 済ませている。`node_modules`（508MB）は入れない。
+      #
+      # **`pack.js` はリポジトリの形を前提にしている** ── `gui/` の親から
+      # `Cargo.toml`（版）・README・LICENSE・`examples/`・`packaging/windows/` を
+      # 読む。だから `cian-gui-win-x64.zip`（平らに展開される前面だけの zip）
+      # では叩けない。**同じ中身でも、形が違うと動かない。**
+      #
+      # Rust のソースは入れない ── 梱包に要らないので。エンジンごと社内で
+      # 作りたい人には `cian-source-offline.zip`（`everything` の裏）がある。
+      - name: Stage the source bundle
+        shell: pwsh
+        run: |
+          $stage = "cian-src-win"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          foreach ($f in 'Cargo.toml','README.md','README.ja.md','LICENSE','cian.ico','cian.png') {
+            Copy-Item $f $stage
+          }
+          New-Item -ItemType Directory -Force -Path "$stage/examples" | Out-Null
+          Copy-Item examples/init.lua "$stage/examples/"
+          New-Item -ItemType Directory -Force -Path "$stage/packaging/windows" | Out-Null
+          Copy-Item packaging/windows/*.txt "$stage/packaging/windows/"
+          # `gui/` は node_modules を除いて丸ごと。`pack.js` 自身と `vendor/` が要る。
+          robocopy gui "$stage/gui" /E /XD node_modules | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy failed: $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
+          # **出口で検証する。** `vendor.js` は写せなくても続けるので、
+          # 書体の抜けた一式が黙って出る（窓版の zip で一度やっている）。
+          foreach ($need in "$stage/gui/pack.js", "$stage/gui/vendor/fonts/cian.ttf",
+                            "$stage/gui/vendor/monaco/vs/loader.js", "$stage/packaging/windows/SRC.ja.txt") {
+            if (!(Test-Path $need)) { throw "$need is missing — the bundle would not build" }
+          }
+          Compress-Archive -Path $stage -DestinationPath cian-src-win.zip
+          "{0:N0} MB" -f ((Get-Item cian-src-win.zip).Length / 1MB)
+
+      - name: Upload the source bundle
+        uses: actions/upload-artifact@v6
+        with:
+          name: cian-src-win
+          path: cian-src-win.zip
+
       - name: Fetch Electron and rcedit
         shell: pwsh
         run: |
