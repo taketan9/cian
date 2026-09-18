@@ -4,14 +4,32 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Built-in SFTP file transfer for cian, over pure-Rust russh (no C deps)"
+description = "Built-in SFTP file transfer for cian, over russh (ring backend: C, but no CMake or NASM)"
 
 [dependencies]
 anyhow = { workspace = true }
 # Pure-Rust SSH/SFTP so the single-binary build (and Windows) stay C-dependency
 # free. A tiny current-thread tokio runtime drives the async client from cian's
 # own worker threads.
-russh = "0.62"
+# **暗号の裏は `ring`。既定の `aws-lc-rs` は使わない。**
+#
+# 既定のままだと `aws-lc-sys` が入り、Windows で作るのに **CMake と NASM** が
+# 要る ── 会社のオフライン機でエンジンを作れない一番の理由がこれで、
+# `packaging/offline/README.txt` に「失敗の9割は aws-lc-sys」と書いてある。
+#
+# `ring` に替えると `aws-lc-sys` も `cmake` も依存から消え、**残る C は
+# `mlua`（Lua を自前で焼く）と `ring` 自身だけ**になる。`ring` は Windows 向けに
+# **アセンブル済みの `.o` を同梱**しているので NASM は要らない（あちらの
+# `build.rs`: "Nasm was already used to generate the object files"）。
+#
+# **品揃えは変わらない。** `russh` は AES-GCM と ChaCha20-Poly1305 を
+# 「`aws_lc_rs::aead` から取るか `ring::aead` から取るか」で差し替えているだけで、
+# 対応アルゴリズムの集合は同じ（`cipher/mod.rs`）。
+#
+# 本物の sshd 相手に通してある（`python3 scripts/remote.py`）── 木ごと送る・
+# 降ろす・サーバ間中継・レート上限・書き戻し・削除まで。**`cargo test` は
+# SFTP を1本も触らない**ので、ここを替えたら必ず `remote.py` を回すこと。
+russh = { version = "0.62", default-features = false, features = ["ring", "flate2", "rsa"] }
 russh-sftp = "2.3"
 tokio = { version = "1", features = ["rt", "io-util", "net", "macros", "fs"] }
 # A download is a copy, so it keeps the server's date. Setting a time by path
