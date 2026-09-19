@@ -1,7 +1,4 @@
 /target
-# Each spike is its own cargo workspace, so each grows a `target/` of its own —
-# `/target` above does not reach them.
-/spikes/*/target
 # The bundled font is fetched at build time, not committed: twelve megabytes
 # that would sit in every clone forever. See .github/workflows/release.yml.
 # （2026-09-06 に `crates/cian-gui/fonts/` から移した。あのクレートが出たので）
