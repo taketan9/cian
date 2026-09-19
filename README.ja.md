@@ -15,20 +15,23 @@
 
 ## ダウンロード
 
-**[→ リリース](https://github.com/taketan9/cian/releases)** — ウィンドウ版とエンジン、それに照合用の `SHA256SUMS` が付いています。
+**[→ リリース](https://github.com/taketan9/cian/releases)** — **資材は3点と `SHA256SUMS` だけです**（2026-09-20 に13点から絞りました。物差しは「その機械で作れないものだけ置く」）。
 
 | 使いたいもの | 落とすもの | 中身 |
 |---|---|---|
-| Windows でウィンドウ版 | `cian-gui-win-x64.zip`（15MB） | 前面一式・エディタの実行時・同梱フォント・エンジン。**Electron 本体だけ別途必要**（247MB、社内に既にあるものを使う前提） |
-| Mac でウィンドウ版 | `cian-gui-macos.zip`（18MB） | 同上。エンジンは Intel と Apple シリコンの両方入り |
-| エンジンだけ差し替え | `cian-server-win-x64.exe`（10MB）／`cian-server-macos.bin` | ウィンドウ版が喋る相手。前面は JavaScript なので、更新はたいていこれ1つで足ります |
-| `.exe` が社内の網に止められる | `cian-server-win-x64.exe.zip`（4MB）／`cian-server-macos.bin.zip` | 中身も名前も生のものと同じ。展開するとその exe がそのまま出ます |
+| Windows でウィンドウ版 | `cian-src-win.zip`（10MB）＋ `cian-server-win-x64.exe.zip`（3MB） | 前面一式・エディタの実行時・同梱フォント、それにエンジン。展開して `node gui\pack.js` を1回叩くと `cian.exe` ができます（`npm install` も Rust も不要）。**Electron 本体だけ別途必要**（247MB、社内に既にあるものを使う前提）。手順は同梱の `packaging\windows\SRC.ja.txt` |
+| エンジンだけ差し替え | `cian-server-win-x64.exe.zip`（3MB） | ウィンドウ版が喋る相手。前面は JavaScript なので、更新はたいていこれ1つで足ります |
+| 端末版 | `cian-tui-win-x64.exe.zip`（5MB） | 一本の実行ファイルだけ。Electron も書体も要りません |
 | ビルドする人向け | `cian-source-offline.zip`（182MB） | 依存クレートを全部同梱したソース一式 — [ソースからビルド](#ソースからビルド)を参照。Actions から `everything = true` で手動実行 |
 
-**配っているのはウィンドウ版だけです**（2026-09-10）。端末版（`cian-tui`）は生きていて
-テストも通っていますが、資材としては出していません。要るならソースから建ててください。
+**全部 zip です。** `.exe` の直接ダウンロードを止める網が実際にあり、**zip が通る網は
+裸の exe も通りますが、逆は通りません。**
 
-展開して実行するだけです。インストーラの質問に答える必要はなく、設定を保存するまで置いたディレクトリの外には何も書きません。
+**Mac の資材はリリースには付けていません。** ビルド自体は毎回走っているので、
+Actions の成果物から取ってください（下の `gh run download`）。手元に Rust と Node が
+あるなら、`packaging/macos/bundle-gui.sh --dock` のほうが速いはずです。
+
+インストーラはありません。展開して（Windows のウィンドウ版は、そこから1行で組み立てて）実行するだけで、設定を保存するまで置いたディレクトリの外には何も書きません。
 
 **ファイラは1つ、前面は2つ。** ウィンドウ版は Electron の中で描くので、Windows でも
 日本語が潰れません。`cian-tui` は今ある端末の中で動きます — ssh 先や tmux の
@@ -587,35 +590,40 @@ flowchart TD
 
 ## Windows へオフライン導入
 
-**要るのは2つだけで、どちらも展開するだけです。** ネットにつながる機械で
-[リリース](https://github.com/taketan9/cian/releases) から `cian-gui-win-x64.zip`（15MB）を取り、
-`SHA256SUMS` と照合して持ち込みます：
+**持ち込むのは 13MB です。** ネットにつながる機械で
+[リリース](https://github.com/taketan9/cian/releases) から `cian-src-win.zip`（10MB）と
+`cian-server-win-x64.exe.zip`（3MB）を取り、`SHA256SUMS` と照合して持ち込みます：
 
 ```powershell
-Get-FileHash cian-gui-win-x64.zip -Algorithm SHA256
+Get-FileHash cian-src-win.zip -Algorithm SHA256
 ```
 
-もう1つは **Electron 本体**（247MB）。zip には入っていません ── 社内に既にあるものを
-使う前提で、無ければ [electron/electron のリリース](https://github.com/electron/electron/releases)
-から `electron-v33.x.x-win32-x64.zip` を落として展開します。Rust もコンパイラも要りません
-（前面は JavaScript で、エンジンは exe で届きます）。
+社内で要るものは **Node** と **Electron 本体**（247MB）だけです。どちらも zip には
+入っていません ── 社内に既にあるものを使う前提で、Electron が無ければ
+[electron/electron のリリース](https://github.com/electron/electron/releases)
+から `electron-v38.x.x-win32-x64.zip` を落として展開します。**Rust もコンパイラも
+要りません**（前面は JavaScript で、エンジンは exe で届きます）。
 
 **展開する前に、zip のブロックを外してください。** 右クリック →「プロパティ」→
 「セキュリティ: 他のコンピューターから取得したものです」があれば **「許可する」** →
 OK。外さないと展開後の全ファイルに印が残り、`cian-server.exe` が黙って起動しません
-（窓は出るのに中身が空、という形で出ます）。
+（窓は出るのに中身が空、という形で出ます）。`tar -xf` で展開すれば印は写りません。
 
-置き方と更新のしかたは zip の中の `GUI.txt` と `DEPLOY.ja.txt` にあります ──
-`electron\` と `gui\` を並べ、`run.bat` で起動します。cian を上げるときは
-`gui\` を新しい zip の中身で置き換えるだけです。
+組み立ては1行です（手順の全文は zip の中の `packaging\windows\SRC.ja.txt`）：
 
-zip 自体を自前で作ることもできます（Mac から、Windows の開発機なしで）。同梱の
-ワークフローが本物の Windows ランナーでビルドします — タグを push
-（`git tag v1.1.0 && git push --tags`）、または **Actions → release → Run workflow** で、
-その実行結果のアーティファクトを取ってください。
+```powershell
+node gui\pack.js --out dist --platform win32 `
+  --electron C:\electron\electron-v38.0.0-win32-x64 `
+  --engine C:\落とした場所\cian-server-win-x64.exe --zip
+```
 
-**端末版（`cian-tui.exe`）は資材として出していません**（2026-09-10）。要るなら
-`cian-source-offline.zip` を持ち込んで建ててください。
+`dist\cian\cian.exe` ができます。**配るのは `dist\cian-win-x64.zip`** のほうで、
+受け取った人は展開して `cian.exe` をダブルクリックするだけです（Electron ごと
+入っています）。置き方と更新のしかたは同梱の `START.ja.txt` と `DEPLOY.ja.txt` に
+あります。
+
+**端末版が要るなら `cian-tui-win-x64.exe.zip`**（5MB）を一緒に持ち込んでください。
+一本の実行ファイルで、Electron も書体も要りません。
 
 ---
 

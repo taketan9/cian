@@ -4,8 +4,9 @@ cian — ソース一式（社内で組み立てる） Windows x64
 社内で cian.exe を組み立てるための一式です。crmaine の crmaine-src と
 同じ考え方で、持ち込むのはこの zip とエンジン 1 個だけです。
 
-  cian-src-win.zip           この一式（約 30MB）
-  cian-server-win-x64.exe    エンジン。別の資材として置いてあります
+  cian-src-win.zip           この一式（約 10MB）
+  cian-server-win-x64.exe.zip  エンジン。別の資材として置いてあります
+                             （展開すると cian-server-win-x64.exe が出ます）
 
 エンジンだけは社内で作れません（Rust と C コンパイラが要ります）。
 前面は JavaScript なので、Node があれば組み立てられます。
@@ -50,6 +51,7 @@ cian — ソース一式（社内で組み立てる） Windows x64
 
 エンジンも社内で作りたいとき
   この一式に Rust のソースは入っていません。必要なら
-  cian-source-offline.zip（約 180MB）を使ってください。そちらは
+  cian-source-offline.zip（約 180MB）を使ってください。Actions から
+  release を everything = true で手動実行すると並びます。そちらは
   vendor 済みで、ネットワーク無しで cargo build が通ります。
   作り方は同梱の packaging\offline\README.txt にあります。

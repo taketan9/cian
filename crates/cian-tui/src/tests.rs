@@ -16155,7 +16155,7 @@ mod going_up_lands_where_you_were {
 mod the_panel_answers_a_capital_letter {
     use super::*;
 
-    /// `Char('H')` with no modifiers — exactly what `cian-gui` produces.
+    /// `Char('H')` with no modifiers — exactly what the window build produces.
     fn windowed(c: char) -> KeyEvent {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
     }

@@ -10,7 +10,7 @@
 //! It has to live here rather than in `crates/cian-tui`, which is where the
 //! rest of the terminal build is: a build script contributes resources to the
 //! binaries of *its own* package, and the exe is produced by this one. The
-//! same reasoning puts a copy in `cian-server` and `cian-gui`.
+//! same reasoning puts a copy in `cian-server`.
 //!
 //! Nothing happens off Windows — `winresource` is a Windows-only
 //! build-dependency, so this whole module is absent from a Mac build rather

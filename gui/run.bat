@@ -135,7 +135,7 @@ if not exist "%HERE%\cian-server.exe" (
     if not exist "%HERE%\..\target\release\cian-server.exe" (
         if not exist "%HERE%\..\target\debug\cian-server.exe" (
             echo cian-server.exe is missing. Either:
-            echo   - put the release's cian-server-win-x64.exe at
+            echo   - unzip the release's cian-server-win-x64.exe.zip and put it at
             echo     "%HERE%\cian-server.exe"
             echo   - or build it: cargo build --release -p cian-server
             pause

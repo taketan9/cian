@@ -20,12 +20,9 @@ __pycache__/
 
 # Local handoff doc for cross-session continuity; not part of the project.
 /HANDOFF.md
-# What the release workflow stages before zipping, and where `bundle-gui.sh`
-# leaves the .app if it is pointed here: a whole application bundle, binaries
-# and all.
-/cian-macos/
-/cian-windows-x64/
-/target/cian.app
+# What `gui/pack.js --out dist` leaves behind when it is run from a checkout:
+# a whole application bundle, Electron and all.
+/dist/
 
 # Local Claude Code settings. The skill link beside it is shared.
 .claude/settings.local.json
@@ -40,8 +37,3 @@ gui/vendor/
 # — a file that ships is a file the next version overwrites, which is the whole
 # reason this exists instead of editing run.bat.
 gui/electron.txt
-
-# Xcode がここに建てる（資材は scripts/ios-build.sh が作り直す）
-ios/build/
-ios/*.xcodeproj/xcuserdata/
-ios/*.xcodeproj/project.xcworkspace/

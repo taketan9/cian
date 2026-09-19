@@ -15,21 +15,24 @@ One binary. macOS and Windows. No runtime, no DLLs, nothing to install alongside
 
 ## Download
 
-**[→ Releases](https://github.com/taketan9/cian/releases)** — the window build and the engine, and a `SHA256SUMS` to check them against.
+**[→ Releases](https://github.com/taketan9/cian/releases)** — **three packages and a `SHA256SUMS`** (down from thirteen on 2026-09-20; the measure is "publish only what the machine that needs it cannot make").
 
 | What you want | What to download | What is in it |
 |---|---|---|
-| The window, on Windows | `cian-gui-win-x64.zip` (15MB) | the front end, the editor's runtime, the bundled font, and the engine. **Electron itself is not in it** (247MB — the assumption is that your machine already has one) |
-| The window, on a Mac | `cian-gui-macos.zip` (18MB) | the same, with a universal engine (Intel and Apple silicon) |
-| Just the engine | `cian-server-win-x64.exe` (10MB) / `cian-server-macos.bin` | what the window talks to. The front end is JavaScript, so this one file is usually the whole update |
-| A network that refuses a bare `.exe` | `cian-server-win-x64.exe.zip` (4MB) / `cian-server-macos.bin.zip` | the same file, same name, inside a zip |
+| The window, on Windows | `cian-src-win.zip` (10MB) + `cian-server-win-x64.exe.zip` (3MB) | the front end, the editor's runtime, the bundled font, and the engine. Unpack and run `node gui\pack.js` once to get `cian.exe` — no `npm install`, no Rust. **Electron itself is not in it** (247MB — the assumption is that your machine already has one). The steps are in `packaging\windows\SRC.ja.txt` inside the zip |
+| Just the engine | `cian-server-win-x64.exe.zip` (3MB) | what the window talks to. The front end is JavaScript, so this one file is usually the whole update |
+| The terminal build | `cian-tui-win-x64.exe.zip` (5MB) | one executable. No Electron, no font to install |
 | Any, to build on | `cian-source-offline.zip` (182MB) | the source with every dependency already downloaded — see [build from source](#build-from-source); run `release` by hand with `everything = true` |
 
-**The window build is the whole of what is distributed** (2026-09-10). The
-terminal build still exists and is still tested; it is simply not handed out.
-Build it from source if you want it.
+**Everything is zipped.** A corporate network that refuses a bare `.exe` download
+is a real thing and one refused ours: **a network that lets a zip through lets a
+bare exe through, and not the other way round.**
 
-Unpack it and run it. There is no installer to answer to, and nothing is written outside the folder you put it in until you save a setting.
+**macOS packages are not attached to releases.** They are still built on every
+run — take them from the workflow artifacts (`gh run download`, below). With Rust
+and Node on the machine, `packaging/macos/bundle-gui.sh --dock` is faster.
+
+There is no installer to answer to — unpack it, build it in one line on Windows, and nothing is written outside the folder you put it in until you save a setting.
 
 **One file manager, two front ends.** The window draws inside Electron, which
 is what makes Japanese come out right on Windows; `cian-tui` runs inside the
@@ -603,21 +606,27 @@ flowchart TD
 
 ## Install on Windows (offline)
 
-**Two things, both of which only need unzipping.** On a machine with a network, take `cian-gui-win-x64.zip` (15MB) from the [releases](https://github.com/taketan9/cian/releases), check it against `SHA256SUMS`, and carry it across:
+**13MB crosses the air gap.** On a machine with a network, take `cian-src-win.zip` (10MB) and `cian-server-win-x64.exe.zip` (3MB) from the [releases](https://github.com/taketan9/cian/releases), check them against `SHA256SUMS`, and carry them across:
 
 ```powershell
-Get-FileHash cian-gui-win-x64.zip -Algorithm SHA256
+Get-FileHash cian-src-win.zip -Algorithm SHA256
 ```
 
-The other is **Electron itself** (247MB), which is not in the zip — the assumption is that the machine already has one. If it does not, take `electron-v33.x.x-win32-x64.zip` from [electron/electron's releases](https://github.com/electron/electron/releases). No Rust and no compiler: the front end is JavaScript and the engine arrives as an exe.
+What the far machine has to supply is **Node** and **Electron itself** (247MB) — the assumption is that it already has both. If it does not have Electron, take `electron-v38.x.x-win32-x64.zip` from [electron/electron's releases](https://github.com/electron/electron/releases). No Rust and no compiler: the front end is JavaScript and the engine arrives as an exe.
 
-**Unblock the zip before unpacking it.** Right-click → Properties → tick **Unblock** if "This file came from another computer" is there. Leave it on and every unpacked file keeps the mark, and `cian-server.exe` will not start — which shows up as a window with nothing in it.
+**Unblock the zip before unpacking it.** Right-click → Properties → tick **Unblock** if "This file came from another computer" is there. Leave it on and every unpacked file keeps the mark, and `cian-server.exe` will not start — which shows up as a window with nothing in it. Unpacking with `tar -xf` does not copy the mark at all.
 
-How to lay it out and how to update it are in `GUI.txt` and `DEPLOY.ja.txt` inside the zip: put `electron\` and `gui\` side by side and start it with `run.bat`. Updating cian means replacing `gui\` with the contents of a newer zip.
+Then one line (the whole procedure is in `packaging\windows\SRC.ja.txt` inside the zip):
 
-To build the zip yourself instead — from a Mac, with no Windows dev machine — the bundled workflow does it on a real Windows runner: push a tag (`git tag v1.1.0 && git push --tags`), or **Actions → release → Run workflow**, and take the artifact from that run.
+```powershell
+node gui\pack.js --out dist --platform win32 `
+  --electron C:\electron\electron-v38.0.0-win32-x64 `
+  --engine C:\downloads\cian-server-win-x64.exe --zip
+```
 
-**The terminal build is not handed out** (2026-09-10). If you want `cian-tui.exe`, carry `cian-source-offline.zip` across and build it.
+That leaves `dist\cian\cian.exe`, and **`dist\cian-win-x64.zip` is what you hand out** — the people who get it unpack it and double-click `cian.exe`, Electron included. How to lay it out on a shared machine and how to update it are in `START.ja.txt` and `DEPLOY.ja.txt` inside the zip.
+
+**If you want the terminal build, carry `cian-tui-win-x64.exe.zip`** (5MB) across too. One executable, no Electron and no font to install.
 
 ---
 

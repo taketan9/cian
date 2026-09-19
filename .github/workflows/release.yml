@@ -1,15 +1,19 @@
 name: release
 
-# Builds what is actually handed to people — the window front end for Windows
-# and for a Mac, and the engine each one talks to — and publishes them as one
-# GitHub Release.
+# Builds what is actually handed to people and publishes it as one GitHub
+# Release.
 #
-# **The window build is the whole of what is distributed** (2026-09-10, his
-# decision). The terminal build still exists, is still tested, and still builds
-# from source; it is simply not something this workflow hands out. What that
-# removed: `cian-windows-x64.zip` (which carried `cian.exe` — the winit front
-# end, gone from main on 2026-09-06 — beside `cian-tui.exe`), and, earlier the
-# same day, the macOS `.app` package.
+# **資材は3点＋チェックサム**（2026-09-20、本人の判断。13点あった）──
+# `cian-src-win.zip`・`cian-server-win-x64.exe.zip`・`cian-tui-win-x64.exe.zip`。
+# 物差しは**「その機械で作れないものだけ置く」**で、社内に持ち込む道が
+# 「一式＋エンジン → `node gui/pack.js`」に決まった時点で、残りはその道で
+# 作れるものか、誰も取らないものになった。**外した5点＝Mac の資材は、今も
+# ジョブが作って成果物に上げている** ── 何も削っていない。付けるものを
+# publish が選んでいる（`Keep only what a release hands out`）。
+#
+# その前の版: 2026-09-10 に「窓版が配るものの全部」になり、`cian-windows-x64.zip`
+# （winit 版 `cian.exe` を抱えていた。本体は 2026-09-06 に main から出た）と
+# macOS の `.app` が消えた。端末版は 2026-09-16 に資材へ戻った。
 #
 # Trigger it by pushing a version tag (`git tag v1.1.0 && git push --tags`), or
 # by hand from the Actions tab. A tag publishes a release; a manual run only
@@ -33,9 +37,8 @@ on:
   workflow_dispatch:
     inputs:
       everything:
-        # The window builds and the engines are what a release is, and they run
-        # every time. This adds the one package nobody needs unless they are
-        # building: the source with every crate already vendored (182MB).
+        # 3点は毎回走る。これが足すのは、作る人しか要らない1つ ── すべての
+        # クレートを vendor 済みのソース一式（182MB）。
         description: "Also build the offline source bundle (182MB)"
         type: boolean
         default: false
@@ -43,14 +46,13 @@ on:
 permissions:
   contents: write
 
-# **The window build, on both platforms, every time.**
+# **両方の platform を、毎回。** 出る資材は Windows のものだけだが、Mac 側も
+# 毎回作る ── 彼の Mac（Intel）で試すときはここの成果物を取るし、両アーキテクチャ
+# を貼り合わせた engine が壊れていないことは、作ってみないと分からない。
 #
-# 2026-09-01 it was Windows only: "しばらくは Windows の gui モードでしか
-# 動作させないから、ビルドは win-gui だけでいいよ" — the full set was eleven
-# minutes and a quarter of a gigabyte, most of it for platforms nobody was
-# running that week. The macOS window has since joined it; what left instead
-# was everything that packaged the terminal build and the winit front end
-# (2026-09-10).
+# 2026-09-01 は Windows だけだった: 「しばらくは Windows の gui モードでしか
+# 動作させないから、ビルドは win-gui だけでいいよ」── 全部入りは11分と
+# 1/4 ギガで、その大半がその週に誰も走らせていない platform のものだった。
 #
 # One input is left, and it gates one thing: the offline source bundle, which
 # is 182MB and is only of use to somebody who has to build without a network.
@@ -306,75 +308,26 @@ jobs:
             cian-tui-win-x64.exe
             cian-tui-win-x64.exe.zip
 
-      # The window front end, ready to run. cian-windows-x64.zip carries the
-      # three exes and nothing of `gui/`, so until now the only way to get the
-      # Electron build onto a Windows machine was the 175MB source bundle —
-      # for a front end that is JavaScript and needs no compiler at all.
-      #
-      # Everything except Electron itself: the front end, its vendored runtime
-      # (Monaco, monaco-vim, mermaid, the font), and the engine dropped in
-      # beside it, which is the first place engine.js looks.
+      # `gui/vendor/` — Monaco, monaco-vim, mermaid and the bundled font.
+      # The source bundle below carries it, which is what lets the machine that
+      # unpacks it run `node gui/pack.js` with no `npm install` and no network.
       - name: Fetch the editor's runtime
         run: |
           cd gui
           npm install --omit=dev --no-audit --no-fund
           node vendor.js
 
-      - name: Stage the window front end
-        shell: pwsh
-        run: |
-          $stage = "cian-gui-win-x64"
-          # robocopy rather than Copy-Item: -Exclude does not reach into a
-          # -Recurse copy, and node_modules is a hundred megabytes of the
-          # untrimmed originals that gui/vendor/ already replaces.
-          robocopy gui $stage /E /XD node_modules | Out-Null
-          if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
-          $global:LASTEXITCODE = 0
-          Copy-Item target/release/cian-server.exe "$stage/"
-          Copy-Item packaging/windows/GUI.txt "$stage/"
-          # The checklist travels with the zip: the machine this is carried to
-          # is offline, so a link to it would be a link to nothing.
-          Copy-Item packaging/windows/CHECK.ja.txt "$stage/"
-          # How to put this on a shared machine — and the one trap that
-          # breaks everybody's bookmarks quietly if it is walked into.
-          Copy-Item packaging/windows/DEPLOY.ja.txt "$stage/"
-          # The window's own icon. `main.js` looks beside itself first and at
-          # the repository root second, so this is what makes the packaged
-          # copy find one at all.
-          Copy-Item cian.ico, cian.png "$stage/"
-          # **The font, or stop.** `vendor.js` prints a line and carries on
-          # when it cannot find one, so the first gui-only build shipped a zip
-          # 6MB lighter with no face in it and nothing failed. A package that
-          # is quietly missing something is worse than a build that stops.
-          if (-not (Test-Path "$stage/vendor/fonts/cian.ttf")) {
-              throw "vendor/fonts/cian.ttf is missing — the window would draw the listing in a proportional face"
-          }
-          Copy-Item README.md, README.ja.md, LICENSE "$stage/"
-          New-Item -ItemType Directory -Force -Path "$stage/examples" | Out-Null
-          Copy-Item examples/init.lua "$stage/examples/"
-          Compress-Archive -Path "$stage/*" -DestinationPath "cian-gui-win-x64.zip" -Force
-          "{0:N0} MB" -f ((Get-Item cian-gui-win-x64.zip).Length / 1MB)
-
-      - name: Upload the window front end
-        uses: actions/upload-artifact@v6
-        with:
-          name: cian-gui-win-x64
-          path: cian-gui-win-x64.zip
-
-      # **Electron ごと同梱した版** (2026-09-12, his call: "やっぱり exe を
-      # 叩かせるのがいちばんやりやすい"). The zip above is the front end only
-      # and needs an Electron already on the machine, found by `run.bat`; this
-      # one carries Electron, is launched by double-clicking `cian.exe`, and
-      # so never asks where Electron is. Both ship: the big one is the first
-      # install, the small one is every update after it.
+      # **社内で組み立てるための一式 ── いまはこれが Windows の入口。**
+      # crmaine の `crmaine-src` と同じ考えで、持ち込むのはこれ（10MB）と
+      # エンジン1個だけ。社内で `node gui/pack.js` を叩けば、Electron ごと
+      # 同梱した `cian.exe` ができる。2026-09-12 の「やっぱり exe を叩かせるのが
+      # いちばんやりやすい」は、**CI が 123MB を焼くのではなく、社内のこの一行で
+      # 満たす**ことにした（2026-09-20、本人。社内に Electron はある）。
       #
       # **No electron-builder.** crmaine reached the same conclusion and wrote
       # down why: a tool that fetches while it builds leaves half-made output
       # when the network drops, and that output looks finished. `gui/pack.js`
       # copies and renames, then checks what it made.
-      # **社内で組み立てるための一式。** crmaine の `crmaine-src` と同じ考えで、
-      # 持ち込むのはこれ（約30MB）とエンジン1個だけ ── 社内で
-      # `node gui/pack.js` を叩けば `cian.exe` ができる。
       #
       # **`npm install` は要らない。** `pack.js` が要るのは `gui/vendor/` が
       # 埋まっていることだけで、それは上の「Fetch the editor's runtime」が
@@ -382,8 +335,9 @@ jobs:
       #
       # **`pack.js` はリポジトリの形を前提にしている** ── `gui/` の親から
       # `Cargo.toml`（版）・README・LICENSE・`examples/`・`packaging/windows/` を
-      # 読む。だから `cian-gui-win-x64.zip`（平らに展開される前面だけの zip）
-      # では叩けない。**同じ中身でも、形が違うと動かない。**
+      # 読む。**同じ中身でも、形が違うと動かない** ── 前面だけを平らに展開する
+      # `cian-gui-win-x64.zip` では叩けなかった（その zip は 2026-09-20 に
+      # 資材から外した。この一式が同じ中身を repo の形で持っている）。
       #
       # Rust のソースは入れない ── 梱包に要らないので。エンジンごと社内で
       # 作りたい人には `cian-source-offline.zip`（`everything` の裏）がある。
@@ -417,37 +371,6 @@ jobs:
         with:
           name: cian-src-win
           path: cian-src-win.zip
-
-      - name: Fetch Electron and rcedit
-        shell: pwsh
-        run: |
-          # The earlier install was --omit=dev, which skips Electron — it is a
-          # devDependency because from a checkout it is the thing you run, not
-          # a thing you ship. Here it *is* the thing we ship.
-          cd gui
-          npm install --no-audit --no-fund
-          cd ..
-          # The icon has to be burned into the exe: it is a PE resource, and
-          # nothing in Node can write one. rcedit is a 1MB single exe from
-          # electron/rcedit — the same tool crmaine uses for crmaine.exe.
-          Invoke-WebRequest -Uri "$env:RCEDIT_URL" -OutFile rcedit.exe
-        env:
-          RCEDIT_URL: https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
-
-      - name: Pack the bundled build
-        shell: pwsh
-        run: |
-          node gui/pack.js --out dist --platform win32 `
-            --electron gui/node_modules/electron/dist `
-            --engine target/release/cian-server.exe `
-            --rcedit (Resolve-Path rcedit.exe).Path --zip
-          "{0:N0} MB" -f ((Get-Item dist/cian-win-x64.zip).Length / 1MB)
-
-      - name: Upload the bundled build
-        uses: actions/upload-artifact@v6
-        with:
-          name: cian-win-x64
-          path: dist/cian-win-x64.zip
 
   # The whole of cian as one file that builds with no network at all: the
   # source, and every crate it depends on already downloaded. This is what
@@ -556,9 +479,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # The generated notes are a list of commits, which answers a question
-      # nobody arriving here is asking. Seven files with names like
-      # cian-source-offline.zip, and no hint which one is the program — the
-      # download page has to say which to take before it says what changed.
+      # nobody arriving here is asking. Files with names like
+      # cian-src-win.zip, and no hint which one is the program — the download
+      # page has to say which to take before it says what changed.
       #
       # First, and into a subdirectory: checkout cleans what it checks out
       # into, and dist/ is not something to hand it the chance to clean.
@@ -574,6 +497,40 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      # **資材は3点＋チェックサム**（2026-09-20、本人の判断。13点あった）。
+      # 物差しは「その機械で作れないものだけ置く」:
+      #
+      #   cian-src-win.zip            前面一式。社内で pack.js が cian.exe にする
+      #   cian-server-win-x64.exe.zip エンジン。社内では作れない（Rust ＋ C）
+      #   cian-tui-win-x64.exe.zip    端末版。同じ理由
+      #
+      # 外したもの ── Mac の5点（彼の Mac は Rust も Node も揃っていて、試すなら
+      # **下のジョブが今も作っている成果物**で足りる。タグを切らずに Actions を
+      # 手回しして `gh run download` で取れる）、`cian-win-x64.zip`（123MB。社内で
+      # `pack.js` が同じものを作る）、`cian-gui-win-x64.zip`（`cian-src-win.zip` が
+      # 同じ中身を repo の形で持っている）、裸の `.exe` 2つ（**zip が通る網は
+      # 裸も通るが、逆は通らない** ── 実際に断られた網がある）。
+      #
+      # ジョブの側は何も削っていない: 成果物は全部これまで通り上がり、**この一覧に
+      # 載っているものだけがリリースに付く**。落としたものは行に出るので、資材を
+      # 足したつもりで黙って落ちることはない。
+      - name: Keep only what a release hands out
+        working-directory: dist
+        run: |
+          keep="cian-src-win.zip cian-server-win-x64.exe.zip cian-tui-win-x64.exe.zip cian-source-offline.zip"
+          for f in *; do
+            case " $keep " in
+              *" $f "*) ;;
+              *) rm -rf "$f"; echo "not published: $f" ;;
+            esac
+          done
+          # 出口で検証する。`everything` の裏の一本だけは無くて当たり前なので
+          # 数えない ── 残りの3つは、無ければリリースを止める。
+          for need in cian-src-win.zip cian-server-win-x64.exe.zip cian-tui-win-x64.exe.zip; do
+            test -f "$need" || { echo "::error::$need never arrived — the release would be missing it"; exit 1; }
+          done
+          ls -l
 
       # A Windows machine cut off from the network is the one that most needs
       # to know its zip arrived whole. `sha256sum -c SHA256SUMS` on the far

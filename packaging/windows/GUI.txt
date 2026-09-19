@@ -9,18 +9,25 @@ cian — ウィンドウ版（Electron） Windows x64
   vendor\                              エディタの実行時一式
                                        （Monaco・monaco-vim・mermaid・同梱フォント）
   cian-server.exe                      エンジン。前面はこれと話します
+                                       （cian-src-win.zip から始めるときは
+                                       同梱されていません ── 別に落とした
+                                       cian-server-win-x64.exe.zip を展開し、
+                                       cian-server.exe と名づけて gui\ の隣へ）
   run.bat                              Electron を探して起動する
   examples\init.lua                    設定の見本
 
 同梱していないもの
   Electron 本体。247MB あり、社内にすでにあるものを使う前提です。
   無ければ https://github.com/electron/electron/releases から
-  electron-v33.x.x-win32-x64.zip を落として展開してください。
+  electron-v38.x.x-win32-x64.zip を落として展開してください。
 
 起動
   1. 好きな場所に展開する。右クリック →「すべて展開」でも、
-       tar -xf cian-gui-win-x64.zip -C C:\cian
+       tar -xf cian-src-win.zip -C C:\cian
      でも構いません（`tar` は落としてきた印を中のファイルに写しません）。
+     前面一式は展開した中の gui\ です ── この読み物は、そこから
+     run.bat で起動する道のものです。cian.exe を作って配る道は
+     SRC.ja.txt を見てください。
 
      **「印があるとエンジンが黙って起動しない」と、ここには長いあいだ
      書いてありました。確かめられていない話です**（2026-08-31 に「Windows で
@@ -42,7 +49,7 @@ cian — ウィンドウ版（Electron） Windows x64
     1. デスクトップで右クリック →「新規作成」→「ショートカット」
     2. 場所に、Electron と cian のフォルダをこの順で書く（両方とも引用符つき）
 
-         "D:\apps\electron-v33.4.11-win32-x64\electron.exe" "C:\cian\cian-gui-win-x64"
+         "D:\apps\electron-v38.0.0-win32-x64\electron.exe" "C:\cian\cian-src-win\gui"
 
     3. 名前を cian にして完了。アイコンを変えたければ、プロパティ →
        「アイコンの変更」で同じフォルダの cian.ico を指す
@@ -135,7 +142,7 @@ Electron の場所の教え方
         Get-ChildItem -Recurse | Unblock-File
 
 エンジンだけ新しくしたいとき
-  リリースの cian-server-win-x64.exe を落として、このフォルダの
+  リリースの cian-server-win-x64.exe.zip を落として展開し、このフォルダの
   cian-server.exe に名前を変えて上書きしてください。前面は隣のこれを
   最優先で使います。前面（JavaScript）は変わらないので、エンジンの
   修正だけならこれが一番小さい持ち込みです（9MB）。

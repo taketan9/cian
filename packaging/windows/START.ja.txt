@@ -74,6 +74,6 @@ Program Files のような書けない場所へしおりを保存しに行くこ
   文字が等幅にならない    …… resources\app\vendor\fonts\cian.ttf があるか
   もっと知りたい          …… cian の中で `?`（キー一覧）と `Ctrl+.`（マニュアル）
 
-Electron を社内にあるものと共用したい場合は、前面だけの zip
-（cian-gui-win-x64.zip）と `run.bat` を使う道も残してあります。そちらは
-GUI.txt を読んでください。
+Electron を社内にあるものと共用したい場合は、cian-src-win.zip の中の `gui\` を
+そのまま置いて `run.bat` で起動する道も残してあります。そちらは GUI.txt を
+読んでください（1台あたり 30MB で済みます）。

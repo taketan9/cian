@@ -5,8 +5,9 @@ This package is the whole of cian: the source, and every crate it depends
 on, already downloaded. Nothing in a build of it reaches the network.
 
 It is the package to bring in-house when the point is to change cian, not
-just to run it. To only run it, take cian-win-x64.zip instead — that one is
-already built, and starts by double-clicking cian.exe.
+just to run it. To only run it, take cian-src-win.zip (10 MB) and the engine
+instead, and build it there with `node gui\pack.js` — one line, no Rust, no
+npm install. That is what the releases page hands out.
 
 
 What has to be on the machine first
@@ -17,27 +18,32 @@ different sizes.
 
 **To work on the Electron front end, nothing.** Not Rust, not npm.
 The front end is JavaScript; it talks to a prebuilt cian-server.exe over
-a pipe. Take that one file (9 MB, `cian-server-win-x64.exe` on the
+a pipe. Take that one file (9 MB, `cian-server-win-x64.exe.zip` on the
 releases page) and a standalone Electron, and you can edit and restart
 all day. See "The Electron front end" below.
 
-Measured, v3.2.0, so that what to carry in can be decided before
+Measured, v3.3.8, so that what to carry in can be decided before
 carrying it:
 
-    cian-server.exe           10 MB   the engine, one file
-    cian-gui-win-x64.zip      14 MB   the front end, needs an Electron here
-    cian-win-x64.zip         124 MB   Electron included; double-click cian.exe
-                                      (307 MB once unzipped)
+    cian-server-win-x64.exe.zip   3 MB   the engine (9 MB unzipped), one file
+    cian-src-win.zip             10 MB   everything else; pack.js builds
+                                         cian.exe from it, here
+    cian-tui-win-x64.exe.zip      5 MB   the terminal build, one file
 
-    gui\ + gui\vendor\        29 MB   the front end's own files
-    Electron itself          247 MB   unzipped; ~100 MB as its own zip
+    gui\ + gui\vendor\           29 MB   the front end's own files
+    Electron itself             247 MB   unzipped; ~100 MB as its own zip
+    cian-win-x64.zip            123 MB   what pack.js makes: Electron
+                                         included, double-click cian.exe
+                                         (307 MB once unzipped)
 
 **The Electron front end is either an exe or a folder, and the difference
-is who supplies Chromium.** cian-win-x64.zip carries it: one folder, one
-`cian.exe`, nothing to find. cian-gui-win-x64.zip does not: 14 MB, and
-`run.bat` looks for an Electron already on the machine. If several
-machines are getting cian and they already share an Electron, the small
-one is 14 MB each; if they are not, the big one asks nobody anything.
+is who supplies Chromium.** What `pack.js --zip` makes carries it: one
+folder, one `cian.exe`, nothing to find — that is the thing to hand to
+people who only want to run cian. Running from `gui\` with `run.bat`
+instead needs an Electron already on the machine, which is how the machine
+that builds usually runs it. **Since 2026-09-20 the releases page carries
+neither of those two** — it carries the 10 MB source bundle, and this
+machine makes them.
 
 **To build the Rust side**, three things or four, depending on which
 programs you want — and possibly none, if you only need the engine:
@@ -176,10 +182,12 @@ development loop. Nothing is compiled.
 Building the bundled cian.exe, by hand, on this machine
 -------------------------------------------------------
 
-The releases page carries this already built (`cian-win-x64.zip`, 124 MB):
+**This is the step the releases page stopped doing for you** (2026-09-20):
 Electron, the front end and the engine in one folder, started by
-double-clicking `cian.exe`. This is how to make that folder yourself —
-the same script the release workflow runs, with nothing else involved.
+double-clicking `cian.exe`. The same script the release workflow used to
+run, with nothing else involved — and it is one line whether the source
+came from this bundle or from `cian-src-win.zip` (10 MB), which is the
+usual way in.
 
     node gui\pack.js --out dist --platform win32 ^
         --electron C:\electron-v33.4.11-win32-x64 ^
@@ -294,7 +302,6 @@ Contents
                                        `node gui/vendor.js` against
                                        node_modules; carried here instead.
     examples\init.lua                  A starter configuration.
-    packaging\windows\install.ps1      Puts a built exe on PATH.
     gui\run.bat                        Starts the Electron front end.
     BUILT-WITH.txt                     The compiler and commit this was
                                        vendored from.

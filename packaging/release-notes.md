@@ -1,52 +1,58 @@
 ## どれを落とせばいい？
 
+**資材は3点とチェックサムだけです**（2026-09-20 に13点から絞りました）。物差しは
+**「その機械で作れないものだけ置く」**です。
+
 | 使いたいもの | 落とすもの |
 |---|---|
-| **Windows で、とにかく動かしたい** | **`cian-win-x64.zip`**（124MB）── Electron ごと入っています。展開して **`cian.exe` をダブルクリック**。用意するものはありません |
-| Windows で、社内にある Electron を使いたい | `cian-gui-win-x64.zip`（14MB）── 前面だけ。`run.bat` が Electron を探します |
-| **Mac で窓版（Electron）** | **`cian-gui-macos.zip`** — Electron 本体は別途必要。エンジンは Intel と Apple Silicon の両方入り |
-| **社内で自分で組み立てたい** | **`cian-src-win.zip`**（約30MB）── ソース一式。社内の Electron と `cian-server-win-x64.exe` を渡して `node gui\pack.js` を1回叩けば `cian.exe` ができます。`npm install` も Rust も要りません。手順は同梱の `packaging\windows\SRC.ja.txt` |
-| **端末で使いたい（端末版）** | **`cian-tui-win-x64.exe`／`cian-tui-macos.bin`** ── 一本の実行ファイルだけ。Electron も書体も要りません。お使いの端末（WezTerm・iTerm2・Windows Terminal）で走らせます |
-| エンジンだけ差し替えたい | `cian-server-win-x64.exe`（10MB）／`cian-server-macos.bin` |
-| **`.exe` が社内の網に止められる** | **`cian-server-win-x64.exe.zip`**（4MB）／`cian-server-macos.bin.zip`／`cian-tui-win-x64.exe.zip`／`cian-tui-macos.bin.zip` — 中身は同じものが1つだけ |
-| 壊れずに届いたかの確認 | `SHA256SUMS` — `sha256sum -c SHA256SUMS` / `Get-FileHash` |
+| **Windows で窓版を使いたい** | **`cian-src-win.zip`**（10MB）と **`cian-server-win-x64.exe.zip`**（3MB）の2つ。展開して `node gui\pack.js` を1回叩けば `cian.exe` ができます。**`npm install` も Rust も要りません。** 手順は同梱の `packaging\windows\SRC.ja.txt` |
+| エンジンだけ差し替えたい | `cian-server-win-x64.exe.zip` だけ。前面は JavaScript なので、更新はたいていこれ1つで足ります |
+| **端末で使いたい（端末版）** | **`cian-tui-win-x64.exe.zip`**（5MB）── 一本の実行ファイルだけ。Electron も書体も要りません。お使いの端末（WezTerm・Windows Terminal）で走らせます |
+| 壊れずに届いたかの確認 | `SHA256SUMS` ── `sha256sum -c SHA256SUMS` / `Get-FileHash` |
+| エンジンごとソースから作りたい | `cian-source-offline.zip`（約180MB）── 毎回は出していません。Actions から `release` を **everything = true** で手動実行すると並びます |
 
-**`cian-src-win.zip` は 2026-09-19 から。** crmaine の `crmaine-src` と同じ考えで、
-**持ち込むのはこの30MBとエンジン1個だけ**になります（124MB を運ぶかわりに）。
-エンジンが変わっていない版なら、ソース30MBだけで済みます。**エンジンそのものは
-社内では作れません** ── Rust と C コンパイラが要るので、そこは落としたものを
-使ってください。ソースからエンジンごと作りたいときは `cian-source-offline.zip`
-（約180MB、`release` の手動実行で出ます）のほうです。
+**組み立ては1行です。** 持ち込むのはこの2つ（13MB）だけ。Electron は社内にある
+ものを使います。
 
-**端末版（`cian-tui`）は 2026-09-16 から資材に入りました。** それまでは
-`release.yml` のビルド確認にしか出てこず、実機で試すにはソースから
-`cargo build` するしかありませんでした。**窓版と同じ機能を、端末の中で動かす
-もの**です ── 設定（`init.lua`）も配色も両方で同じものを読みます。
-Mac 版は Intel と Apple Silicon の両方が一本に入っています。
+```
+cd C:\work\cian-src-win
+node gui\pack.js --out dist --platform win32 ^
+  --electron C:\electron\electron-v38.0.0-win32-x64 ^
+  --engine C:\落とした場所\cian-server-win-x64.exe --zip
+```
 
-**Windows の zip は2つあって、違いは「Chromium を誰が持ってくるか」だけです。**
-`cian-win-x64.zip` は中に Electron を抱えているので 124MB（展開 307MB）、
-そのかわり何も探しません。`cian-gui-win-x64.zip` は 14MB で、機械に既にある
-Electron を `run.bat` が探します ── 何台にも配るなら、そちらが1台 14MB です。
-**前面の中身は同じものです。**
+`dist\cian\cian.exe` ができます。**配るのは `--zip` が並べる
+`dist\cian-win-x64.zip`** のほうで、受け取った人は展開して `cian.exe` を
+ダブルクリックするだけです（Electron ごと入っています）。
 
-**zip 版のエンジンは、中身も名前も生のものと同じです。** 会社の運用端末で
-`.exe` の直接ダウンロードが止められることがあり、実際に止まったので置いています。
-展開すると `cian-server-win-x64.exe` がそのまま出てきます（フォルダは挟みません）。
-落とせるなら生の `.exe` のままで構いません。crmaine の `gui/pack.js` はどちらでも
-受け取ります。
+**エンジンそのものは社内では作れません** ── Rust と C コンパイラが要るので、
+そこは落としたものを渡してください。`--engine` は落とした名前のままで構いません。
 
-**出してしまった版に、後から資材を足すには** ── `release.yml` は次の版から
-自動で zip も並べますが、既に出た版には
-`python3 scripts/release-asset.py <タグ> --zip <資材名>` を使ってください。
-公開済みのバイト列を落として包み、取り出して一致を確かめ、`SHA256SUMS` を
-継ぎ足し、上げ直してから**もう一度落として照合**します。手でやると、この
-最後の一手を飛ばしても成功したように見えます。
+### 何を外したか（2026-09-20）
 
-**出しているのは窓版（Windows と Mac）とエンジンだけです。** 端末版・Mac の
-`.app`・Linux の資材は、もう作っていません（2026-09-10、配布は窓版一本）。
-端末版はソースからは建ちます。オフラインビルド用のソース一式が要るときは、
-Actions から `release` を **everything = true** で手動実行してください。
+以前は13点ありました。外したのは、**この道で作れるもの**と、**誰も取らないもの**です。
+
+- `cian-win-x64.zip`（123MB）── CI が焼いていた同梱版。社内で `pack.js` が同じ
+  ものを作るので、123MB を運ぶ理由が無くなりました
+- `cian-gui-win-x64.zip`（14MB）── 前面だけの zip。`cian-src-win.zip` が同じ中身を
+  **リポジトリの形**で持っています（`pack.js` はその形でしか叩けません）
+- 裸の `.exe` 2つ ── **zip が通る網は裸の exe も通りますが、逆は通りません。**
+  実際に `.exe` の直接ダウンロードを止められた網があるので、残すなら zip です
+- **Mac の5点** ── ビルド自体は今も毎回走っていて、成果物（Actions）から取れます。
+  リリースには付けません
+
+```
+gh run download <run-id> -n cian-gui-macos     # 窓版一式（エンジン同梱）
+gh run download <run-id> -n cian-tui-macos     # 端末版
+gh run download <run-id> -n cian-server-macos  # エンジンだけ
+```
+
+### 出してしまった版に、後から資材を足すには
+
+`python3 scripts/release-asset.py <タグ> --zip <資材名>` を使ってください。手では
+やらないこと。公開済みのバイト列を落として包み、取り出して一致を確かめ、
+`SHA256SUMS` を継ぎ足し、上げ直してから**もう一度落として照合**します。手でやると、
+この最後の一手を飛ばしても成功したように見えます。
 
 ### Windows で SmartScreen が出たら
 
@@ -57,16 +63,13 @@ Actions から `release` を **everything = true** で手動実行してくだ�
 「すべて展開」は落としてきた印を中の全ファイルに写しますが、`tar` は写しません:
 
 ```
-tar -xf cian-win-x64.zip -C C:\cian
+tar -xf cian-src-win.zip -C C:\work
 ```
 
 zip のプロパティで「許可する」→ それから展開、でも同じです。**どちらも必須では
 ありません。**
 
-詳しい手順は zip の中にあります ── 同梱版は `START.ja.txt`、前面だけの方は
-`GUI.txt` です。
-
-### Mac で落としたら
+### Mac で成果物を落としたら
 
 macOS は落としたものに「隔離」の印を付けます。cian は公証していないので、
 展開したフォルダで一度だけ:

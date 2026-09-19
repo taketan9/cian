@@ -892,14 +892,14 @@ fn popup_scroll(popup: &Popup) -> usize {
 ///
 /// Braille — ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ — is what everything spins with, and it is the one
 /// thing this cannot use. The window draws with exactly one font and no
-/// fallback (deliberately: see cian-gui's `font.rs`), and not one of the
-/// Japanese Nerd Fonts it looks for has the braille block in it — HackGen
-/// Console NF, checked: 28,584 characters, U+2800 not among them. Ten frames
-/// that are all the same missing glyph is a spinner that does not spin, which
-/// is exactly how it was reported. The quarter-filled circles are in every font
-/// on this machine — HackGen Console NF and Hack Nerd Font, both weights of
-/// each — at the same advance as `m`, so they sit in one cell and read as one
-/// thing turning.
+/// fallback (deliberately: it ships one face, `gui/vendor/fonts/cian.ttf`),
+/// and not one of the Japanese Nerd Fonts it looks for has the braille block
+/// in it — HackGen Console NF, checked: 28,584 characters, U+2800 not among
+/// them. Ten frames that are all the same missing glyph is a spinner that does
+/// not spin, which is exactly how it was reported. The quarter-filled circles
+/// are in every font on this machine — HackGen Console NF and Hack Nerd Font,
+/// both weights of each — at the same advance as `m`, so they sit in one cell
+/// and read as one thing turning.
 ///
 /// Four frames rather than ten, at 120ms each: half a second to the turn, which
 /// is a spinner rather than a flicker.

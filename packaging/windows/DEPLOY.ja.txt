@@ -36,7 +36,7 @@ cian の設定は「持ち歩ける」ことを優先していて、**exe の隣
 
   C:\Program Files\cian\
       electron\                      ← Electron を展開したもの
-      gui\                           ← cian-gui-win-x64.zip を展開したもの
+      gui\                           ← cian-src-win.zip の中の gui\
           run.bat
           cian-server.exe
           electron.txt               ← 1行だけ: C:\Program Files\cian\electron
@@ -47,7 +47,8 @@ cian の設定は「持ち歩ける」ことを優先していて、**exe の隣
 
   C:\Users\Public\Desktop\cian.lnk   ← gui\run.bat へのショートカット
 
-**Electron 同梱版（cian-win-x64.zip）を配るときは、もっと短くなります。**
+**Electron 同梱版（社内で `node gui\pack.js --zip` が作る cian-win-x64.zip）を
+配るときは、もっと短くなります。**
 
   C:\Program Files\cian\
       cian.exe                       ← 共通デスクトップのショートカットはこれ
