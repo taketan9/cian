@@ -6,8 +6,8 @@ on, already downloaded. Nothing in a build of it reaches the network.
 
 It is the package to bring in-house when the point is to change cian, not
 just to run it. To only run it, take cian-src-win.zip (10 MB) and the engine
-instead, and build it there with `node gui\pack.js` — one line, no Rust, no
-npm install. That is what the releases page hands out.
+instead, and build it there with `node gui\pack.js`: one line, no Rust and no
+npm install. Those two are what the releases page carries.
 
 
 What has to be on the machine first
@@ -182,12 +182,11 @@ development loop. Nothing is compiled.
 Building the bundled cian.exe, by hand, on this machine
 -------------------------------------------------------
 
-**This is the step the releases page stopped doing for you** (2026-09-20):
-Electron, the front end and the engine in one folder, started by
-double-clicking `cian.exe`. The same script the release workflow used to
-run, with nothing else involved — and it is one line whether the source
-came from this bundle or from `cian-src-win.zip` (10 MB), which is the
-usual way in.
+Since 2026-09-20 the releases page no longer carries this built: Electron,
+the front end and the engine in one folder, started by double-clicking
+`cian.exe`. It is the same script the release workflow used to run, with
+nothing else involved, and it is one line whether the source came from this
+bundle or from `cian-src-win.zip` (10 MB).
 
     node gui\pack.js --out dist --platform win32 ^
         --electron C:\electron-v33.4.11-win32-x64 ^

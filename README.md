@@ -15,7 +15,7 @@ One binary. macOS and Windows. No runtime, no DLLs, nothing to install alongside
 
 ## Download
 
-**[→ Releases](https://github.com/taketan9/cian/releases)** — **three packages and a `SHA256SUMS`** (down from thirteen on 2026-09-20; the measure is "publish only what the machine that needs it cannot make").
+**[→ Releases](https://github.com/taketan9/cian/releases)** — three packages and a `SHA256SUMS` (down from thirteen on 2026-09-20).
 
 | What you want | What to download | What is in it |
 |---|---|---|
@@ -24,15 +24,16 @@ One binary. macOS and Windows. No runtime, no DLLs, nothing to install alongside
 | The terminal build | `cian-tui-win-x64.exe.zip` (5MB) | one executable. No Electron, no font to install |
 | Any, to build on | `cian-source-offline.zip` (182MB) | the source with every dependency already downloaded — see [build from source](#build-from-source); run `release` by hand with `everything = true` |
 
-**Everything is zipped.** A corporate network that refuses a bare `.exe` download
-is a real thing and one refused ours: **a network that lets a zip through lets a
-bare exe through, and not the other way round.**
+Everything is zipped: some corporate networks refuse a bare `.exe` download, and
+a zip gets through.
 
-**macOS packages are not attached to releases.** They are still built on every
-run — take them from the workflow artifacts (`gh run download`, below). With Rust
-and Node on the machine, `packaging/macos/bundle-gui.sh --dock` is faster.
+macOS packages are not attached to releases. They are still built on every run —
+take them from the workflow artifacts (`gh run download`, below). With Rust and
+Node on the machine, `packaging/macos/bundle-gui.sh --dock` is faster.
 
-There is no installer to answer to — unpack it, build it in one line on Windows, and nothing is written outside the folder you put it in until you save a setting.
+There is no installer to answer to. Unpack it and run it — on Windows, build it
+first with the one line below — and nothing is written outside the folder you put
+it in until you save a setting.
 
 **One file manager, two front ends.** The window draws inside Electron, which
 is what makes Japanese come out right on Windows; `cian-tui` runs inside the
@@ -606,13 +607,13 @@ flowchart TD
 
 ## Install on Windows (offline)
 
-**13MB crosses the air gap.** On a machine with a network, take `cian-src-win.zip` (10MB) and `cian-server-win-x64.exe.zip` (3MB) from the [releases](https://github.com/taketan9/cian/releases), check them against `SHA256SUMS`, and carry them across:
+What has to be carried across is 13MB. On a machine with a network, take `cian-src-win.zip` (10MB) and `cian-server-win-x64.exe.zip` (3MB) from the [releases](https://github.com/taketan9/cian/releases), check them against `SHA256SUMS`, and carry them over:
 
 ```powershell
 Get-FileHash cian-src-win.zip -Algorithm SHA256
 ```
 
-What the far machine has to supply is **Node** and **Electron itself** (247MB) — the assumption is that it already has both. If it does not have Electron, take `electron-v38.x.x-win32-x64.zip` from [electron/electron's releases](https://github.com/electron/electron/releases). No Rust and no compiler: the front end is JavaScript and the engine arrives as an exe.
+The far machine has to supply Node and Electron itself (247MB) — the assumption is that it already has both. If it does not have Electron, take `electron-v38.x.x-win32-x64.zip` from [electron/electron's releases](https://github.com/electron/electron/releases). No Rust and no compiler: the front end is JavaScript and the engine arrives as an exe.
 
 **Unblock the zip before unpacking it.** Right-click → Properties → tick **Unblock** if "This file came from another computer" is there. Leave it on and every unpacked file keeps the mark, and `cian-server.exe` will not start — which shows up as a window with nothing in it. Unpacking with `tar -xf` does not copy the mark at all.
 
@@ -624,9 +625,9 @@ node gui\pack.js --out dist --platform win32 `
   --engine C:\downloads\cian-server-win-x64.exe --zip
 ```
 
-That leaves `dist\cian\cian.exe`, and **`dist\cian-win-x64.zip` is what you hand out** — the people who get it unpack it and double-click `cian.exe`, Electron included. How to lay it out on a shared machine and how to update it are in `START.ja.txt` and `DEPLOY.ja.txt` inside the zip.
+That leaves `dist\cian\cian.exe`, and `dist\cian-win-x64.zip` beside it is what you hand out — the people who get it unpack it and double-click `cian.exe`, Electron included. How to lay it out on a shared machine and how to update it are in `START.ja.txt` and `DEPLOY.ja.txt` inside the zip.
 
-**If you want the terminal build, carry `cian-tui-win-x64.exe.zip`** (5MB) across too. One executable, no Electron and no font to install.
+For the terminal build, carry `cian-tui-win-x64.exe.zip` (5MB) across too. One executable, no Electron and no font to install.
 
 ---
 

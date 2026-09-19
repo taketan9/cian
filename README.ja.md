@@ -15,7 +15,7 @@
 
 ## ダウンロード
 
-**[→ リリース](https://github.com/taketan9/cian/releases)** — **資材は3点と `SHA256SUMS` だけです**（2026-09-20 に13点から絞りました。物差しは「その機械で作れないものだけ置く」）。
+**[→ リリース](https://github.com/taketan9/cian/releases)** — 資材は3点と `SHA256SUMS` です（2026-09-20 に13点から絞りました）。
 
 | 使いたいもの | 落とすもの | 中身 |
 |---|---|---|
@@ -24,14 +24,13 @@
 | 端末版 | `cian-tui-win-x64.exe.zip`（5MB） | 一本の実行ファイルだけ。Electron も書体も要りません |
 | ビルドする人向け | `cian-source-offline.zip`（182MB） | 依存クレートを全部同梱したソース一式 — [ソースからビルド](#ソースからビルド)を参照。Actions から `everything = true` で手動実行 |
 
-**全部 zip です。** `.exe` の直接ダウンロードを止める網が実際にあり、**zip が通る網は
-裸の exe も通りますが、逆は通りません。**
+資材は全部 zip です。`.exe` の直接ダウンロードを止める網があり、zip なら通ります。
 
-**Mac の資材はリリースには付けていません。** ビルド自体は毎回走っているので、
-Actions の成果物から取ってください（下の `gh run download`）。手元に Rust と Node が
-あるなら、`packaging/macos/bundle-gui.sh --dock` のほうが速いはずです。
+Mac の資材はリリースには付けていません。ビルドは毎回走っているので、Actions の
+成果物から取ってください（下の `gh run download`）。手元に Rust と Node があるなら、
+`packaging/macos/bundle-gui.sh --dock` のほうが速いはずです。
 
-インストーラはありません。展開して（Windows のウィンドウ版は、そこから1行で組み立てて）実行するだけで、設定を保存するまで置いたディレクトリの外には何も書きません。
+インストーラはありません。展開して実行するだけです（Windows のウィンドウ版は、そこから1行で組み立てます）。設定を保存するまで、置いたディレクトリの外には何も書きません。
 
 **ファイラは1つ、前面は2つ。** ウィンドウ版は Electron の中で描くので、Windows でも
 日本語が潰れません。`cian-tui` は今ある端末の中で動きます — ssh 先や tmux の
@@ -590,7 +589,7 @@ flowchart TD
 
 ## Windows へオフライン導入
 
-**持ち込むのは 13MB です。** ネットにつながる機械で
+持ち込むのは 13MB です。ネットにつながる機械で
 [リリース](https://github.com/taketan9/cian/releases) から `cian-src-win.zip`（10MB）と
 `cian-server-win-x64.exe.zip`（3MB）を取り、`SHA256SUMS` と照合して持ち込みます：
 
@@ -598,11 +597,11 @@ flowchart TD
 Get-FileHash cian-src-win.zip -Algorithm SHA256
 ```
 
-社内で要るものは **Node** と **Electron 本体**（247MB）だけです。どちらも zip には
-入っていません ── 社内に既にあるものを使う前提で、Electron が無ければ
+社内で要るものは Node と Electron 本体（247MB）です。どちらも zip には入って
+いません ── 社内に既にあるものを使う前提で、Electron が無ければ
 [electron/electron のリリース](https://github.com/electron/electron/releases)
-から `electron-v38.x.x-win32-x64.zip` を落として展開します。**Rust もコンパイラも
-要りません**（前面は JavaScript で、エンジンは exe で届きます）。
+から `electron-v38.x.x-win32-x64.zip` を落として展開します。Rust もコンパイラも
+要りません（前面は JavaScript で、エンジンは exe で届きます）。
 
 **展開する前に、zip のブロックを外してください。** 右クリック →「プロパティ」→
 「セキュリティ: 他のコンピューターから取得したものです」があれば **「許可する」** →
@@ -617,12 +616,12 @@ node gui\pack.js --out dist --platform win32 `
   --engine C:\落とした場所\cian-server-win-x64.exe --zip
 ```
 
-`dist\cian\cian.exe` ができます。**配るのは `dist\cian-win-x64.zip`** のほうで、
-受け取った人は展開して `cian.exe` をダブルクリックするだけです（Electron ごと
-入っています）。置き方と更新のしかたは同梱の `START.ja.txt` と `DEPLOY.ja.txt` に
+`dist\cian\cian.exe` ができます。配るのは `dist\cian-win-x64.zip` のほうで、
+受け取った人は展開して `cian.exe` をダブルクリックします（Electron ごと入って
+います）。置き方と更新のしかたは同梱の `START.ja.txt` と `DEPLOY.ja.txt` に
 あります。
 
-**端末版が要るなら `cian-tui-win-x64.exe.zip`**（5MB）を一緒に持ち込んでください。
+端末版が要るなら `cian-tui-win-x64.exe.zip`（5MB）を一緒に持ち込んでください。
 一本の実行ファイルで、Electron も書体も要りません。
 
 ---
