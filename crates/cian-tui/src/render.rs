@@ -2997,6 +2997,30 @@ fn draw_status(f: &mut Frame, area: Rect, app: &App) {
         spans.push(chip(name, readable_on(theme().status_bg)));
     }
 
+    // **A mask is the one that follows you**, so it is the one most likely to
+    // be forgotten: a directory that looks empty, three folders later, with
+    // nothing on screen to say why. It is drawn in the filter's own green so
+    // the two read as the same kind of fact, and it is never not shown.
+    if let Some(mask) = app.active_pane().map(|p| p.mask.clone()).filter(|m| !m.is_empty()) {
+        // **Counted without `..`.** `item_count` includes the way-up row, so
+        // a masked listing said "4 of 4" while hiding one — a chip claiming
+        // nothing was hidden is worse than no chip at all.
+        let (shown, total) = match app.active_pane() {
+            Some(p) => (
+                p.entries.iter().filter(|e| !e.is_parent).count(),
+                p.all_entries.iter().filter(|e| !e.is_parent).count(),
+            ),
+            None => (0, 0),
+        };
+        spans.push(dim_sep.clone());
+        let mask_chip = if ja {
+            format!("マスク {} ({}/{} 件)", mask, shown, total)
+        } else {
+            format!("mask {} ({} of {})", mask, shown, total)
+        };
+        spans.push(chip(mask_chip, Color::Rgb(80, 200, 120)));
+    }
+
     // A narrowed listing must never look like a complete one, so the active
     // filter stays visible after leaving filter mode.
     if let Some(filter) = app.active_pane().map(|p| p.filter.clone()).filter(|f| !f.is_empty()) {

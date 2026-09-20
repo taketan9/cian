@@ -70,6 +70,11 @@ struct PaneView {
     /// whether there is anything to clear, and guessing from the row count
     /// cannot tell "filtered to 3" from "a folder with 3 things in it".
     filter: String,
+    /// The standing mask, when one is set. Unlike `filter` it survives a
+    /// directory change, so the window has to draw it wherever you land —
+    /// a folder that looks empty three levels down, with nothing to say why,
+    /// is the failure this field exists to prevent.
+    mask: String,
     /// The archive this pane is looking inside, if it is. The window needs it
     /// for the same reason it needs `remote`: the rows name nothing on this
     /// disk, so opening one has to go a different way.
@@ -149,6 +154,7 @@ impl PaneView {
             remote_path: pane.remote_view().map(|(_, path)| path.to_string()),
             archive: pane.archive_view().map(|(a, _)| a.display().to_string()),
             filter: pane.filter.clone(),
+            mask: pane.mask.clone(),
             entries: pane
                 .entries
                 .iter()
@@ -5669,6 +5675,19 @@ impl Session {
                 } else {
                     pane.set_filter(text);
                 }
+                self.view(&which)
+            }
+            // The standing mask (`:mask *.log`), which `filter` above is not:
+            // that one is cleared by every `go_to`, and this one is the point
+            // precisely because it is not.
+            "mask" => {
+                let which = req.params["pane"].as_str().unwrap_or("left").to_string();
+                let spec = req.params["text"].as_str().unwrap_or("").trim().to_string();
+                if !spec.is_empty() && cian_core::mask_matcher(&spec).is_none() {
+                    anyhow::bail!("読めないマスクです: {spec}");
+                }
+                let pane = self.pane_mut(&which)?;
+                pane.set_mask(spec);
                 self.view(&which)
             }
             "hidden" => {

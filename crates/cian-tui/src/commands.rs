@@ -14,6 +14,43 @@ impl App {
         self.mode = Mode::Command;
     }
 
+    /// `:mask *.log` — the standing filter, kept across directory changes.
+    pub(crate) fn cmd_mask(&mut self, rest: &str) {
+        let Some(pane) = self.active_pane_mut() else { return };
+        let was = pane.mask.clone();
+        if rest.trim().is_empty() {
+            pane.set_mask("");
+            self.message = Some(if was.is_empty() {
+                tr(self.lang, "usage: :mask *.log   (no mask is set)", "使い方: :mask *.log   （いまマスクはありません）").into()
+            } else if self.lang == crate::theme::Lang::Ja {
+                format!("マスクを外しました（{was}）")
+            } else {
+                format!("mask off (was {was})")
+            });
+            return;
+        }
+        // A pattern that cannot be read is refused rather than quietly
+        // matching nothing — a mask that hides everything looks exactly like
+        // an empty directory.
+        let spec = rest.trim().to_string();
+        if cian_core::mask_matcher(&spec).is_none() {
+            // 読めないパターンは断る。黙って0件にすると、空のディレクトリと
+            // 見分けがつかない。
+            self.message = Some(format!(
+                "{}: {spec}",
+                tr(self.lang, "a mask cian cannot read", "読めないマスクです")
+            ));
+            return;
+        }
+        pane.set_mask(spec.clone());
+        let n = pane.entries.iter().filter(|e| !e.is_parent).count();
+        self.message = Some(if self.lang == crate::theme::Lang::Ja {
+            format!("マスク {spec}。{n} 件")
+        } else {
+            format!("mask {spec}. {n} shown")
+        });
+    }
+
     /// Put `text` on the `:` line with the caret after it.
     ///
     /// **One door**, because the caret is a second fact about the same line:
@@ -165,6 +202,12 @@ impl App {
             "man" | "help" | "h" => self.open_manual(),
             "paste" => { let _ = self.paste_clip(); }
             "hidden" => self.toggle_hidden(),
+            // **AFXW のマスク。** `/` の絞り込みはディレクトリを移ると消える
+            // （それが `/` の仕事）。こちらは付けたまま歩くもので、
+            // 「今日はログを見ている」を画面に固定する。引数なしで解除し、
+            // 何が外れたかを言う ── 黙って全部出ると、直前に何を見ていたのか
+            // が分からなくなる。
+            "mask" => self.cmd_mask(rest),
             // `r` and the menu have always had this; the command line never
             // did, and the name was taken by the AI renamer.
             "rename" | "ren" => self.start_rename(),

@@ -245,11 +245,16 @@ those seven work in vi style too. With no normal mode there is nothing for
 | Key | Does |
 |---|---|
 | **`/`** | filter the listing as you type (Enter keeps it, Esc clears) |
+| **`:mask *.log`** | **a standing filter that follows you** — unlike `/`, it survives a directory change. Several are an OR (`*.log *.trc`), and `/regex/` is the same spelling as everywhere else. `:mask` alone takes it off |
 | **`f`** | jump between matches in this folder |
 | **`Shift+F`** (`:find`) | find by name, anywhere below this folder |
 | **`Ctrl+F`** (or `Ctrl+G`, `:grep`) | grep inside files — Enter opens the hit on its line |
 | **`b`** | branch view — flatten the whole subtree into one listing |
 | **`,`** | sort by name / size / date / extension (`n` `s` `d` `e`) |
+
+**`/` and a mask are different questions.** `/` narrows what you are looking at now and is gone when you leave; a mask is "I am working on the log files today" and follows you until you take it off. **Directories are never masked** — a mask that hides the way through the tree is one you have to remove in order to move. While one is on, the status bar says `mask *.log (3 of 12)`.
+
+**`/` and a mask are different questions.** `/` narrows what you are looking at now and is gone when you leave; a mask is "I am working on the log files today" and follows you until you take it off. **Directories are never masked** — a mask that hides the way through the tree is one you have to remove in order to move. While one is on, the status bar says `mask *.log (3 of 12)`.
 
 Searches run in the background and stream results as they arrive; **Esc** stops one. In a result list, **`p`** panelizes the matches into the pane so you can mark and operate on them.
 

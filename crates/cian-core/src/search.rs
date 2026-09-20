@@ -77,7 +77,10 @@ impl Matcher {
         }
     }
 
-    fn matches(&self, hay: &str) -> bool {
+    /// Does `hay` match? Public because the listing's standing mask asks the
+    /// same question of a file name that a search asks of a line, and two
+    /// answers to "does this pattern match" is two pattern languages.
+    pub fn matches(&self, hay: &str) -> bool {
         match self {
             Matcher::Literal(s) => hay.to_lowercase().contains(s),
             Matcher::Regex(re) => re.is_match(hay),

@@ -335,6 +335,19 @@ pub struct Pane {
     pub all_entries: Vec<Entry>,
     /// Case-insensitive substring that narrows the listing. Empty shows all.
     pub filter: String,
+    /// The standing display mask: `*.log`, or a pattern in the search syntax.
+    ///
+    /// **Unlike [`Self::filter`], this survives a directory change.** That is
+    /// the whole difference between the two, and the reason both exist:
+    /// `/` is "narrow what I am looking at now" and is gone the moment you
+    /// leave, while a mask is "I am working on the log files today" and
+    /// follows you around until you take it off.
+    ///
+    /// The concept comes from AFXW, which cian carries over (the extension
+    /// rules and marks come from the same place). A `mask` option used to
+    /// exist in `init.lua` and was **removed in a cleanup because it only ever
+    /// displayed and never filtered** — this is that promise, kept.
+    pub mask: String,
     /// Show entries whose name starts with a dot. Defaults to true, which is
     /// what cian has always done; most file managers hide them, so it is a
     /// toggle rather than a fixed choice.
@@ -376,6 +389,7 @@ impl Pane {
             entries: Vec::new(),
             all_entries: Vec::new(),
             filter: String::new(),
+            mask: String::new(),
             show_hidden: true,
             sort: Sort::default(),
             cursor: 0,
@@ -597,6 +611,7 @@ impl Pane {
     /// `show_hidden`.
     fn apply_filter(&mut self) {
         let needle = self.filter.to_lowercase();
+        let mask = mask_matcher(&self.mask);
         let show_hidden = self.show_hidden;
         // The synthetic `..` a remote or archive listing carries is pulled
         // out first: it is navigation, not a listed file, so neither the
@@ -620,6 +635,11 @@ impl Pane {
                 // where it always did.
                 needle.is_empty() || crate::query::hits(&e.name_lower, &needle)
             })
+            // The mask, on top of the filter: they are different questions
+            // and both can be true at once. A directory always survives it —
+            // a mask that hides the way through the tree is a mask you have
+            // to take off to move, which is not what it is for.
+            .filter(|e| mask.as_ref().map_or(true, |m| e.is_dir || m.matches(&e.name)))
             .cloned()
             .collect();
         // A `..` row at the very top, so stepping up a level is a visible,
@@ -662,6 +682,12 @@ impl Pane {
     /// Drop the filter. Called whenever the pane changes directory, since a
     /// filter left over from the previous folder would hide files the user
     /// has no reason to expect are missing.
+    /// Set the standing mask (`*.log`, `/\.rs$/`, …). Empty clears it.
+    pub fn set_mask(&mut self, mask: impl Into<String>) {
+        self.mask = mask.into();
+        self.apply_filter();
+    }
+
     pub fn clear_filter(&mut self) {
         if !self.filter.is_empty() {
             self.filter.clear();
@@ -930,6 +956,51 @@ impl Pane {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The standing mask: `*.log` follows you into the next directory, and
+    /// `/` does not. That difference is the whole feature.
+    #[test]
+    fn a_mask_survives_a_directory_change_and_a_filter_does_not() {
+        let d = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(d.path()).unwrap();
+        for name in ["app.log", "app.trc", "notes.md"] {
+            std::fs::write(root.join(name), "x").unwrap();
+        }
+        std::fs::create_dir(root.join("sub")).unwrap();
+        for name in ["deep.log", "deep.md"] {
+            std::fs::write(root.join("sub").join(name), "x").unwrap();
+        }
+        let mut pane = Pane::new(root.clone()).unwrap();
+        let names = |p: &Pane| -> Vec<String> {
+            p.entries.iter().filter(|e| !e.is_parent).map(|e| e.name.clone()).collect()
+        };
+
+        pane.set_mask("*.log");
+        assert_eq!(names(&pane), vec!["sub", "app.log"], "the mask, and the way through");
+
+        // **Into the next directory, and it is still on.** A `/` filter is
+        // cleared by `go_to`; this is the opposite promise.
+        pane.go_to(root.join("sub")).unwrap();
+        assert_eq!(names(&pane), vec!["deep.log"], "still masked one level down");
+
+        // Several masks are an OR — a name cannot end in two extensions.
+        pane.go_to(root.clone()).unwrap();
+        pane.set_mask("*.log *.trc");
+        assert_eq!(names(&pane), vec!["sub", "app.log", "app.trc"]);
+
+        // A filter narrows *within* the mask; both are true at once.
+        pane.set_filter("trc");
+        assert_eq!(names(&pane), vec!["app.trc"]);
+        pane.clear_filter();
+
+        // `/…/` is the same spelling every other prompt takes.
+        pane.set_mask("/^app\\./");
+        assert_eq!(names(&pane), vec!["sub", "app.log", "app.trc"]);
+
+        pane.set_mask("");
+        assert_eq!(names(&pane), vec!["sub", "app.log", "app.trc", "notes.md"], "off again");
+    }
+
 
     /// A pane over a temp dir containing `names` (all plain files).
     fn pane_with(names: &[&str]) -> (tempfile::TempDir, Pane) {
@@ -1538,6 +1609,44 @@ mod log_destination_tests {
             crate::log::start(Some(&p)).unwrap();
         }
     }
+}
+
+/// Turn a mask into the pattern language everything else in cian searches with.
+///
+/// **`*.log` is what a person types**, and it is a glob, not one of the two
+/// spellings `query::hits` knows (a literal, or `/regex/`). Rather than teach
+/// the query engine a third language, the glob is rewritten as a regex here —
+/// so a mask means exactly what the same characters mean at every other
+/// prompt, and `/…/` still gets through untouched for anyone who wants one.
+///
+/// Several masks separated by spaces are an OR (`*.log *.trc`), which is how
+/// AFXW's masks read and how nobody expects `*.log *.trc` to mean "both at
+/// once" — a name cannot end in two extensions.
+pub fn mask_matcher(mask: &str) -> Option<crate::search::Matcher> {
+    let mask = mask.trim();
+    if mask.is_empty() {
+        return None;
+    }
+    // `/…/` is already the language every other prompt speaks; hand it over.
+    if mask.starts_with('/') {
+        return crate::search::Matcher::parse(mask).ok();
+    }
+    let parts: Vec<String> = mask
+        .split_whitespace()
+        .map(|p| {
+            let mut re = String::from("^");
+            for c in p.chars() {
+                match c {
+                    '*' => re.push_str(".*"),
+                    '?' => re.push('.'),
+                    c => re.push_str(&regex::escape(&c.to_string())),
+                }
+            }
+            re.push('$');
+            re
+        })
+        .collect();
+    crate::search::Matcher::parse(&format!("/{}/i", parts.join("|"))).ok()
 }
 
 /// A transfer cap written the way a person writes one: `2M`, `500k`, `off`.

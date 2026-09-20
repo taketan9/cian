@@ -4094,6 +4094,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry(":count", None, "count files & steps (marked, or the whole tree)", "ファイル・ステップ数を数える（マーク or ツリー全体）"),
                 entry(":du", None, "disk usage: what's biggest here (Enter into a folder, - up)", "容量分析: 何が大きいか（Enter でディレクトリへ、- で上へ）"),
                 entry(":hidden", None, "show / hide dotfiles (also right-click)", "ドットファイルの表示切替（右クリックでも）"),
+                entry(":mask", None, "a standing filter that follows you into the next directory;  :mask *.log  (:mask alone takes it off)", "付けたまま歩くフィルタ。ディレクトリを移っても効きます；  :mask *.log  （:mask だけで解除）"),
                 entry(":attr", None, "attributes;  :chmod 644,  :readonly on|off", "属性；  :chmod 644,  :readonly on|off"),
                 entry(":hash", None, "checksum;  :hash md5  /  :hash sha256", "チェックサム；  :hash md5  /  :hash sha256"),
                 entry(":stage / :unstage", None, "git add / git reset the selection (in a repo)", "選択を git add / git reset（リポジトリ内）"),

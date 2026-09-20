@@ -296,6 +296,9 @@ function drawStatus() {
         if (pane.marked > 0) chip('mk', tr(`${pane.marked} marked`, `マーク ${pane.marked}`));
         const row = pane.entries[pane.cursor];
         if (row && !row.parent) chip('cur', row.name);
+        // **マスクは付けたまま歩くので、いちばん忘れられる。** 3つ先の
+        // ディレクトリで空に見えて、理由が画面のどこにも無い、が防ぎたい形。
+        if (pane.mask) chip('msk', tr(`mask ${pane.mask} (${pane.entries.length})`, `マスク ${pane.mask} (${pane.entries.length} 件)`));
         if (pane.filter) chip('flt', tr(`filter /${pane.filter} (${pane.entries.length})`, `フィルタ /${pane.filter} (${pane.entries.length} 件)`));
     }
     // The branch, with ahead/behind and how many files are changed — green
@@ -6874,6 +6877,8 @@ function buildCommands() {
     { name: 'forward', about: tr("forward, one directory", 'ひとつ先のディレクトリへ'), run: () => step('forward') },
 
     { name: 'cd', alias: ['goto'], about: tr(":cd <path> / :cd .. / :cd - / :cd ~", ':cd <パス> / :cd .. / :cd - / :cd ~'), arg: tr('path', 'パス'), run: cmdCd },
+    // AFXW のマスク。`/` の絞り込みと違って、ディレクトリを移っても効き続ける。
+    { name: 'mask', about: tr("a standing filter that follows you: :mask *.log", '付けたまま歩くフィルタ: :mask *.log'), arg: tr('*.log, or /regex/ (empty takes it off)', '*.log か /正規表現/（省略で解除）'), optional: true, run: cmdMask },
     { name: 'hidden', about: tr("show / hide dotfiles", '隠しファイルの表示切替'), run: toggleHidden },
     { name: 'refresh', alias: ['rescan'], about: tr("reload", '読み直す'), run: reread },
     { name: 'undo', about: tr("undo the last operation", '直前の操作を取り消す'), run: undo },
@@ -6933,6 +6938,24 @@ async function cmdMkdir(spec) {
 /// **名前なし: 選んでいるもの（マーク、無ければカーソル）の日時をいまに。**
 /// **名前あり: そのファイルを作る。** 2026-09-20、本人の指定。それまで後者
 /// しか無く、選択に新しい日時を打つ道だけが無かった。
+/// `:mask *.log` — 付けたまま歩くフィルタ。引数なしで解除する。
+async function cmdMask(spec) {
+    const text = (spec || '').trim();
+    const was = state[state.focus].mask || '';
+    const r = await ask('mask', { pane: state.focus, text });
+    if (!r) return;
+    state[state.focus] = r;
+    draw(state.focus);
+    if (!text) {
+        say(was
+            ? tr(`mask off (was ${was})`, `マスクを外しました（${was}）`)
+            : tr('usage: :mask *.log   (no mask is set)', '使い方: :mask *.log   （いまマスクはありません）'));
+        return;
+    }
+    const n = r.entries.filter((e) => !e.parent).length;
+    say(tr(`mask ${text}. ${n} shown`, `マスク ${text}。${n} 件`));
+}
+
 async function cmdTouch(name) {
     if (!name) {
         const r = await ask('touchnow', { pane: state.focus });
