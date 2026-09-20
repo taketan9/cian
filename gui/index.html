@@ -331,6 +331,14 @@ html, body {
   content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
   border: 3px solid var(--mode-accent);
 }
+/* **サーバを見ているペインは、焦点があってもカーマイン。**
+   上の焦点枠（3px・`z-index: 3`）が、`.pane.remote` の 2px のアウトラインを
+   完全に覆っていた ── リモートペインは「いま操作しているペイン」であることが
+   ほとんどなので、実質いつもシアンに見えていた（2026-09-20、本人が実機で気づいた）。
+   端末版は焦点に関わらずカーマインを描く（render.rs、`is_remote()` の分岐が
+   焦点の分岐より後にある）。太さの差（3px か 2px か）が焦点を言い続けるので、
+   色は「ここはサーバだ」の一言だけに使う。 */
+#work[data-focus="files"] .pane.active.remote::after { border-color: var(--m-remote); }
 /* The mode's colour, on the frame of the surface holding the keys — which is
    where cian-tui puts it (`focus_badge_color`, render.rs:2134). It was only
    on the prompt row at the very bottom of the screen, which is the one place

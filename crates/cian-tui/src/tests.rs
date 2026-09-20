@@ -13454,6 +13454,34 @@ use crate::ai::StoredChatExt;
 
     /// `:mirror` — the other pane makes the same *step*, and says so when it
     /// cannot (2026-09-20, his call).
+    /// **サーバを見ているペインの枠は、焦点があってもカーマイン。**
+    ///
+    /// 窓版で 2026-09-20 に壊れていた（焦点の3px枠がリモートの2px枠を覆って
+    /// いて、リモートペインはたいてい焦点を持っているので実質いつもシアン
+    /// だった）。端末版は焦点の分岐より後にリモートの分岐が来るので正しい ──
+    /// **正しいことを、正しいと書いておく。**
+    #[test]
+    fn a_remote_pane_wears_carmine_even_when_it_has_the_keys() {
+        let (_d, mut app) = app_with(&["a.txt"]);
+        app.active_pane_mut()
+            .unwrap()
+            .enter_remote("me@server", "/srv", vec![]);
+        let _ = render(&mut app, 100, 30);
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(100, 30)).unwrap();
+        terminal.draw(|f| crate::render::draw(f, &mut app)).unwrap();
+        let buf = terminal.backend().buffer().clone();
+        // 左ペインの左上の角。枠の色そのもの。
+        let corner = buf[(0, 0)].fg;
+        assert_eq!(
+            corner,
+            ratatui::style::Color::Rgb(214, 45, 70),
+            "焦点のあるリモートペインの角がカーマインでない: {corner:?}",
+        );
+        // そして、焦点があること自体は変わっていない（シアンに戻っていない）。
+        assert!(matches!(app.focused, FocusedPane::Left));
+    }
+
     #[test]
     fn mirror_makes_the_other_pane_take_the_same_step() {
         let d = tempfile::tempdir().unwrap();

@@ -605,6 +605,15 @@ async function main() {
         ['?', 'ヘルプを開く'], ['wait:500', ''], ['shot:help-list@#find', '一覧のキー表'],
         ['Esc', '閉じる'],
 
+        // **サーバを見ているペインの枠は、焦点があってもカーマイン。**
+        // 焦点枠（3px）がリモートの枠（2px）を完全に覆っていて、リモートペインは
+        // 「いま操作しているペイン」であることがほとんどなので、実質いつも
+        // シアンに見えていた（2026-09-20、本人が実機で気づいた）。端末版は
+        // 焦点に関わらずカーマインを描く。
+        ['read:(()=>{document.querySelector(".pane.active").classList.add("remote");return "remote を付けた"})()', ''],
+        ['want:getComputedStyle(document.querySelector(".pane.active"),"::after").borderTopColor.replace(/\\s/g,"") === getComputedStyle(document.documentElement).getPropertyValue("--m-remote").replace(/\\s/g,"")', 'サーバの枠はカーマイン'],
+        ['read:(()=>{document.querySelector(".pane.active").classList.remove("remote");return "戻した"})()', ''],
+
         // AI の会話窓。**AI が設定されていなくても開く** ── 面と鍵と重なりは
         // モデルと無関係で、それがここで見たいもの。実際に答えが返るところは
         // `CIAN_CONFIG_DIR` に mock を書いた別走行で見る（`[mock +2]` が
@@ -1374,6 +1383,24 @@ async function main() {
             // 同じ z-index の兄弟は文書順で重なるので、後に書いたほうが勝つ
             // ── index.html のコメントがその事故を書いている場所で、また
             // 起きた。**状態ではなく画素を見る**。
+            // `want:<式>` ── 式が `true` を返すこと。返さなければ**例外に数える**。
+            //
+            // `top:` と同じ理由でここにある: 画面の*見え方*についての約束は、
+            // 打鍵では動かないので「動かなかったキー」には出ず、絵を見るまで
+            // 誰も気づかない。計算後のスタイルは数えられるので、数える。
+            //
+            // **壊して確かめるには** `gui/index.html` の
+            // `.pane.active.remote::after` の行を消す。焦点のあるリモートペインが
+            // シアンに戻り、この一歩が例外1件で落ちる。
+            if (key.startsWith('want:')) {
+                const expr = key.slice(5);
+                const out = await cdp.read(expr);
+                console.log(`  want    ${what || expr.slice(0, 40)} → ${out}`);
+                if (String(out) !== 'true') {
+                    crashes.push(`約束が守られていません: ${what || expr} → ${out}`);
+                }
+                continue;
+            }
             if (key.startsWith('top:')) {
                 const sel = key.slice(4);
                 const out = await cdp.read(
