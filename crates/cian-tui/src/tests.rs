@@ -13283,6 +13283,67 @@ use crate::ai::StoredChatExt;
             Popup::Viewer { view, .. } => assert!(view.lines.join("\n").contains("+let B = 2;"), "diff shown"),
             _ => panic!("diff did not open"),
         }
+        app.popup = Popup::None;
+
+        // **`:commit` is one word for both** (2026-09-20). Here it has to
+        // reach svn's prompt: routing it to git's would say "not a git
+        // repository" in a directory that plainly is under version control.
+        app.active_pane_mut().unwrap().marks.clear();
+        app.active_pane_mut().unwrap().cursor =
+            app.active_pane().unwrap().entries.iter().position(|e| e.name == "f.rs").unwrap();
+        app.command_buffer = "commit".into();
+        app.run_command();
+        match &app.popup {
+            Popup::TextInput { kind: InputKind::SvnCommit { paths }, prompt, .. } => {
+                assert_eq!(paths.len(), 1, "the file under the cursor");
+                // And it says where the message is going. git's commit stays
+                // on the machine; this one is on the server as soon as it
+                // succeeds, and one word now covers both.
+                assert!(prompt.contains("server"), "the prompt says where it goes: {prompt:?}");
+            }
+            other => panic!("`:commit` in an svn working copy did not open svn's prompt: {other:?}"),
+        }
+    }
+
+    /// `:commit` reaches svn's prompt in an svn working copy, git's in a git
+    /// repository — **without svn installed**.
+    ///
+    /// The test above this one covers the same routing against a real
+    /// repository, and it skips wherever `svnadmin` is missing, which is this
+    /// laptop. A check that does not run is a check that says nothing, and
+    /// "one word for both" is exactly the promise that goes quietly wrong.
+    /// `svn::is_working_copy` only looks for a `.svn` directory, so the
+    /// branch can be tested for the price of `mkdir`.
+    #[test]
+    fn one_commit_word_goes_to_whichever_vcs_the_directory_is_under() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = std::fs::canonicalize(d.path()).unwrap();
+        std::fs::create_dir(dir.join(".svn")).unwrap();
+        std::fs::write(dir.join("f.txt"), "one\n").unwrap();
+        let mut app = App::new(dir.clone(), dir.clone(), en_config()).unwrap();
+        app.active_pane_mut().unwrap().cursor =
+            app.active_pane().unwrap().entries.iter().position(|e| e.name == "f.txt").unwrap();
+        app.command_buffer = "commit".into();
+        app.run_command();
+        match &app.popup {
+            Popup::TextInput { kind: InputKind::SvnCommit { .. }, prompt, .. } => {
+                assert!(prompt.contains("server"), "the prompt says where it goes: {prompt:?}");
+            }
+            other => panic!("svn working copy: `:commit` opened {other:?}"),
+        }
+
+        // And where there is no repository at all, it says that rather than
+        // "not a git repository" — which would be true and useless in an svn
+        // checkout, and is the answer this change exists to stop giving.
+        let plain = tempfile::tempdir().unwrap();
+        let p = std::fs::canonicalize(plain.path()).unwrap();
+        std::fs::write(p.join("f.txt"), "one\n").unwrap();
+        let mut app = App::new(p.clone(), p, en_config()).unwrap();
+        app.command_buffer = "commit".into();
+        app.run_command();
+        assert!(matches!(app.popup, Popup::None), "no prompt without a repository");
+        let said = app.message.clone().unwrap_or_default();
+        assert!(said.contains("version-controlled"), "says what is missing: {said:?}");
     }
 
     #[test]

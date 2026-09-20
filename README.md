@@ -300,7 +300,11 @@ Bare text is literal, with nothing to escape; slashes make it a regex ([Rust `re
 
 The status line always shows free space on the active pane's drive — amber past 80 % used, red past 95 %.
 
-**git and svn just work.** Each entry gets a badge (`●` staged, `✚` modified, `?` untracked, `‼` conflict), the status line shows the branch (or `svn r123`), and F3 marks changed lines against HEAD. `:stage` `:unstage` `:discard` `:gitlog` `:gitdiff`, and `B` in the viewer for blame — all under right-click **Git ▸** / **SVN ▸**. cian shells out to your own `git` / `svn`.
+**git and svn just work.** Each entry gets a badge (`●` staged, `✚` modified, `?` untracked, `‼` conflict), the status line shows the branch (or `svn r123`), and F3 marks changed lines against HEAD. `B` in the viewer gives blame. All of it is under right-click **Git ▸** / **SVN ▸** as well. cian shells out to your own `git` / `svn`.
+
+**One name per action.** The directory already knows which repository it is in, so `:stage` `:unstage` `:discard` `:commit` do the right thing in either (older spellings like `:svnadd` still work; they are just not listed). Only the two that show you something carry the name: `:gitlog` / `:svnlog`, `:gitdiff` / `:svndiff`. `:update` and `:resolve` are svn's alone and say so in a git checkout — git's `update` would be a pull, which merges, and that stays in your own git.
+
+**`:commit` is the one word whose consequences differ.** git records it on this machine; svn has it on the server the moment it succeeds. So the prompt says which: "commits to the repository here" for git, "committing sends it to the server" for svn.
 
 ---
 

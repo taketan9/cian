@@ -204,6 +204,31 @@ impl App {
         });
     }
 
+    /// `:commit` — 一語で両方。どちらのリポジトリかはディレクトリが知っている。
+    ///
+    /// **同じ語だが、取り返しのつかなさが違う。** git のコミットはこの機械の
+    /// 中で終わり、あとから直せる。svn のコミットは成功した瞬間にサーバへ届き、
+    /// 他の人がもう見ている。名前を揃えた以上、その差は**訊く画面のほうで**
+    /// 言わなければならない ── git の枠は「手元のリポジトリに記録します」と
+    /// 書き、svn の入力欄は「サーバに送ります」と書く（2026-09-20、本人:
+    /// 「確認ダイアログで差を出すで良い」）。
+    pub(crate) fn commit_prompt(&mut self) {
+        match self.vcs_dir() {
+            Some((_, Vcs::Svn)) => self.svn_commit_prompt(),
+            Some((_, Vcs::Git)) => self.start_commit(),
+            None => {
+                self.message = Some(
+                    tr(
+                        self.lang,
+                        "not a version-controlled directory",
+                        "バージョン管理下のディレクトリではありません",
+                    )
+                    .into(),
+                )
+            }
+        }
+    }
+
     pub(crate) fn svn_resolve(&mut self) {
         let Some((dir, kind)) = self.vcs_dir() else {
             self.message = Some(tr(self.lang, "not a version-controlled directory", "バージョン管理下のディレクトリではありません").into());
@@ -239,7 +264,18 @@ impl App {
             return;
         };
         if kind != Vcs::Svn {
-            self.message = Some(tr(self.lang, "update is svn-only", "update は svn 専用です").into());
+            // **git に `:update` は入れていない。** `git pull` は fetch と
+            // merge で、merge は cian が引き受けないと決めたもの（2026-09-10、
+            // 本人: git は素のコミットだけ）。「svn 専用です」とだけ言うと、
+            // 忘れられているのか断られているのかが分からない。
+            self.message = Some(
+                tr(
+                    self.lang,
+                    "update is svn's. the git version is a pull, which merges, and that stays in your own git",
+                    "update は svn のものです。git の同じ手は pull で、merge を伴うので cian には入れていません",
+                )
+                .into(),
+            );
             return;
         }
         match cian_core::svn::update(&dir) {
@@ -267,9 +303,15 @@ impl App {
             self.message = Some(tr(self.lang, "nothing selected to commit", "コミットする対象が選択されていません").into());
             return;
         }
+        // **届く先を欄に書く。** `:commit` は git と svn で同じ語になったので、
+        // 「これは手元では終わらない」と言えるのはここしかない。
         self.open_popup(text_input(
             "svn commit",
-            "message:",
+            if self.lang == crate::theme::Lang::Ja {
+                "メッセージ（コミットするとサーバに届きます）:"
+            } else {
+                "message (committing sends it to the server):"
+            },
             String::new(),
             InputKind::SvnCommit { paths },
         ));

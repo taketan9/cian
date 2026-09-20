@@ -2682,11 +2682,11 @@ function contextRows() {
             v.push(group('SVN ▸', () => [
                 { label: tr("Add", '追加'), value: 'svn add', run: () => cmdSvn('stage') },
                 { label: tr("Discard changes", '変更を破棄'), value: 'svn revert', run: () => cmdSvn('discard') },
-                { label: tr("Resolve conflict", '競合を解決'), value: 'svn resolve', run: () => cmdSvn('resolve') },
+                { label: tr("Resolve conflict", '競合を解決'), value: ':resolve', run: () => cmdSvn('resolve') },
                 { label: tr("Diff vs BASE", 'BASEとの差分'), value: 'svn diff', run: () => cmdVcsDiff('svn') },
                 { label: tr("History / log", '履歴 / ログ'), value: 'svn log', run: () => cmdLog(false, 'svn') },
-                { label: tr("Update", '更新'), value: 'svn update', run: () => cmdSvn('update') },
-                { label: tr("Commit", 'コミット'), value: 'svn commit', run: () => cmdSvn('commit') },
+                { label: tr("Update", '更新'), value: ':update', run: () => cmdSvn('update') },
+                { label: tr("Commit", 'コミット'), value: ':commit', run: () => cmdSvn('commit') },
             ]));
         }
     }
@@ -3171,7 +3171,7 @@ function helpRows() {
         [':gitlog / :filelog', tr("the commit log / this file's history (git and svn)", 'コミットログ / このファイルの履歴（git・svn）')],
         [':gitdiff', tr("the selected file's diff", '選択ファイルの差分')],
         [':stage / :unstage / :discard', tr("git add / reset / discard the changes", 'git add / reset / 変更の破棄')],
-        [':commit', tr("commit the staged changes, with a message you write", 'ステージ済みの変更を、自分で書いたメッセージでコミット')],
+        [':commit', tr("commit with a message you write. git records it here, svn sends it to the server", '自分で書いたメッセージでコミット。git は手元に記録、svn はサーバに届きます')],
         [':svnupdate :svncommit :svnresolve', tr("the three svn ones", 'svn の3つ')],
         [':dup', tr("find duplicate files \u2014 same contents (also :duplicate)", '重複ファイルを検出 — 中身が同じもの（:duplicate でも）')],
         [':df / :wc / :stat', tr("free space / lines, words, bytes / attributes", '空き容量 / 行・単語・バイト / 属性')],
@@ -6717,8 +6717,8 @@ function buildCommands() {
     { name: 'log', about: tr("what this build is, and where it reads from. :log on|off starts and stops a diagnostic log", 'この版と、読んでいる設定の場所。:log on|off で診断ログの開始と停止'), arg: tr('on / off / a path', 'on / off / パス'), optional: true, run: cmdState },
     { name: 'filelog', about: tr("this file's history", 'このファイルの履歴'), run: () => cmdLog(true) },
     { name: 'gitdiff', alias: ['gdiff', 'svndiff'], about: tr("the selected file's diff (git / svn)", '選択ファイルの差分（git / svn）'), run: () => cmdVcsDiff(null) },
-    { name: 'stage', alias: ['add', 'svnadd'], about: tr("git add", 'git add'), run: () => cmdVcs('stage') },
-    { name: 'unstage', alias: ['reset'], about: tr("git reset", 'git reset'), run: () => cmdVcs('unstage') },
+    { name: 'stage', alias: ['add', 'svnadd'], about: tr("stage the selection (git or svn)", '選択をステージ（git・svn）'), run: () => cmdVcs('stage') },
+    { name: 'unstage', alias: ['reset'], about: tr("unstage the selection (git or svn)", '選択をアンステージ（git・svn）'), run: () => cmdVcs('unstage') },
     { name: 'discard', alias: ['revert', 'svnrevert'], about: tr("discard worktree changes", '作業ツリーの変更を破棄'), run: () => cmdVcs('discard') },
     { name: 'dup', alias: ['duplicate', 'dedup'], about: tr("find files with identical contents", '中身が同じファイルを探す'), run: cmdDedup },
     { name: 'redo', about: tr("redo what u undid", 'u で取り消した操作をやり直す'), run: redo },
@@ -6785,7 +6785,8 @@ function buildCommands() {
     { name: 'limit', alias: ['speed', 'ratelimit'], about: tr("cap the transfer rate \u2014 :limit 2m / 500k / off", '転送の速さの上限 — :limit 2m / 500k / off'), arg: '2m / 500k / off', optional: true, run: cmdLimit },
     { name: 'summary', alias: ['summarize', 'summarise'], about: tr("AI: summarise the open file", 'AI: 開いているファイルを要約'), run: cmdSummary },
     { name: 'aicommit', alias: ['commitmsg'], about: tr("AI: a commit message from the staged diff", 'AI: ステージ済みの差分からコミットメッセージを作る'), run: cmdAiCommit },
-    { name: 'commit', about: tr("commit the staged changes (git)", 'ステージ済みの変更をコミット（git）'), run: cmdCommit },
+    // 一語で両方（2026-09-20）。どちらのリポジトリかはディレクトリが知っている。
+    { name: 'commit', alias: ['svncommit'], about: tr("commit. git records it here, svn sends it to the server", 'コミット。git は手元に、svn はサーバに届きます'), run: cmdCommit },
     { name: 'aierror', alias: ['explain'], about: tr("AI: explain the shell's last error", 'AI: シェルの直近のエラーを説明する'), run: cmdAiError },
     { name: 'ime', alias: ['inputmethod'], about: tr("input method \u2014 off in vim's normal mode (cian.ime)", 'IME 連携 — vim のノーマルモードで自動オフ（cian.ime）'), run: cmdIme },
     { name: 'stat', about: tr("attributes (same as :attr)", '属性（:attr と同じ）'), run: cmdAttr },
@@ -6833,9 +6834,8 @@ function buildCommands() {
     { name: 'reindent', about: tr("re-indent to a consistent step", 'インデントを揃える'), run: () => textOp('reindent') },
     { name: 'lf', about: tr("line endings to LF", '改行を LF にする'), run: () => setEol('lf') },
     { name: 'crlf', about: tr("line endings to CRLF", '改行を CRLF にする'), run: () => setEol('crlf') },
-    { name: 'svnupdate', about: tr("svn update", 'svn update'), run: () => cmdSvn('update') },
-    { name: 'svncommit', about: tr("svn commit (it asks for a message)", 'svn commit（メッセージを訊きます）'), run: () => cmdSvn('commit') },
-    { name: 'svnresolve', alias: ['resolve'], about: tr("svn resolve --accept working", 'svn resolve --accept working'), run: () => cmdSvn('resolve') },
+    { name: 'update', alias: ['svnupdate'], about: tr("svn update the working copy. svn only", 'svn update で作業コピーを更新。svn のみ'), run: () => cmdSvn('update') },
+    { name: 'resolve', alias: ['svnresolve'], about: tr("svn resolve --accept working. svn only", 'svn resolve --accept working。svn のみ'), run: () => cmdSvn('resolve') },
     { name: 'visual', alias: ['select'], about: tr("visual selection (also v)", 'ビジュアル選択（v でも）'), run: startVisual },
     // `:back` is cian-tui's name for the history popup (commands.rs:248), not
     // for stepping one directory back — that is Alt+← and `:cd -`, as it is
@@ -7951,9 +7951,25 @@ async function setEol(kind) {
 }
 
 async function cmdSvn(what) {
+    // **git の中では、無いのではなく入れていない。** エンジンは「svn の作業
+    // コピーではありません」としか言えず、それだと忘れられているのか断られて
+    // いるのかが分からない。端末版はここで理由を言う（gitui.rs `svn_update`）
+    // ので、窓も同じことを言う ── `:update` と `:resolve` は svn 専用だと
+    // 決めたのであって、作り忘れではない。
+    if ((what === 'update' || what === 'resolve')
+        && repo[state.focus] && repo[state.focus].v && repo[state.focus].v.kind === 'git') {
+        say(what === 'update'
+            ? tr("update is svn's. the git version is a pull, which merges, and that stays in your own git",
+                 'update は svn のものです。git の同じ手は pull で、merge を伴うので cian には入れていません')
+            : tr("resolve is svn's. git's conflicts are settled in your own git",
+                 'resolve は svn のものです。git の競合は自分の git で解決してください'));
+        return;
+    }
     let message;
     if (what === 'commit') {
-        message = await askFor(tr('Commit message', 'コミットメッセージ'), '');
+        // 届く先を欄に書く。`:commit` は git と svn で同じ語になったので、
+        // 「これは手元では終わらない」と言えるのはここしかない。
+        message = await askFor(tr('Commit message. committing sends it to the server', 'コミットメッセージ。コミットするとサーバに届きます'), '');
         if (message === null || !message.trim()) return;
     }
     const r = await ask('svn', { pane: state.focus, what, message });
@@ -10253,8 +10269,19 @@ async function cmdLimit(spec) {
 ///
 /// 訊き方も svn のコミットと同じにしてある ── 同じことをする2つの入口が違う
 /// 訊き方をすると、どちらを使っているのか分からなくなる。
+/// `:commit` — 一語で両方。どちらのリポジトリかはディレクトリが知っている。
+///
+/// **同じ語だが、取り返しのつかなさが違う。** git のコミットはこの機械の中で
+/// 終わる。svn のコミットは成功した瞬間にサーバへ届く。名前を揃えたので、
+/// その差は訊く画面が言う（2026-09-20、本人）。
 async function cmdCommit() {
-    const message = await askFor(tr('Commit message', 'コミットメッセージ'), '');
+    const kind = repo[state.focus] && repo[state.focus].v && repo[state.focus].v.kind;
+    if (kind === 'svn') { await cmdSvn('commit'); return; }
+    if (kind !== 'git') {
+        say(tr('not a version-controlled directory', 'バージョン管理下のディレクトリではありません'));
+        return;
+    }
+    const message = await askFor(tr('Commit message. it stays in the repository here', 'コミットメッセージ。手元のリポジトリに記録します'), '');
     if (message === null || !message.trim()) return;
     const done = await ask('commit', { pane: state.focus, message });
     if (!done) return;

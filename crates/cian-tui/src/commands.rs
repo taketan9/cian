@@ -265,11 +265,18 @@ impl App {
             // SVN-only working-copy operations.
             // svn-only, so it says so in the name. `:up` in a file manager
             // reads as "go to the parent", which is not what it did.
-            "svnupdate" => self.svn_update(),
+            // **一語で両方**（2026-09-20）。svn にしか無い概念なので svn 専用の
+            // ままだが、名前から `svn` を落とした ── git のディレクトリで叩いた
+            // ときは、無いのではなく入れていないことを理由つきで言う。
+            "update" | "svnupdate" => self.svn_update(),
             // Likewise. `:svncommit` names svn's, and the bare `:commit`
             // below is git's — the verb was left free for it (2026-09-10).
-            "svncommit" => self.svn_commit_prompt(),
-            "commit" => self.start_commit(),
+            // **`:commit` は git と svn のどちらでも同じ語**（2026-09-20、本人）。
+            // どちらのリポジトリかはディレクトリが知っていて、バッジも状態行も
+            // すでにそう言っている。`:svncommit` は手が覚えているので残すが、
+            // 一覧には出さない。取り返しのつかなさの差は訊く画面が言う ──
+            // `commit_prompt` の註にある。
+            "commit" | "svncommit" => self.commit_prompt(),
             "svnresolve" | "resolve" => self.svn_resolve(),
             "snip" | "snippet" => self.start_snippets(),
             "aicommit" | "commitmsg" => self.start_ai_commit_message(),

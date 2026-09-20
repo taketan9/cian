@@ -4442,6 +4442,15 @@ f.render_widget(block, rect);
 
 let body_w = inner.width.max(1) as usize;
 let mut lines: Vec<Line> = Vec::new();
+// **Where it goes.** `:commit` is one word for git and for svn now, and the
+// two do not cost the same: this one stays on the machine, while svn's is on
+// the server the moment it succeeds. This popup is git's, so it says so —
+// svn's own prompt says the other half (`svn_commit_prompt`).
+lines.push(Line::from(Span::styled(
+    tr(lang, "commits to the repository here", "手元のリポジトリに記録します").to_string(),
+    Style::default().fg(dim_text(theme().popup_bg)),
+)));
+lines.push(Line::from(""));
 // The staged-files summary, quietly, so the reviewer sees what it covers.
 if !stat.is_empty() {
     for raw in stat.lines() {
