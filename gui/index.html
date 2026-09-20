@@ -681,6 +681,11 @@ html, body {
   color: var(--text); white-space: pre-wrap;
 }
 #settings .sfoot { flex: 0 0 auto; }
+/* 保存が断られたときの一行。**色を持つ** ── 同じ場所に出る「◯件の変更を
+   書きます」と見分けがつかないと、断られたことが伝わらない。 */
+/* `--mark` は cian が「これは注意して見るもの」に使っている色（マーク、
+   停滞した転送）。断られた保存も同じ種類の事実なので、色を増やさない。 */
+#settings .sfoot #se-foot[data-bad="1"] { color: var(--mark); font-weight: 600; }
 #settings .sfoot button {
   font: inherit; padding: 2px 14px; margin-left: 8px; cursor: pointer;
   background: var(--pane-off); color: var(--text);

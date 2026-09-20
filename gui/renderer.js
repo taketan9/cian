@@ -4051,6 +4051,9 @@ document.addEventListener('keydown', (e) => {
 ///     「1件設定済み」と出る
 const settings = {
     on: false,
+    /// 保存が断られた理由。**シートの中に残す** ── 状態行は次の知らせで流れ、
+    /// 設定の保存は「押したはずなのに効いていない」がいちばん起きる場所だ。
+    failed: null,
     /// エンジンが渡した項目の表。
     fields: [],
     /// AI のブロック。`endpoint` が空なら**未設定＝オフ**。
@@ -4580,12 +4583,20 @@ function drawSettingsFoot() {
         const f = (w || '').split(/[\\/]/).pop() || 'init.lua';
         if (!where.includes(f)) { where.push(f); }
     }
-    el.seFoot.textContent = settings.error
-        ? tr('read the file first', 'まず init.lua を直してください')
-        : n
-            ? tr(`${n} change(s). saved into ${where.join(' / ')}`,
-                 `${n} 件の変更を ${where.join(' / ')} に書きます`)
-            : tr('nothing changed yet', 'まだ何も変えていません');
+    // **保存が断られたら、シートの中に残す。** 状態行は次の知らせで流れるし、
+    // 設定の保存は「押したはずなのに効いていない」がいちばん起きる場所だ ──
+    // 実機で書けないディレクトリに保存したとき、画面の下は「書きます」と
+    // 未来形のままだった（2026-09-20）。変更は消えずに残っているので、
+    // 直してもう一度押せば書ける。
+    el.seFoot.textContent = settings.failed
+        ? tr(`could not save: ${settings.failed}`, `保存できませんでした: ${settings.failed}`)
+        : settings.error
+            ? tr('read the file first', 'まず init.lua を直してください')
+            : n
+                ? tr(`${n} change(s). saved into ${where.join(' / ')}`,
+                     `${n} 件の変更を ${where.join(' / ')} に書きます`)
+                : tr('nothing changed yet', 'まだ何も変えていません');
+    el.seFoot.dataset.bad = settings.failed ? '1' : '';
     el.seSave.textContent = tr('Save', '保存');
     el.seCancel.textContent = tr('Close', '閉じる');
     el.seSave.disabled = !!settings.error || n === 0;
@@ -4638,31 +4649,38 @@ function captureKey(e) {
 
 async function saveSettings() {
     if (settings.error) { return; }
+    settings.failed = null;
     const set = [...settings.touched].map(([name, value]) => ({ name, value }));
     const ai = [...settings.touchedAi].map(([key, value]) => ({ key, value }));
     const hosts = [...settings.touchedHosts].map(([name, row]) => ({ name, row }));
     const keys = [...settings.touchedKeys].map(([action, key]) => ({ action, key }));
     const snips = [...settings.touchedSnips].map(([name, row]) => ({ name, row }));
     if (!set.length && !ai.length && !hosts.length && !keys.length && !snips.length) { return; }
+    // `ask` は断られると null を返し、理由を状態行に出す。その理由をシートにも
+    // 残すため、直前の知らせを拾う。
+    const refused = () => {
+        settings.failed = status.msg || tr('refused', '断られました');
+        drawSettingsFoot();
+    };
     if (snips.length) {
         const s2 = await ask('settings_snips_write', { snips });
-        if (!s2) { return; }
+        if (!s2) { refused(); return; }
     }
     // キーも別の呼び出し ── 書く先が `keymap.lua` のことがある。
     if (keys.length) {
         const k = await ask('settings_keys_write', { keys });
-        if (!k) { return; }
+        if (!k) { refused(); return; }
     }
     // **ホストは別の呼び出し。** 書く先が `init.lua` とは限らない
     // （`ssh.lua` があればそちら）ので、どちらに何を書くかを混ぜない。
     if (hosts.length) {
         const h = await ask('settings_hosts_write', { hosts });
-        if (!h) { return; }
+        if (!h) { refused(); return; }
     }
     let r = { path: settings.ssh.writes, backup: '' };
     if (set.length || ai.length) {
         r = await ask('settings_write', { set, ai });
-        if (!r) { return; }
+        if (!r) { refused(); return; }
     }
     // **設定を直したら、読み直す。** cian で最頻のバグは「設定を直したのに
     // 効かない」で、書いたあと画面が古い値を出し続けるのはその一種。

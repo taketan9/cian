@@ -73,6 +73,44 @@ def rows() -> list[dict]:
     return out
 
 
+# `(?s)(?=.*A)(?=.*B)…` ── この台帳でいちばん多い書き方。「A も B も、どこかに
+# 有ること」を1つの正規表現で言うためのものだが、**外れたときに壊滅的に遅い**:
+# 600KB の `renderer.js` に対して、`.*` の伸縮を先読みの数だけ掛け合わせる。
+#
+# 2026-09-20 に実際に固まった。**守られていない依頼が、赤ではなく無反応として
+# 出る** ── この台帳がいちばんしてはいけないことだ。意味は「それぞれがどこかに
+# 有ること」でしかないので、先読みを切り離して1つずつ探す。線形で、同じ答えが出る。
+LOOKAHEADS = re.compile(r"^\(\?s\)((?:\(\?=\.\*.*?\))+)$", re.DOTALL)
+
+
+def matches(pattern: str, text: str) -> int | None:
+    """`pattern` が当たった位置。当たらなければ `None`。"""
+    m = LOOKAHEADS.match(pattern)
+    if m:
+        # `(?=.*X)` を1つずつに割る。入れ子の括弧があるので、深さで数える。
+        parts, depth, start = [], 0, None
+        body = m.group(1)
+        for i, c in enumerate(body):
+            if c == "(":
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif c == ")":
+                depth -= 1
+                if depth == 0:
+                    parts.append(body[start + len("(?=.*") : i])
+        first = None
+        for part in parts:
+            hit = re.search(part, text, re.DOTALL | re.MULTILINE)
+            if not hit:
+                return None
+            if first is None:
+                first = hit.start()
+        return first if first is not None else 0
+    hit = re.search(pattern, text, re.MULTILINE)
+    return hit.start() if hit else None
+
+
 def main() -> int:
     listing = "--list" in sys.argv
     entries = rows()
@@ -89,16 +127,16 @@ def main() -> int:
         if not f.exists():
             bad.append((e, f"{e['path']} がありません"))
             continue
+        text = f.read_text(encoding="utf-8")
         try:
-            rx = re.compile(e["pattern"], re.MULTILINE)
+            hit = matches(e["pattern"], text)
         except re.error as err:
             bad.append((e, f"正規表現が壊れています: {err}"))
             continue
-        hit = rx.search(f.read_text(encoding="utf-8"))
-        if e["negate"] and hit:
-            line = f.read_text(encoding="utf-8")[: hit.start()].count("\n") + 1
+        if e["negate"] and hit is not None:
+            line = text[: hit].count("\n") + 1
             bad.append((e, f"{e['path']}:{line} に、あってはならないものがあります"))
-        elif not e["negate"] and not hit:
+        elif not e["negate"] and hit is None:
             bad.append((e, f"{e['path']} が条件を満たしていません"))
         elif listing:
             op = "!~" if e["negate"] else "~"
