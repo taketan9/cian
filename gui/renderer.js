@@ -3503,13 +3503,17 @@ document.addEventListener('keydown', (e) => {
     else if (k === 'ArrowDown' || (mod(e) && k === 'n')) {
         if (mode === 'find') { finder.at = Math.min(finder.rows.length - 1, finder.at + 1); drawHits(finder.rows.length); }
         else if (mode === 'filter') move(1);
+        else if (mode === 'cmd') walkCmdHistory(1);
         else return;
     }
     else if (k === 'ArrowUp' || (mod(e) && k === 'p')) {
         if (mode === 'find') { finder.at = Math.max(0, finder.at - 1); drawHits(finder.rows.length); }
         else if (mode === 'filter') move(-1);
+        else if (mode === 'cmd') walkCmdHistory(-1);
         else return;
     }
+    // Tab は `:` の行だけ。絞り込みと検索の箱では、Tab は今までどおり外へ出る。
+    else if (k === 'Tab' && mode === 'cmd') completeCmdLine();
     else return;
     e.preventDefault();
 }, true);
@@ -8114,9 +8118,85 @@ function commandLine(initial = '') {
 }
 
 /// Run whatever was typed on the command line.
+/// `:` の行で走らせた line。新しいものが末尾。**この起動のあいだだけ**
+/// （端末版と同じ ── 何を打ったかの記録を機械に残す理由がない）。
+const cmdLine = { history: [], at: null, draft: '' };
+
+/// ↑ と ↓。打ちかけの行は `draft` に置いておき、↓ で戻れるようにする。
+function walkCmdHistory(step) {
+    const n = cmdLine.history.length;
+    if (!n) return;
+    if (cmdLine.at === null) {
+        if (step > 0) return;
+        cmdLine.draft = el.fInput.value;
+        cmdLine.at = n - 1;
+    } else if (step < 0) {
+        cmdLine.at = Math.max(0, cmdLine.at - 1);
+    } else if (cmdLine.at + 1 < n) {
+        cmdLine.at += 1;
+    } else {
+        cmdLine.at = null;
+    }
+    el.fInput.value = cmdLine.at === null ? cmdLine.draft : cmdLine.history[cmdLine.at];
+    const end = el.fInput.value.length;
+    el.fInput.setSelectionRange(end, end);
+}
+
+/// Tab。動詞か、キャレットの下の語をパスとして。
+///
+/// **候補が一致するところまでしか埋めない。** 選んでしまう Tab は、取り消す
+/// 羽目になる Tab だ。候補が複数あるときは名前を状態行に出す（端末版と同じ）。
+async function completeCmdLine() {
+    const value = el.fInput.value;
+    const caret = el.fInput.selectionStart ?? value.length;
+    const head = value.slice(0, caret);
+    const tail = value.slice(caret);
+    const cut = head.lastIndexOf(' ') + 1;
+    const before = head.slice(0, cut);
+    const word = head.slice(cut);
+
+    let hits;
+    if (!before.trim()) {
+        // 別名も候補に。**打てば動くものは、Tab で書けるべき**だ ── 窓版で
+        // 重複検出の本名は `dup` で `duplicate` は別名、端末版はその逆で、
+        // 名前だけ見ていると同じ `dupli` が前端によって当たったり外れたりする。
+        hits = commands()
+            .filter((c) => !c.hidden && !(c.needsAi && !cfg.ai))
+            .flatMap((c) => [c.name, ...(c.alias || [])])
+            .filter((n) => n.startsWith(word));
+    } else {
+        // エンジンに訊く。歩くのは端末版と同じ関数（cian-core）。
+        const r = await ask('complete', { pane: state.focus, word });
+        hits = (r && r.hits) || [];
+    }
+    hits = [...new Set(hits)].sort();
+    if (!hits.length) return;
+    const common = hits.reduce((acc, h) => {
+        let n = 0;
+        while (n < acc.length && n < h.length && acc[n] === h[n]) n += 1;
+        return acc.slice(0, n);
+    });
+    if (common.length > word.length) {
+        el.fInput.value = before + common + tail;
+        const end = (before + common).length;
+        el.fInput.setSelectionRange(end, end);
+    }
+    if (hits.length > 1) {
+        const shown = hits.slice(0, 8);
+        if (hits.length > shown.length) shown.push(`… +${hits.length - shown.length}`);
+        say(shown.join('  '));
+    }
+}
+
 async function runTypedCommand(line) {
     const text = line.trim();
     if (!text) return;
+    // 走らせる前に覚える。失敗した行こそ ↑ で戻したい。
+    if (cmdLine.history[cmdLine.history.length - 1] !== text) {
+        cmdLine.history.push(text);
+        if (cmdLine.history.length > 200) cmdLine.history.shift();
+    }
+    cmdLine.at = null;
     // `!` is a prefix, not a name: everything after it is the command line
     // itself, spaces and all.
     if (text.startsWith('!')) {

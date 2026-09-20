@@ -9,13 +9,126 @@ impl App {
     /// "Command…" menu item.
     pub(crate) fn enter_command_mode(&mut self) {
         self.command_buffer.clear();
+        self.command_cursor = 0;
+        self.command_hist_at = None;
         self.mode = Mode::Command;
     }
+
+    /// Put `text` on the `:` line with the caret after it.
+    ///
+    /// **One door**, because the caret is a second fact about the same line:
+    /// an assignment that forgets it leaves the caret at 0, and the next
+    /// character typed lands at the *front* of what was just put there. That
+    /// is exactly what happened to the paste path the day the caret arrived.
+    pub(crate) fn set_command_line(&mut self, text: impl Into<String>) {
+        self.command_buffer = text.into();
+        self.command_cursor = self.command_buffer.chars().count();
+    }
+
+    /// ↑ and ↓ on the `:` line: the lines already run, newest first.
+    ///
+    /// The line being typed is kept as `command_draft`, so walking up and back
+    /// down again returns what was there rather than an empty line — the
+    /// thing every shell does and nobody notices until it is missing.
+    pub(crate) fn walk_command_history(&mut self, step: i32) {
+        if self.command_history.is_empty() {
+            return;
+        }
+        let n = self.command_history.len();
+        let at = match (self.command_hist_at, step) {
+            // First step back: remember what was being typed.
+            (None, -1) => {
+                self.command_draft = self.command_buffer.clone();
+                Some(n - 1)
+            }
+            (None, _) => None,
+            (Some(0), -1) => Some(0),
+            (Some(i), -1) => Some(i - 1),
+            (Some(i), _) if i + 1 < n => Some(i + 1),
+            // Past the newest: back to what was being typed.
+            (Some(_), _) => None,
+        };
+        self.command_hist_at = at;
+        self.command_buffer = match at {
+            Some(i) => self.command_history[i].clone(),
+            None => std::mem::take(&mut self.command_draft),
+        };
+        self.command_cursor = self.command_buffer.chars().count();
+    }
+
+    /// Tab on the `:` line: finish the verb, or the path being typed.
+    ///
+    /// **One press completes as far as every candidate agrees** (the common
+    /// prefix), and says what the candidates are when more than one is left.
+    /// That is the shell behaviour a hand expects, and it never picks for you
+    /// — a Tab that guesses is a Tab you have to undo.
+    pub(crate) fn complete_command(&mut self) {
+        let head: String = self.command_buffer.chars().take(self.command_cursor).collect();
+        let tail: String = self.command_buffer.chars().skip(self.command_cursor).collect();
+        // The word under the caret: everything back to the last space.
+        let cut = head.rfind(' ').map(|i| i + 1).unwrap_or(0);
+        let (before, word) = head.split_at(cut);
+        let verb_position = before.trim().is_empty();
+
+        let mut hits: Vec<String> = if verb_position {
+            crate::palette::command_list()
+                .iter()
+                .map(|(v, _, _)| (*v).to_string())
+                .filter(|v| v.starts_with(word))
+                .collect()
+        } else {
+            match self.cwd() {
+                Some(cwd) => cian_core::ops::path_completions(&cwd, word),
+                None => Vec::new(),
+            }
+        };
+        hits.sort();
+        hits.dedup();
+        if hits.is_empty() {
+            return;
+        }
+        // As far as they all agree.
+        let common = hits.iter().skip(1).fold(hits[0].clone(), |acc, h| {
+            let n = acc
+                .chars()
+                .zip(h.chars())
+                .take_while(|(a, b)| a == b)
+                .count();
+            acc.chars().take(n).collect()
+        });
+        if common.chars().count() > word.chars().count() {
+            self.command_buffer = format!("{before}{common}{tail}");
+            self.command_cursor = before.chars().count() + common.chars().count();
+        }
+        if hits.len() > 1 {
+            // Not a popup: the line is being typed, and something that steals
+            // the screen to list eight names is worse than a line of them.
+            let mut shown: Vec<String> = hits.iter().take(8).cloned().collect();
+            if hits.len() > shown.len() {
+                shown.push(format!("… +{}", hits.len() - shown.len()));
+            }
+            self.message = Some(shown.join("  "));
+        }
+    }
+
 
     pub(crate) fn run_command(&mut self) {
         let raw = self.command_buffer.trim().to_string();
         self.command_buffer.clear();
+        self.command_cursor = 0;
+        self.command_hist_at = None;
         self.mode = Mode::Normal;
+        // Remembered before it runs, so a command that fails is still there
+        // for ↑ — that is the one you most want back. The same line twice in
+        // a row is kept once; a history that repeats is a history you have to
+        // press past.
+        if !raw.is_empty() && self.command_history.last().map(String::as_str) != Some(raw.as_str()) {
+            self.command_history.push(raw.clone());
+            // A session's worth, not a lifetime's.
+            if self.command_history.len() > 200 {
+                self.command_history.remove(0);
+            }
+        }
         if raw.is_empty() {
             return;
         }

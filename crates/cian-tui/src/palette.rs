@@ -377,11 +377,11 @@ impl App {
             }
             PaletteKind::Commands if takes_arg => {
                 // Prefill command mode so the argument can be typed.
-                self.command_buffer = format!("{} ", value);
+                self.set_command_line(format!("{} ", value));
                 self.mode = Mode::Command;
             }
             PaletteKind::Commands => {
-                self.command_buffer = value;
+                self.set_command_line(value);
                 self.run_command();
             }
         }

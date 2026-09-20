@@ -500,7 +500,7 @@ fn draw_frame(f: &mut Frame, app: &mut App) {
                     &format!("{}/{} match  Enter=keep  Esc=clear", matched, total),
                 );
             } else {
-                draw_command_line(f, cmd_area, &app.command_buffer);
+                draw_command_line(f, cmd_area, &app.command_buffer, app.command_cursor);
             }
         }
     }
@@ -2544,9 +2544,24 @@ fn draw_prompt_line(f: &mut Frame, area: Rect, left: &str, right: &str) {
     }
 }
 
-fn draw_command_line(f: &mut Frame, area: Rect, buf: &str) {
-    let text = format!(":{}", buf);
-    let p = Paragraph::new(text).style(prompt_style());
+/// The `:` line, with the caret where the next character will land.
+///
+/// **It had no caret because it had no cursor**: the line only ever grew and
+/// shrank at the end, so there was nothing to draw. Now that Left, Right,
+/// Home and End work, the caret is the only thing that says where they went.
+fn draw_command_line(f: &mut Frame, area: Rect, buf: &str, cursor: usize) {
+    let chars: Vec<char> = buf.chars().collect();
+    let at = cursor.min(chars.len());
+    let before: String = chars[..at].iter().collect();
+    let on: String = chars.get(at).map(|c| c.to_string()).unwrap_or_else(|| " ".to_string());
+    let after: String = chars.get(at + 1..).map(|s| s.iter().collect()).unwrap_or_default();
+    let line = Line::from(vec![
+        Span::raw(":"),
+        Span::raw(before),
+        Span::styled(on, Style::default().fg(readable_on(theme().accent)).bg(theme().accent)),
+        Span::raw(after),
+    ]);
+    let p = Paragraph::new(line).style(prompt_style());
     f.render_widget(p, area);
 }
 

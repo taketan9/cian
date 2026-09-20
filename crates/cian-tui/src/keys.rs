@@ -1891,14 +1891,48 @@ impl App {
             return Ok(());
         }
         match key.code {
-            KeyCode::Esc => { self.command_buffer.clear(); self.mode = Mode::Normal; }
+            KeyCode::Esc => {
+                self.command_buffer.clear();
+                self.command_cursor = 0;
+                self.command_hist_at = None;
+                self.mode = Mode::Normal;
+            }
             KeyCode::Enter => self.run_command(),
-            KeyCode::Backspace => { self.command_buffer.pop(); }
+            KeyCode::Backspace => {
+                crate::backspace_at(&mut self.command_buffer, &mut self.command_cursor)
+            }
+            KeyCode::Delete => {
+                crate::delete_at(&mut self.command_buffer, &mut self.command_cursor)
+            }
+            // **Where the caret goes.** Until 2026-09-20 there was nowhere for
+            // it to go: a path typed with a typo in the middle had to be
+            // backspaced away to reach the mistake.
+            KeyCode::Left => self.command_cursor = self.command_cursor.saturating_sub(1),
+            KeyCode::Right => {
+                self.command_cursor =
+                    (self.command_cursor + 1).min(self.command_buffer.chars().count())
+            }
+            KeyCode::Home => self.command_cursor = 0,
+            KeyCode::End => self.command_cursor = self.command_buffer.chars().count(),
+            KeyCode::Char('a') | KeyCode::Char('A') if ctrl => self.command_cursor = 0,
+            KeyCode::Char('e') | KeyCode::Char('E') if ctrl => {
+                self.command_cursor = self.command_buffer.chars().count()
+            }
+            // The lines already run, newest first — vi's ↑, and every shell's.
+            KeyCode::Up => self.walk_command_history(-1),
+            KeyCode::Down => self.walk_command_history(1),
+            // Finish the verb, or the path under the caret.
+            KeyCode::Tab => self.complete_command(),
             // Clear the line, as in any readline prompt.
-            KeyCode::Char('u') | KeyCode::Char('U') if ctrl => self.command_buffer.clear(),
+            KeyCode::Char('u') | KeyCode::Char('U') if ctrl => {
+                self.command_buffer.clear();
+                self.command_cursor = 0;
+            }
             // Otherwise a bare Ctrl+<key> would type its letter into the line.
             KeyCode::Char(_) if ctrl => {}
-            KeyCode::Char(c) => self.command_buffer.push(c),
+            KeyCode::Char(c) => {
+                crate::insert_char_at(&mut self.command_buffer, &mut self.command_cursor, c)
+            }
             _ => {}
         }
         Ok(())
@@ -1979,7 +2013,9 @@ impl App {
             _ => {}
         }
         match self.mode {
-            Mode::Command => self.command_buffer.push_str(&clean),
+            Mode::Command => {
+                crate::insert_str_at(&mut self.command_buffer, &mut self.command_cursor, &clean)
+            }
             Mode::Filter => {
                 self.filter_buffer.push_str(&clean);
                 self.apply_filter_buffer();
@@ -2442,6 +2478,8 @@ impl App {
             (false, _, KeyCode::Char(':')) => {
                 self.mode = Mode::Command;
                 self.command_buffer.clear();
+                self.command_cursor = 0;
+                self.command_hist_at = None;
             }
             (false, _, KeyCode::Esc) => {
                 // In a branch / search listing, Esc is the way out of the view
@@ -2791,10 +2829,7 @@ impl App {
             }
             Action::MarkAll => self.mark_all(),
             Action::Visual => self.visual_start(),
-            Action::Command => {
-                self.mode = Mode::Command;
-                self.command_buffer.clear();
-            }
+            Action::Command => self.enter_command_mode(),
             Action::Filter => self.start_filter(),
             Action::FindRecursive => self.start_find_prompt(),
             Action::GrepRecursive => self.start_grep_prompt(),

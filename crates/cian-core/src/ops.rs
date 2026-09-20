@@ -367,6 +367,49 @@ pub fn touch(parent: &Path, name: &str) -> Result<PathBuf> {
     Ok(p)
 }
 
+/// What could finish `word` as a path, relative to `cwd`, spelled the way it
+/// was typed (so the answer can be put back where it came from).
+///
+/// Directories come back with a trailing `/`, which is both a hint and what
+/// lets the next Tab carry on into them.
+///
+/// In `cian-core` because **both front ends complete the same way** — one
+/// walking the disk itself, the other asking the engine. A window that only
+/// offered the names already on screen would be a second, quieter rule about
+/// what Tab means.
+pub fn path_completions(cwd: &Path, word: &str) -> Vec<String> {
+    let typed = PathBuf::from(word);
+    // Where to look, and the part of the last component already typed.
+    let (dir, stem, shown) = if word.ends_with('/') || word.ends_with('\\') {
+        (cwd.join(&typed), String::new(), word.to_string())
+    } else {
+        let parent = typed.parent().map(Path::to_path_buf).unwrap_or_default();
+        let stem = typed
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let shown = match word.rfind(['/', '\\']) {
+            Some(i) => word[..=i].to_string(),
+            None => String::new(),
+        };
+        (cwd.join(parent), stem, shown)
+    };
+    let Ok(rd) = fs::read_dir(&dir) else { return Vec::new() };
+    let mut out: Vec<String> = rd
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if !name.starts_with(&stem) {
+                return None;
+            }
+            let slash = if e.path().is_dir() { "/" } else { "" };
+            Some(format!("{shown}{name}{slash}"))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
 /// Move an existing path's clock to now, without creating or opening it.
 ///
 /// **Not [`touch`].** That one is the `touch(1)` that makes a file, and it

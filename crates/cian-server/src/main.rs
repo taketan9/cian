@@ -5645,6 +5645,17 @@ impl Session {
                     "right": PaneView::of(self.right.get()),
                 }))
             }
+            // Tab on the window's `:` line. The same walk the terminal build
+            // does (cian-core `path_completions`), so one Tab does not mean
+            // two different things depending on which front end is open.
+            "complete" => {
+                let which = req.params["pane"].as_str().unwrap_or("left").to_string();
+                let word = req.params["word"].as_str().unwrap_or("").to_string();
+                let cwd = self.pane_mut(&which)?.cwd.clone();
+                Ok(serde_json::json!({
+                    "hits": cian_core::ops::path_completions(&cwd, &word),
+                }))
+            }
             // Narrow the listing to names containing this. Case-insensitive,
             // and it scopes everything downstream — marks, operations, the
             // count on the status line — because they all work off what is

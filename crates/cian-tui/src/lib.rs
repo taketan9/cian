@@ -2339,6 +2339,25 @@ pub struct App {
     pub focused: FocusedPane,
     pub mode: Mode,
     pub command_buffer: String,
+    /// Where the caret sits in [`Self::command_buffer`], as a **char** index
+    /// (CJK is one char and two columns; the edit helpers all count chars).
+    ///
+    /// The `:` line had no cursor at all until 2026-09-20: it grew at the end
+    /// and shrank from the end, and a mistyped path had to be backspaced away
+    /// in full. The window's `:` is an `<input>` and had every one of these
+    /// for free, which is how a difference this large stayed invisible —
+    /// `parity.py` reads the words on screen, not what a key does.
+    pub command_cursor: usize,
+    /// The `:` lines already run, newest last, for ↑ and ↓.
+    ///
+    /// **This session only.** `state.toml` remembers directories and marks;
+    /// a command history on disk is a record of what was typed, and typing it
+    /// again is cheap next to explaining why a machine kept it.
+    pub command_history: Vec<String>,
+    /// Where ↑ has walked back to, and the line that was being typed when it
+    /// started — so ↓ can come back to it.
+    pub command_hist_at: Option<usize>,
+    pub command_draft: String,
     /// In-progress text for [`Mode::Filter`].
     pub filter_buffer: String,
     pub message: Option<String>,
@@ -2838,6 +2857,10 @@ impl App {
             focused: FocusedPane::Left,
             mode: Mode::Normal,
             command_buffer: String::new(),
+            command_cursor: 0,
+            command_history: Vec::new(),
+            command_hist_at: None,
+            command_draft: String::new(),
             filter_buffer: String::new(),
             message: None,
             last_file_pane: FocusedPane::Left,
@@ -4132,6 +4155,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry("  CIAN_LEGACY_KEYS=1", None, "start without the enhanced-keyboard request — try it if every Ctrl shortcut is dead", "拡張キーボード要求なしで起動 — Ctrl 系が全滅するときに試す"),
                 entry(":log", None, "what this build is, where it reads from, what the terminal can do — and a copy on disk to send", "この版・設定の在り処・端末の素性を1枚で（送れるようにファイルにも書きます）"),
                 entry("  :log on / off", None, "start or stop writing diagnostics, without restarting (:log <path> to choose)", "診断ログの開始／停止（再起動不要。:log <パス> で場所を指定）"),
+                entry("the : line", None, "← → Home End move the caret, ↑ ↓ walk what you have run, Tab finishes a verb or a path", "← → Home End でカーソル、↑ ↓ で打った行、Tab で動詞やパスを補完"),
                 entry(":mark", None, "mark by wildcard;  :mark *.rs   :unmark *", "ワイルドカードでマーク；  :mark *.rs   :unmark *"),
                 entry(":ai", None, "AI: ask. needs cian.ai in init.lua, and nothing leaves the machine until you send it", "AI: 訊く。init.lua の cian.ai が要ります。送るまで何もこの機械から出ません"),
                 entry("  :ai commit / error / diff / log", None, "the staged diff, the shell's last error, the diff on screen, the selected log", "ステージ済みの差分／直前のシェルのエラー／表示中の差分／選択中のログ"),

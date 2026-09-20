@@ -11841,7 +11841,7 @@ use crate::ai::StoredChatExt;
 
     /// Run a `:`-command as if it were typed and Enter pressed.
     fn run_cmd(app: &mut App, line: &str) {
-        app.command_buffer = line.to_string();
+        app.set_command_line(line);
         app.mode = Mode::Command;
         app.run_command();
     }
@@ -12079,7 +12079,7 @@ use crate::ai::StoredChatExt;
     fn paste_lands_in_the_command_line() {
         let (_d, mut app) = app_with(&["a.txt"]);
         app.mode = Mode::Command;
-        app.command_buffer = "cd ".into();
+        app.set_command_line("cd ");
         // A bracketed-paste event carrying a path, with a stray newline.
         app.insert_into_active_text("/some/path\n");
         assert_eq!(app.command_buffer, "cd /some/path", "newline stripped, text appended");
@@ -13376,6 +13376,80 @@ use crate::ai::StoredChatExt;
         app.handle_key(key('j')).unwrap();
         app.run_substitute("'<,'>!sort -u");
         assert_eq!(viewer_lines(&app), vec!["a", "b", "keep"], "three lines became two");
+    }
+
+    /// The `:` line, which until 2026-09-20 could only grow and shrink at the
+    /// end: a caret that moves, the lines already run, and Tab.
+    #[test]
+    fn the_command_line_has_a_caret_a_history_and_a_tab() {
+        let (_d, mut app) = app_with(&["alpha.txt", "beta.txt", "note.md"]);
+        std::fs::create_dir(app.active_pane().unwrap().cwd.join("subdir")).unwrap();
+        app.reload_active();
+
+        // **The caret moves, and typing lands where it is.** This is the whole
+        // complaint: a path with a typo in the middle had to be backspaced
+        // away in full.
+        app.handle_key(key(':')).unwrap();
+        for c in "cd tmp".chars() {
+            app.handle_key(key(c)).unwrap();
+        }
+        for _ in 0..3 {
+            app.handle_key(code(KeyCode::Left)).unwrap();
+        }
+        app.handle_key(key('/')).unwrap();
+        assert_eq!(app.command_buffer, "cd /tmp", "typed at the caret, not at the end");
+        app.handle_key(code(KeyCode::Home)).unwrap();
+        assert_eq!(app.command_cursor, 0);
+        app.handle_key(code(KeyCode::End)).unwrap();
+        assert_eq!(app.command_cursor, 7);
+        app.handle_key(code(KeyCode::Left)).unwrap();
+        app.handle_key(code(KeyCode::Backspace)).unwrap();
+        // The caret sits between m and p, so Backspace takes the m — not the
+        // last character, which is what the old line could only ever do.
+        assert_eq!(app.command_buffer, "cd /tp", "backspace at the caret");
+        app.handle_key(code(KeyCode::Esc)).unwrap();
+
+        // **↑ brings back what was run**, including the line that failed —
+        // which is the one most worth getting back.
+        run_cmd(&mut app, "frobnicate");
+        run_cmd(&mut app, "pwd");
+        app.handle_key(key(':')).unwrap();
+        app.handle_key(code(KeyCode::Up)).unwrap();
+        assert_eq!(app.command_buffer, "pwd", "newest first");
+        app.handle_key(code(KeyCode::Up)).unwrap();
+        assert_eq!(app.command_buffer, "frobnicate", "and the one before it");
+        app.handle_key(code(KeyCode::Down)).unwrap();
+        app.handle_key(code(KeyCode::Down)).unwrap();
+        assert_eq!(app.command_buffer, "", "past the newest is what was being typed");
+        app.handle_key(code(KeyCode::Esc)).unwrap();
+
+        // **Tab finishes a verb** as far as every candidate agrees.
+        app.handle_key(key(':')).unwrap();
+        for c in "dupl".chars() {
+            app.handle_key(key(c)).unwrap();
+        }
+        app.handle_key(code(KeyCode::Tab)).unwrap();
+        assert_eq!(app.command_buffer, "duplicate", "one candidate, finished");
+        app.handle_key(code(KeyCode::Esc)).unwrap();
+
+        // **And a path**, with a directory marked as one.
+        app.handle_key(key(':')).unwrap();
+        for c in "cd sub".chars() {
+            app.handle_key(key(c)).unwrap();
+        }
+        app.handle_key(code(KeyCode::Tab)).unwrap();
+        assert_eq!(app.command_buffer, "cd subdir/", "a directory says it is one");
+        app.handle_key(code(KeyCode::Esc)).unwrap();
+
+        // Several candidates: completed only as far as they agree, and the
+        // names are said rather than one of them being chosen.
+        app.handle_key(key(':')).unwrap();
+        for c in "cd a".chars() {
+            app.handle_key(key(c)).unwrap();
+        }
+        app.handle_key(code(KeyCode::Tab)).unwrap();
+        assert_eq!(app.command_buffer, "cd alpha.txt", "the only one starting with a");
+        app.handle_key(code(KeyCode::Esc)).unwrap();
     }
 
     #[test]
