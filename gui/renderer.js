@@ -296,6 +296,8 @@ function drawStatus() {
         if (pane.marked > 0) chip('mk', tr(`${pane.marked} marked`, `マーク ${pane.marked}`));
         const row = pane.entries[pane.cursor];
         if (row && !row.parent) chip('cur', row.name);
+        // ミラーは*反対の*ペインを動かすモードなので、こちらのバーに出す。
+        if (mirrorOn) chip('mir', tr('mirror', 'ミラー'));
         // **マスクは付けたまま歩くので、いちばん忘れられる。** 3つ先の
         // ディレクトリで空に見えて、理由が画面のどこにも無い、が防ぎたい形。
         if (pane.mask) chip('msk', tr(`mask ${pane.mask} (${pane.entries.length})`, `マスク ${pane.mask} (${pane.entries.length} 件)`));
@@ -753,6 +755,8 @@ function draw(which) {
 /// Anything under a quarter of a second stays silent, because a chip that
 /// flashes on every keystroke is worse than no chip.
 const busy = { n: 0 };
+/// `:mirror` が入っているか。状態の正は engine で、これはチップを描くための写し。
+let mirrorOn = false;
 const BUSY_AFTER_MS = 250;
 
 async function ask(method, params) {
@@ -776,7 +780,22 @@ async function ask(method, params) {
                 ...params,
             };
         }
-        return await window.cian.call(method, params);
+        const reply = await window.cian.call(method, params);
+        // **ミラーが動かしたもう片方は、同じ息で届く。** そうしないと、次に
+        // 何かが起きるまで反対のペインは古い場所を描いたままになる。engine が
+        // 両方のペインを持っているので、追随させるのも向こうの仕事
+        // （cian-server `mirror_follow`）。
+        if (reply && reply.mirrored) {
+            const m = reply.mirrored;
+            if (m.said) say(m.said);
+            else {
+                const other = state.focus === 'left' ? 'right' : 'left';
+                state[other] = m;
+                draw(other);
+            }
+            delete reply.mirrored;
+        }
+        return reply;
     } catch (e) {
         say(String(e.message || e), true);
         return null;
@@ -6877,6 +6896,7 @@ function buildCommands() {
     { name: 'forward', about: tr("forward, one directory", 'ひとつ先のディレクトリへ'), run: () => step('forward') },
 
     { name: 'cd', alias: ['goto'], about: tr(":cd <path> / :cd .. / :cd - / :cd ~", ':cd <パス> / :cd .. / :cd - / :cd ~'), arg: tr('path', 'パス'), run: cmdCd },
+    { name: 'mirror', about: tr("the other pane makes the same move", '反対のペインが同じ動きをする'), run: cmdMirror },
     // AFXW のマスク。`/` の絞り込みと違って、ディレクトリを移っても効き続ける。
     { name: 'mask', about: tr("a standing filter that follows you: :mask *.log", '付けたまま歩くフィルタ: :mask *.log'), arg: tr('*.log, or /regex/ (empty takes it off)', '*.log か /正規表現/（省略で解除）'), optional: true, run: cmdMask },
     { name: 'hidden', about: tr("show / hide dotfiles", '隠しファイルの表示切替'), run: toggleHidden },
@@ -6938,6 +6958,20 @@ async function cmdMkdir(spec) {
 /// **名前なし: 選んでいるもの（マーク、無ければカーソル）の日時をいまに。**
 /// **名前あり: そのファイルを作る。** 2026-09-20、本人の指定。それまで後者
 /// しか無く、選択に新しい日時を打つ道だけが無かった。
+/// `:mirror` — 反対のペインが同じ動きをする。
+///
+/// 入り切りだけがここの仕事で、**追随は engine がやる**（両方のペインを
+/// 持っているのは向こうで、`ask` が `mirrored` を受け取って描き直す）。
+async function cmdMirror() {
+    const r = await ask('mirror', {});
+    if (!r) return;
+    mirrorOn = r.on;
+    drawStatus();
+    say(r.on
+        ? tr('mirror on. the other pane makes the same move', 'ミラー オン。反対のペインが同じ動きをします')
+        : tr('mirror off', 'ミラー オフ'));
+}
+
 /// `:mask *.log` — 付けたまま歩くフィルタ。引数なしで解除する。
 async function cmdMask(spec) {
     const text = (spec || '').trim();

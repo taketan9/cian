@@ -2348,6 +2348,15 @@ pub struct App {
     /// for free, which is how a difference this large stayed invisible —
     /// `parity.py` reads the words on screen, not what a key does.
     pub command_cursor: usize,
+    /// `:mirror` — the other pane makes the same move this one makes.
+    ///
+    /// Into `docs/2026/` on the left takes the right side into its own
+    /// `2026/`; stepping up a level steps both up. A jump with no relation to
+    /// where the pane was (`:cd /var/log`) has no "same move" to make, and a
+    /// target that does not exist is **said rather than silently skipped** —
+    /// his call, and the right one: a mirror that quietly stops looks exactly
+    /// like a mirror that broke.
+    pub mirror: bool,
     /// The `:` lines already run, newest last, for ↑ and ↓.
     ///
     /// **This session only.** `state.toml` remembers directories and marks;
@@ -2858,6 +2867,7 @@ impl App {
             mode: Mode::Normal,
             command_buffer: String::new(),
             command_cursor: 0,
+            mirror: false,
             command_history: Vec::new(),
             command_hist_at: None,
             command_draft: String::new(),
@@ -4094,6 +4104,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry(":count", None, "count files & steps (marked, or the whole tree)", "ファイル・ステップ数を数える（マーク or ツリー全体）"),
                 entry(":du", None, "disk usage: what's biggest here (Enter into a folder, - up)", "容量分析: 何が大きいか（Enter でディレクトリへ、- で上へ）"),
                 entry(":hidden", None, "show / hide dotfiles (also right-click)", "ドットファイルの表示切替（右クリックでも）"),
+                entry(":mirror", None, "the other pane makes the same move: into a folder, or up. it says so when there is no such folder on that side", "反対のペインが同じ動きをします（下へ・上へ）。向こうに無いときは、そう言って止まります"),
                 entry(":mask", None, "a standing filter that follows you into the next directory;  :mask *.log  (:mask alone takes it off)", "付けたまま歩くフィルタ。ディレクトリを移っても効きます；  :mask *.log  （:mask だけで解除）"),
                 entry(":attr", None, "attributes;  :chmod 644,  :readonly on|off", "属性；  :chmod 644,  :readonly on|off"),
                 entry(":hash", None, "checksum;  :hash md5  /  :hash sha256", "チェックサム；  :hash md5  /  :hash sha256"),

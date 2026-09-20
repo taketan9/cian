@@ -367,6 +367,50 @@ pub fn touch(parent: &Path, name: &str) -> Result<PathBuf> {
     Ok(p)
 }
 
+/// What the other pane should do when this one moves from `was` to `now`.
+///
+/// **The same step, not the same place.** Into `2026/` on one side takes the
+/// other into its own `2026/`; up one level takes it up one. A move that is
+/// not a step from where the pane was — a jump to an unrelated path — has no
+/// mirror image, and says so rather than dragging the other side somewhere it
+/// was never asked to go.
+///
+/// In `cian-core` so the rule is one rule: the terminal build follows it after
+/// every keystroke, the engine after every call the window makes, and a
+/// mirror that meant two different things depending on which front end was
+/// open would be worse than none.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MirrorStep {
+    /// Go here (it exists).
+    Go(PathBuf),
+    /// The step is right but there is nothing there on that side.
+    Missing(PathBuf),
+    /// Not a step at all — nothing to mirror.
+    NotAStep,
+}
+
+pub fn mirror_step(was: &Path, now: &Path, other: &Path) -> MirrorStep {
+    let target = if let Ok(down) = now.strip_prefix(was) {
+        other.join(down)
+    } else if let Ok(up) = was.strip_prefix(now) {
+        let mut t = other.to_path_buf();
+        for _ in up.components() {
+            match t.parent() {
+                Some(p) => t = p.to_path_buf(),
+                None => break,
+            }
+        }
+        t
+    } else {
+        return MirrorStep::NotAStep;
+    };
+    if target.is_dir() {
+        MirrorStep::Go(target)
+    } else {
+        MirrorStep::Missing(target)
+    }
+}
+
 /// What could finish `word` as a path, relative to `cwd`, spelled the way it
 /// was typed (so the answer can be put back where it came from).
 ///

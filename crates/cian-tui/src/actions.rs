@@ -2097,6 +2097,88 @@ impl App {
         }
     }
 
+    /// Where the active pane is standing, when `:mirror` is on and the
+    /// question makes sense (a local directory, not a server or an archive).
+    pub(crate) fn mirror_anchor(&mut self) -> Option<PathBuf> {
+        if !self.mirror {
+            return None;
+        }
+        let pane = self.active_pane()?;
+        (!pane.is_synthetic_view()).then(|| pane.cwd.clone())
+    }
+
+    /// Make the other pane take the same step this one just took.
+    ///
+    /// **The same *step*, not the same place.** Into `2026/` on one side takes
+    /// the other into its own `2026/`; up one takes both up one. A jump that
+    /// is not a step from where the pane was — `:cd /var/log` — has no "same
+    /// move" to make, and says so rather than dragging the other side to an
+    /// unrelated place.
+    pub(crate) fn mirror_follow(&mut self, was: Option<PathBuf>) {
+        let Some(was) = was else { return };
+        let Some(now) = self.active_pane().map(|p| p.cwd.clone()) else { return };
+        if now == was {
+            return;
+        }
+        let other = match self.focused {
+            FocusedPane::Left => FocusedPane::Right,
+            FocusedPane::Right => FocusedPane::Left,
+            FocusedPane::Shell => return,
+        };
+        // A server or an archive on the other side is not a local directory,
+        // so there is nothing to join a path onto.
+        if self.side_pane(other).is_synthetic_view() {
+            self.message = Some(
+                tr(
+                    self.lang,
+                    "mirror: the other pane is not on this disk",
+                    "ミラー: 反対のペインはこのディスクではありません",
+                )
+                .into(),
+            );
+            return;
+        }
+        let here = self.side_pane(other).cwd.clone();
+        match cian_core::ops::mirror_step(&was, &now, &here) {
+            cian_core::ops::MirrorStep::Go(target) => {
+                if self.side_pane_mut(other).jump_to(target).is_err() {
+                    self.message = Some(
+                        tr(self.lang, "mirror: could not follow", "ミラー: 追随できませんでした").into(),
+                    );
+                }
+            }
+            // **Said, not skipped** (2026-09-20, his call). A mirror that
+            // quietly stops following looks exactly like one that broke.
+            cian_core::ops::MirrorStep::Missing(target) => {
+                self.message = Some(if self.lang == crate::theme::Lang::Ja {
+                    format!("ミラー: ありません {}", target.display())
+                } else {
+                    format!("mirror: no {}", target.display())
+                });
+            }
+            cian_core::ops::MirrorStep::NotAStep => {
+                self.message = Some(
+                    tr(
+                        self.lang,
+                        "mirror: that was a jump, not a step. the other pane stayed",
+                        "ミラー: これは同じ動きにできない移動です。反対のペインはそのままです",
+                    )
+                    .into(),
+                );
+            }
+        }
+    }
+
+    /// `:mirror` — turn the other pane's following on or off.
+    pub(crate) fn toggle_mirror(&mut self) {
+        self.mirror = !self.mirror;
+        self.message = Some(if self.mirror {
+            tr(self.lang, "mirror on. the other pane makes the same move", "ミラー オン。反対のペインが同じ動きをします").into()
+        } else {
+            tr(self.lang, "mirror off", "ミラー オフ").into()
+        });
+    }
+
     /// `:readonly` with no argument, the way `:hidden` takes none.
     ///
     /// **What it flips is the first target's state**, applied to everything

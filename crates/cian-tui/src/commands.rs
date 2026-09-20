@@ -208,6 +208,9 @@ impl App {
             // 何が外れたかを言う ── 黙って全部出ると、直前に何を見ていたのか
             // が分からなくなる。
             "mask" => self.cmd_mask(rest),
+            // 二画面の同期移動。名前は本人が選んだ（`:sync` はシェルの
+            // シンクロ入力で埋まっている）。
+            "mirror" => self.toggle_mirror(),
             // `r` and the menu have always had this; the command line never
             // did, and the name was taken by the AI renamer.
             "rename" | "ren" => self.start_rename(),

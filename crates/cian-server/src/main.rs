@@ -290,6 +290,8 @@ struct Session {
         cian_core::grepedit::TextFile,
         Option<cian_core::stamp::Stamp>,
     )>,
+    /// `:mirror` — the other pane makes the same move this one makes.
+    mirror: bool,
     /// Re-read and checksum every file after an SFTP transfer.
     ///
     /// Off by default, as in cian-tui: it doubles the traffic, and the answer
@@ -331,6 +333,7 @@ impl Session {
             left: Side::new(Pane::new(dir.clone())?),
             right: Side::new(Pane::new(dir)?),
             jobs: Jobs::default(),
+            mirror: false,
             out,
             undo: Stack::default(),
             find: Find::default(),
@@ -604,6 +607,71 @@ impl Session {
     /// Answer one call. The error is a string because it is going to a person,
     /// through a dialog, not to code that will match on it.
     fn handle(&mut self, req: &Request) -> anyhow::Result<serde_json::Value> {
+        // `:mirror` — measured around every call rather than inside each of
+        // the ops that can move a pane (enter, up, goto, a bookmark, the
+        // history…). One door, the same reasoning as cian-tui's `handle_key`.
+        let was = self.mirror_anchor(req);
+        let out = self.handle_inner(req);
+        let moved = self.mirror_follow(was);
+        // The window drew one pane from this answer; when the other one moved
+        // too it has to hear about it in the same breath, or the mirror is
+        // invisible until something else happens to refresh.
+        match (out, moved) {
+            (Ok(mut v), Some(other)) => {
+                if let Some(map) = v.as_object_mut() {
+                    map.insert("mirrored".into(), other);
+                }
+                Ok(v)
+            }
+            (out, _) => out,
+        }
+    }
+
+    /// Where the pane this call names is standing, when the mirror is on.
+    fn mirror_anchor(&mut self, req: &Request) -> Option<(String, std::path::PathBuf)> {
+        if !self.mirror {
+            return None;
+        }
+        let which = req.params["pane"].as_str()?.to_string();
+        let pane = self.pane_mut(&which).ok()?;
+        (!pane.is_synthetic_view()).then(|| (which, pane.cwd.clone()))
+    }
+
+    /// Make the other pane take the same step, and hand back its new view.
+    fn mirror_follow(
+        &mut self,
+        was: Option<(String, std::path::PathBuf)>,
+    ) -> Option<serde_json::Value> {
+        let (which, was) = was?;
+        let now = self.pane_mut(&which).ok()?.cwd.clone();
+        if now == was {
+            return None;
+        }
+        let other = if which == "left" { "right" } else { "left" };
+        let pane = self.pane_mut(other).ok()?;
+        if pane.is_synthetic_view() {
+            return None;
+        }
+        let here = pane.cwd.clone();
+        match cian_core::ops::mirror_step(&was, &now, &here) {
+            cian_core::ops::MirrorStep::Go(target) => {
+                let pane = self.pane_mut(other).ok()?;
+                pane.jump_to(target).ok()?;
+                let side = if other == "left" { &self.left } else { &self.right };
+                serde_json::to_value(PaneView::of_side(side)).ok()
+            }
+            // Said, not skipped: the window puts `mirror_said` on the status
+            // line. A mirror that quietly stops looks like one that broke.
+            cian_core::ops::MirrorStep::Missing(target) => Some(serde_json::json!({
+                "said": format!("mirror: no {}", target.display()),
+            })),
+            cian_core::ops::MirrorStep::NotAStep => Some(serde_json::json!({
+                "said": "mirror: that was a jump, not a step",
+            })),
+        }
+    }
+
+    fn handle_inner(&mut self, req: &Request) -> anyhow::Result<serde_json::Value> {
         self.take_cursor(req);
         match req.method.as_str() {
             // Both panes as they stand. What the front end asks for on startup
@@ -5689,6 +5757,12 @@ impl Session {
                 let pane = self.pane_mut(&which)?;
                 pane.set_mask(spec);
                 self.view(&which)
+            }
+            // `:mirror` の入り切り。状態はここ（engine）が持つ ── 両方のペインを
+            // 持っているのはこちらで、窓は結果を描くだけ。
+            "mirror" => {
+                self.mirror = !self.mirror;
+                Ok(serde_json::json!({ "on": self.mirror }))
             }
             "hidden" => {
                 let which = req.params["pane"].as_str().unwrap_or("left").to_string();

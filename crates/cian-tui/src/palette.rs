@@ -65,6 +65,7 @@ pub(crate) fn command_list() -> &'static [(&'static str, (&'static str, &'static
         ("chmod",      ("change the mode (octal)", "モード変更（8進）"), true),
         ("hidden",     ("show / hide dotfiles", "隠しファイル表示切替"), false),
         ("mask",       ("a standing filter that follows you: :mask *.log", "付けたまま歩くフィルタ: :mask *.log"), true),
+        ("mirror",     ("the other pane makes the same move", "反対のペインが同じ動きをする"), false),
         ("theme",      ("theme gallery / set a theme", "テーマ選択"), true),
         ("sync",       ("synchronize input across shell panes", "シェルのシンクロ入力"), false),
         ("snip",       ("snippet launcher", "スニペット"), false),

@@ -251,6 +251,7 @@ those seven work in vi style too. With no normal mode there is nothing for
 | **`Ctrl+F`** (or `Ctrl+G`, `:grep`) | grep inside files — Enter opens the hit on its line |
 | **`b`** | branch view — flatten the whole subtree into one listing |
 | **`,`** | sort by name / size / date / extension (`n` `s` `d` `e`) |
+| **`:mirror`** | **the other pane makes the same move** — into a folder on one side takes the other into its own folder of that name, and up takes both up. When that side has no such folder it says so and stays |
 
 **`/` and a mask are different questions.** `/` narrows what you are looking at now and is gone when you leave; a mask is "I am working on the log files today" and follows you until you take it off. **Directories are never masked** — a mask that hides the way through the tree is one you have to remove in order to move. While one is on, the status bar says `mask *.log (3 of 12)`.
 

@@ -102,7 +102,16 @@ impl App {
     /// happened to your files, `Alt+←` for where you have been — and with it
     /// the bracket.
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
-        self.handle_key_body(key)
+        // `:mirror` is measured here rather than at each place that moves a
+        // pane: `jump_to` has a dozen callers (Enter, Backspace, `:cd`, a
+        // bookmark, the jump list, the history, an archive leaving itself…)
+        // and a follower that has to be remembered at each of them is a
+        // follower that will be forgotten at the next one. One door, and it
+        // is the same door the message freshness uses.
+        let was = self.mirror_anchor();
+        let r = self.handle_key_body(key);
+        self.mirror_follow(was);
+        r
     }
 
     fn handle_key_body(&mut self, key: KeyEvent) -> Result<()> {

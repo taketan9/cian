@@ -13452,6 +13452,60 @@ use crate::ai::StoredChatExt;
         app.handle_key(code(KeyCode::Esc)).unwrap();
     }
 
+    /// `:mirror` — the other pane makes the same *step*, and says so when it
+    /// cannot (2026-09-20, his call).
+    #[test]
+    fn mirror_makes_the_other_pane_take_the_same_step() {
+        let d = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(d.path()).unwrap();
+        // Two trees that agree on one name and disagree on another.
+        for side in ["left", "right"] {
+            std::fs::create_dir_all(root.join(side).join("2026")).unwrap();
+        }
+        std::fs::create_dir_all(root.join("left").join("only-here")).unwrap();
+        let (l, r) = (root.join("left"), root.join("right"));
+        let mut app = App::new(l.clone(), r.clone(), en_config()).unwrap();
+
+        app.command_buffer = "mirror".into();
+        app.run_command();
+        assert!(app.mirror, "on");
+
+        // Down: the other side goes into its own 2026.
+        let i = app.active_pane().unwrap().entries.iter().position(|e| e.name == "2026").unwrap();
+        app.active_pane_mut().unwrap().cursor = i;
+        app.handle_key(code(KeyCode::Enter)).unwrap();
+        assert_eq!(app.active_pane().unwrap().cwd, l.join("2026"));
+        assert_eq!(app.side_pane(FocusedPane::Right).cwd, r.join("2026"), "followed down");
+
+        // Up: both come up.
+        app.handle_key(code(KeyCode::Backspace)).unwrap();
+        assert_eq!(app.active_pane().unwrap().cwd, l);
+        assert_eq!(app.side_pane(FocusedPane::Right).cwd, r, "followed up");
+
+        // **Missing on the other side: said, and it stays.** Silence here
+        // reads as a mirror that broke.
+        let i = app
+            .active_pane()
+            .unwrap()
+            .entries
+            .iter()
+            .position(|e| e.name == "only-here")
+            .unwrap();
+        app.active_pane_mut().unwrap().cursor = i;
+        app.handle_key(code(KeyCode::Enter)).unwrap();
+        assert_eq!(app.active_pane().unwrap().cwd, l.join("only-here"), "this side moved");
+        assert_eq!(app.side_pane(FocusedPane::Right).cwd, r, "the other one stayed");
+        let said = app.message.clone().unwrap_or_default();
+        assert!(said.contains("mirror: no"), "and said so: {said:?}");
+
+        // Off again.
+        app.command_buffer = "mirror".into();
+        app.run_command();
+        assert!(!app.mirror);
+        app.handle_key(code(KeyCode::Backspace)).unwrap();
+        assert_eq!(app.side_pane(FocusedPane::Right).cwd, r, "no longer following");
+    }
+
     #[test]
     fn touch_stamps_the_selection_and_still_makes_a_file_when_named() {
         let d = tempfile::tempdir().unwrap();

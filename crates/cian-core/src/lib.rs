@@ -695,6 +695,14 @@ impl Pane {
         }
     }
 
+    /// True when this listing is not a live local directory: a flat/search
+    /// view, an archive's inside, or a server. Public because anything that
+    /// wants to *join a path onto* this pane's cwd has to know first — the
+    /// mirror's follow being the case that asked for it.
+    pub fn is_synthetic_view(&self) -> bool {
+        self.view.is_synthetic()
+    }
+
     /// True while showing a flat / search listing rather than a live directory.
     pub fn is_flat(&self) -> bool {
         matches!(self.view, PaneView::Flat(_))

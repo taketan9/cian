@@ -7,7 +7,12 @@ impl App {
     // ------- Mouse -------
     /// One mouse event.
     pub(crate) fn handle_mouse(&mut self, ev: MouseEvent) {
+        // The mirror follows a double-click into a folder as well as an Enter
+        // — see `handle_key` for why it is measured here rather than at every
+        // place that moves a pane.
+        let was = self.mirror_anchor();
         self.handle_mouse_inner(ev);
+        self.mirror_follow(was);
     }
 
     /// Whether the pointer is over the viewer panel's own frame.

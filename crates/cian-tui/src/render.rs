@@ -2997,6 +2997,16 @@ fn draw_status(f: &mut Frame, area: Rect, app: &App) {
         spans.push(chip(name, readable_on(theme().status_bg)));
     }
 
+    // `:mirror` is a mode, and a mode that moves the *other* pane has to be
+    // visible on the bar that describes this one.
+    if app.mirror {
+        spans.push(dim_sep.clone());
+        spans.push(chip(
+            if ja { "ミラー".to_string() } else { "mirror".to_string() },
+            Color::Rgb(120, 180, 240),
+        ));
+    }
+
     // **A mask is the one that follows you**, so it is the one most likely to
     // be forgotten: a directory that looks empty, three folders later, with
     // nothing on screen to say why. It is drawn in the filter's own green so
