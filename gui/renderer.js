@@ -11830,6 +11830,22 @@ el.sPanes.addEventListener('contextmenu', (e) => {
 el.gripPanes.addEventListener('mousedown', (e) => startGripDrag('panes', e));
 el.gripMain.addEventListener('mousedown', (e) => startGripDrag('main', e));
 
+// **Monaco が「やめた」と言うのは、壊れたという意味ではない。**
+//
+// 差分を閉じると、まだ走っていた差分計算が捨てられる。Monaco はそれを
+// `Canceled` という拒否で表し、誰も受けないので未処理の拒否になる ──
+// ページは何も壊れていないのに、外から見ると例外が1つ出たことになる
+// （`drive.js` は CDP の `Runtime.exceptionThrown` を数えるので、これが
+// 混ざると「例外 0 件」という基準が当てにならなくなる）。
+//
+// **`Canceled` という名前のものだけ**を黙らせる。ほかの拒否は今までどおり
+// 表に出す ── ここを広く取ると、本物の失敗が一緒に消える。
+window.addEventListener('unhandledrejection', (e) => {
+    if (e.reason && (e.reason.name === 'Canceled' || e.reason.message === 'Canceled')) {
+        e.preventDefault();
+    }
+});
+
 window.addEventListener('resize', () => {
     measureFoot();
     placeGrips();
