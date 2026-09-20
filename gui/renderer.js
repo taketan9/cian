@@ -6740,9 +6740,9 @@ function commands() {
 
 function buildCommands() {
   return [
-    { name: 'count', about: tr("count files, lines and steps", 'ファイル・ステップ数を数える'), run: cmdCount },
+    { name: 'count', alias: ['step'], about: tr("count files, lines and steps", 'ファイル・ステップ数を数える'), run: cmdCount },
     { name: 'du', alias: ['diskusage'], about: tr("disk usage \u2014 what's biggest here", '容量分析 — 何が大きいか'), run: cmdDu },
-    { name: 'attr', about: tr("permissions & owner", '属性を見る'), run: cmdAttr },
+    { name: 'attr', alias: ['stat'], about: tr("permissions & owner", '属性を見る'), run: cmdAttr },
     { name: 'chmod', about: tr("change the mode (e.g. :chmod 644)", 'モードを変える（例 :chmod 644）'), arg: tr('Mode', 'モード'), run: cmdChmod },
     { name: 'readonly', about: tr("set / clear read-only (on by default)", '読み取り専用にする / 解除（既定 on）'), run: cmdReadonly },
     // `:md5` and `:sha256` are verbs of their own in cian-tui (commands.rs:402).
@@ -6756,7 +6756,7 @@ function buildCommands() {
     { name: 'zip', about: tr("zip the marks (:zip -e for a password)", 'マークを zip に（:zip -e でパスワード付き）'), arg: '-e', optional: true, run: (a) => cmdCompress('zip', /-e/.test(a || '')) },
     { name: 'tar', about: tr("tar the marks", 'マークを tar にまとめる'), run: () => cmdCompress('tar') },
     { name: 'targz', about: tr("tar.gz the marks", 'マークを tar.gz にまとめる'), run: () => cmdCompress('targz') },
-    { name: 'unzip', alias: ['extract'], about: tr("extract the archive under the cursor, here", 'カーソルのアーカイブをここに展開'), run: cmdExtract },
+    { name: 'unzip', alias: ['extract', 'untar'], about: tr("extract the archive under the cursor, here", 'カーソルのアーカイブをここに展開'), run: cmdExtract },
     { name: 'lsar', about: tr("list an archive\u2019s contents", 'アーカイブの中身を見る'), run: cmdArchiveList },
     // `:log` went to diagnostics (2026-09-20), so the commit log took the
     // name a person says out loud. Both spellings reach one function: which
@@ -6768,7 +6768,7 @@ function buildCommands() {
     { name: 'stage', alias: ['add', 'svnadd'], about: tr("stage the selection (git or svn)", '選択をステージ（git・svn）'), run: () => cmdVcs('stage') },
     { name: 'unstage', alias: ['reset'], about: tr("unstage the selection (git or svn)", '選択をアンステージ（git・svn）'), run: () => cmdVcs('unstage') },
     { name: 'discard', alias: ['revert', 'svnrevert'], about: tr("discard worktree changes", '作業ツリーの変更を破棄'), run: () => cmdVcs('discard') },
-    { name: 'dup', alias: ['duplicate', 'dedup'], about: tr("find files with identical contents", '中身が同じファイルを探す'), run: cmdDedup },
+    { name: 'duplicate', alias: ['dup', 'dedup'], about: tr("find files with identical contents", '中身が同じファイルを探す'), run: cmdDedup },
     { name: 'redo', about: tr("redo what u undid", 'u で取り消した操作をやり直す'), run: redo },
     { name: 'image', about: tr("how images are drawn (a window always draws them)", '画像の表示方式（ウィンドウ版では常に描画されます）'), run: () => say(tr('a window always draws images — just press F3', 'ウィンドウ版では画像は常に表示されます — F3 でどうぞ')) },
     // `finder` is NOT an alias here: it is `:files`'s, and a spelling that
@@ -6798,7 +6798,10 @@ function buildCommands() {
     { name: 'aidiff', alias: ['explaindiff'], hidden: true, about: tr("AI: explain the diff on screen (:ai diff)", 'AI: 表示中の差分を説明する（:ai diff）'), run: cmdAiDiff },
     { name: 'office', about: tr("open the cloud copy of an Office document", 'Office 文書のクラウド側を開く'), run: () => cmdOffice('office') },
     { name: 'officelink', about: tr("write a .url to the cloud copy (this is the one to paste in a mail)", 'クラウド側への .url を作る（メールに貼るのはこれ）'), run: () => cmdOffice('officelink') },
-    { name: 'reload', about: tr("reload init.lua", 'init.lua を読み直す'), run: cmdReload },
+    // `:source` はここ ── 端末版がその意味で持っている語で、窓版では
+    // Markdown のプレビューに付いていた（2026-09-20 に外した）。**消すだけ
+    // では端末版で打てる語が窓版で死ぬ**ので、端末版の意味でこちらへ。
+    { name: 'reload', alias: ['source'], about: tr("reload init.lua", 'init.lua を読み直す'), run: cmdReload },
     { name: 'key', about: tr("report each key as received (again stops)", '受け取ったキーをそのまま表示（もう一度で止める）'), run: toggleKeyEcho },
     { name: 'bookmark', about: tr("bookmark where you are", 'いまの場所を登録する'), arg: tr('name', '名前'), optional: true, run: cmdBookmark },
     { name: 'macro', about: tr("run a macro (also @)", 'マクロを実行（@ でも）'), run: cmdMacros },
@@ -6813,27 +6816,25 @@ function buildCommands() {
     { name: 'tail', about: tr("the last lines (:tail -n 20)", '末尾だけ見る（:tail -n 20）'), arg: tr('-n count', '-n 数'), optional: true, run: (a) => cmdPeek(a, true) },
     { name: 'recent', alias: ['oldfiles'], about: tr("recently-opened files", '最近開いたファイル'), run: cmdRecent },
     { name: 'version', alias: ['about'], about: tr("the version, and where it lives", '版と居場所'), run: cmdVersion },
-    { name: 'man', about: tr("the key manual (same as :help)", 'キー一覧（:help と同じ）'), run: openHelp },
     { name: 'jump', about: tr("jump to a bookmark or somewhere you have been (also Z)", '登録した場所と履歴へ飛ぶ（Z でも）'), run: cmdJump },
     { name: 'palette', about: tr("every command (also C)", 'コマンド一覧（C でも）'), run: openPalette },
-    { name: 'selectall', alias: ['markall'], about: tr("mark everything (also Ctrl+A)", '全部マーク（Ctrl+A でも）'), run: () => mark(true) },
-    { name: 'ren', alias: ['rename'], about: tr("rename (also r)", 'リネーム（r でも）'), run: rename },
-    { name: 'untar', about: tr("extract here (same as :unzip)", 'ここに展開（:unzip と同じ）'), run: cmdExtract },
-    { name: 'step', about: tr("files and steps (same as :count)", 'ファイル数とステップ数（:count と同じ）'), run: cmdCount },
+    { name: 'markall', alias: ['selectall'], about: tr("mark everything (also Ctrl+A)", '全部マーク（Ctrl+A でも）'), run: () => mark(true) },
+    { name: 'rename', alias: ['ren'], about: tr("rename (also r)", 'リネーム（r でも）'), run: rename },
     { name: 'files', alias: ['finder'], about: tr("fuzzy-find a file below here (also //)", 'この下のファイルをあいまい検索（// でも）'), run: openFinder },
     { name: 'where', alias: ['config'], about: tr("where cian reads and writes its config", 'cian が読み書きする設定ファイルの場所'), run: cmdWhere },
     // 設定画面。**開き口は右クリックと Shift+Enter のメニュー**で、これは
     // その名前を知っている人のための近道（`:` を使う人はいる）。
     { name: 'settings', alias: ['prefs'], about: tr("the settings screen (also right-click / Shift+Enter)", '設定画面（右クリック / Shift+Enter でも）'), run: openSettings },
-    { name: 'mark', about: tr("mark by wildcard (:mark *.rs)", 'ワイルドカードでマーク（:mark *.rs）'), arg: tr('pattern', 'パターン'), run: (a) => cmdMarkGlob(a, true) },
+    // 同じく `:select`。cian の語彙では「選択」はマークのこと。
+    { name: 'mark', alias: ['select'], about: tr("mark by wildcard (:mark *.rs)", 'ワイルドカードでマーク（:mark *.rs）'), arg: tr('pattern', 'パターン'), run: (a) => cmdMarkGlob(a, true) },
     { name: 'unmark', alias: ['deselect'], about: tr("unmark by wildcard", 'ワイルドカードでマークを外す'), arg: tr('pattern', 'パターン'), run: (a) => cmdMarkGlob(a, false) },
     { name: 'copyto', about: tr("copy to a named place", '指定した場所へコピー'), arg: tr('where to', '行き先'), run: (a) => cmdTo('copyto', a) },
     { name: 'moveto', about: tr("move to a named place", '指定した場所へ移動'), arg: tr('where to', '行き先'), run: (a) => cmdTo('moveto', a) },
     { name: 'revealos', alias: ['showinfinder'], about: tr("reveal in Finder / Explorer", 'Finder / エクスプローラで表示'), run: cmdRevealOs },
     { name: 'edit', alias: ['e'], about: tr("open in the external editor ($EDITOR)", '外部エディタで開く（$EDITOR）'), run: cmdEditExternal },
     { name: 'vi', alias: ['vim', 'nvim'], about: tr("open the file in that editor, in a shell tab of its own", 'そのエディタを新しいシェルタブで開く'), run: cmdEditorTab },
-    { name: 'editstyle', alias: ['notepad', 'vimkey'], about: tr("editor keys \u2014 :editstyle vim / :notepad", 'エディタのキー操作 — :editstyle vim / :notepad'), arg: 'vim / notepad', optional: true, run: cmdEditStyle },
-    { name: 'scratch', alias: ['new'], about: tr("a scratch buffer (:w gives it a name)", '下書きを開く（:w で名前を付けて保存）'), run: cmdScratch },
+    { name: 'notepad', alias: ['editstyle', 'vimkey'], about: tr("editor keys: :notepad vim / notepad", 'エディタのキー操作: :notepad vim / notepad'), arg: 'vim / notepad', optional: true, run: cmdEditStyle },
+    { name: 'new', alias: ['scratch'], about: tr("a scratch buffer (:w gives it a name)", '下書きを開く（:w で名前を付けて保存）'), run: cmdScratch },
     { name: 'limit', alias: ['speed', 'ratelimit'], about: tr("cap the transfer rate \u2014 :limit 2m / 500k / off", '転送の速さの上限 — :limit 2m / 500k / off'), arg: '2m / 500k / off', optional: true, run: cmdLimit },
     { name: 'summary', alias: ['summarize', 'summarise'], about: tr("AI: summarise the open file", 'AI: 開いているファイルを要約'), run: cmdSummary },
     { name: 'aicommit', alias: ['commitmsg'], hidden: true, about: tr("AI: a commit message from the staged diff (:ai commit)", 'AI: ステージ済みの差分からコミットメッセージを作る（:ai commit）'), run: cmdAiCommit },
@@ -6841,7 +6842,6 @@ function buildCommands() {
     { name: 'commit', alias: ['svncommit'], about: tr("commit. git records it here, svn sends it to the server", 'コミット。git は手元に、svn はサーバに届きます'), run: cmdCommit },
     { name: 'aierror', alias: ['explain'], hidden: true, about: tr("AI: explain the shell's last error (:ai error)", 'AI: シェルの直近のエラーを説明する（:ai error）'), run: cmdAiError },
     { name: 'ime', alias: ['inputmethod'], about: tr("input method \u2014 off in vim's normal mode (cian.ime)", 'IME 連携 — vim のノーマルモードで自動オフ（cian.ime）'), run: cmdIme },
-    { name: 'stat', about: tr("attributes (same as :attr)", '属性（:attr と同じ）'), run: cmdAttr },
     { name: 'blame', about: tr("who last changed each line of the open file", '各行を最後に変えた人（開いているファイル）'), run: cmdBlame },
     { name: 'enc', about: tr("re-read the open file under another encoding", '開いているファイルの文字コードを変えて読み直す'), arg: 'utf8 / sjis / utf16le / utf16be', optional: true, run: cmdEncoding },
     { name: 'ws', about: tr("show or hide tabs, trailing spaces and the rest", 'タブ・行末の空白などを見せる／隠す'), run: toggleWs },
@@ -6858,7 +6858,10 @@ function buildCommands() {
     // make one big enough to read — so the verb exists here too, and does the
     // same thing.
     { name: 'mermaid', about: tr("draw the mermaid diagrams (:mermaid! for a browser)", 'mermaid 図を描く（:mermaid! でブラウザ）'), run: (a, as_) => (as_ === 'mermaid!' ? cmdMermaidOut() : cmdMermaid()), alias: ['mermaid!'] },
-    { name: 'render', alias: ['source'], about: tr("set the Markdown (also Ctrl+E)", 'Markdown を組んで表示（Ctrl+E でも）'), run: togglePreview2 },
+    // **`:source` は外した**（2026-09-20）。端末版ではそれが init.lua の
+    // 読み直しで、設定を直して `:source` と打った人にここで Markdown が
+    // 組まれるのは、同じ語が前端で別の機能を指す `:history` と同じ事故。
+    { name: 'render', about: tr("set the Markdown (also Ctrl+E)", 'Markdown を組んで表示（Ctrl+E でも）'), run: togglePreview2 },
     { name: 'queue', about: tr("what is running, and how to stop it", '実行中の操作を見る・止める'), run: cmdQueue },
     { name: 'tab', about: tr("a new tab (also t / F9)", '新しいタブ（t / F9 でも）'), run: () => tabNew() },
     { name: 'tabclose', about: tr("close the tab (also w / F10)", 'タブを閉じる（w / F10 でも）'), run: () => tabClose() },
@@ -6888,7 +6891,9 @@ function buildCommands() {
     { name: 'crlf', about: tr("line endings to CRLF", '改行を CRLF にする'), run: () => setEol('crlf') },
     { name: 'update', alias: ['svnupdate'], about: tr("svn update the working copy. svn only", 'svn update で作業コピーを更新。svn のみ'), run: () => cmdSvn('update') },
     { name: 'resolve', alias: ['svnresolve'], about: tr("svn resolve --accept working. svn only", 'svn resolve --accept working。svn のみ'), run: () => cmdSvn('resolve') },
-    { name: 'visual', alias: ['select'], about: tr("visual selection (also v)", 'ビジュアル選択（v でも）'), run: startVisual },
+    // **`:select` は外した**（2026-09-20）。端末版ではマーク（`:mark` の別名）で、
+    // cian の語彙では「選択」はビジュアル選択ではなくマークのこと。
+    { name: 'visual', about: tr("visual selection (also v)", 'ビジュアル選択（v でも）'), run: startVisual },
     // `:back` is cian-tui's name for the history popup (commands.rs:248), not
     // for stepping one directory back — that is Alt+← and `:cd -`, as it is
     // there. The two builds had the same word doing two different things.
@@ -6908,7 +6913,7 @@ function buildCommands() {
     // `:menu` opened something else entirely.
     { name: 'menu', about: tr("the right-click menu", '右クリックメニュー'), run: () => openMenu(CONTEXT) },
     { name: 'toggle', about: tr("the switches menu (T)", 'トグル（T）'), run: () => openMenu(TOGGLES) },
-    { name: 'help', alias: ['h'], about: tr("the key manual", 'キー一覧'), run: openHelp },
+    { name: 'help', alias: ['h', 'man'], about: tr("the key manual", 'キー一覧'), run: openHelp },
   ];
 }
 

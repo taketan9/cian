@@ -199,7 +199,7 @@ impl App {
         match verb {
             "q" | "quit" => self.should_quit = true,
             "shell" => self.focus(FocusedPane::Shell),
-            "man" | "help" | "h" => self.open_manual(),
+            "help" | "man" | "h" => self.open_manual(),
             "paste" => { let _ = self.paste_clip(); }
             "hidden" => self.toggle_hidden(),
             // **AFXW のマスク。** `/` の絞り込みはディレクトリを移ると消える
@@ -455,7 +455,7 @@ impl App {
             // 一覧には出さない。取り返しのつかなさの差は訊く画面が言う ──
             // `commit_prompt` の註にある。
             "commit" | "svncommit" => self.commit_prompt(),
-            "svnresolve" | "resolve" => self.svn_resolve(),
+            "resolve" | "svnresolve" => self.svn_resolve(),
             "snip" | "snippet" => self.start_snippets(),
             "aicommit" | "commitmsg" => self.start_ai_commit_message(),
             // Pattern-based (non-AI) bulk rename. With no argument it prompts;
@@ -534,7 +534,7 @@ impl App {
             "ls" | "dir" => self.cmd_ls(&args),
             // `:ls` is here too: it is the same question asked of the whole
             // listing rather than the selection, and it is what hands type.
-            "stat" | "attr" => self.show_attributes(),
+            "attr" | "stat" => self.show_attributes(),
             "wc" => self.cmd_wc(),
             "head" => self.cmd_peek(cian_core::inspect::End::Head, &args),
             "tail" => self.cmd_peek(cian_core::inspect::End::Tail, &args),
@@ -573,7 +573,7 @@ impl App {
             // the honest one; `:unzip` and `:untar` stay because they are what
             // hands type. The rest spelled out a format the code never asked
             // about, and `:unar` is another program's name.
-            "extract" | "unzip" | "untar" => self.extract_selected(),
+            "unzip" | "extract" | "untar" => self.extract_selected(),
 
             other => self.message = Some(format!("unknown command: :{}", other)),
         }
