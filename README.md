@@ -429,15 +429,19 @@ return {
 
 Off unless `cian.ai{…}` is set, and always in the loop — nothing runs or deletes without your say-so.
 
+**Two ways in** (down from six on 2026-09-20): `:ai` asks, `:aicmd` writes shell.
+
 | Command | You get |
 |---|---|
-| `:ai` | a chat |
+| `:ai <question>` | a chat. the question is typed into it, and sent when you press Enter |
+| `:ai commit` | a commit message from the staged diff |
+| `:ai error` | explain the last shell error |
+| `:ai diff` | explain the diff on screen (also `x` in the diff view) |
+| `:ai log` | triage the selected log: errors, timeline, likely cause |
 | `:aicmd <what you want>` | a shell command for the shell you are in, local or the server you are SSH'd into — drafted for review, never run for you |
-| `:aicommit` | a commit message from the staged diff |
-| `:aierror` | explain the last shell error |
-| `:aidiff` | explain the diff on screen (also `x` in the diff view) |
-| `:ailog` | triage the selected log — errors, timeline, likely cause |
 | `S` in F3 | summarise the file being read |
+
+The older spellings (`:aicommit` `:aierror` `:aidiff` `:ailog`) still work; they are simply not listed. **On a machine with no `cian.ai{…}`, none of this appears in the command palette or the right-click menu** — typing it still answers "not configured", so nothing is closed off.
 
 **The conversation carries, in both builds** — the window has a chat now, and
 all six doors (`:ai`, summarise, explain the error, explain the diff, triage

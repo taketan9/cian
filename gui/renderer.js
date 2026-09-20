@@ -3195,14 +3195,14 @@ function helpRows() {
         [tr("the frame changes", '枠が変わります'), tr("a pane showing a server wears a different colour of frame", 'サーバを表示しているペインは色の違う枠になります')],
     ]],
     [tr("AI (when init.lua configures it)", 'AI（init.lua で設定したとき）'), [
+        [tr(":ai <question>", ':ai 質問'), tr("ask. the question is typed into the chat, and sent when you press Enter", '訊く。質問は会話欄に入るだけで、送るのは Enter を押したとき')],
+        [':ai commit', tr("a commit message from the staged diff (Enter signs it)", 'ステージ済み差分からコミットメッセージ（Enter で署名）')],
+        [':ai error', tr("explain the shell's last error", 'シェルの直近のエラーを説明')],
+        [':ai diff', tr("explain the diff on screen (x on the comparison)", '表示中の差分を説明（差分画面で x）')],
+        [':ai log', tr("triage the selected log (errors, likely cause, what to check next)", '選択中のログを診断（エラー・原因・次の確認）')],
         [tr(":aicmd <description>", ':aicmd 説明'), tr("a shell command from a description \u2014 it is placed, never run", '説明からシェルコマンド生成 ── 置くだけで、実行はしません')],
-        [':ailog', tr("triage the selected log (errors, likely cause, what to check next)", '選択中のログを診断（エラー・原因・次の確認）')],
-        [':aierror  、:explain', tr("explain the shell's last error", 'シェルの直近のエラーを説明')],
-        [':aicommit', tr("a commit message from the staged diff (Enter signs it)", 'ステージ済み差分からコミットメッセージ（Enter で署名）')],
         [':ime', tr("switch the input method off in vim's normal mode (init.lua's cian.ime)", 'vim のノーマルモードで IME を自動オフ（init.lua の cian.ime）')],
         [tr("  with the IME on", '  IME オンのまま'), tr("the listing keys still work \u2014 this build reads the physical key, so no helper is needed", '一覧のキーはそのまま効きます — ウィンドウ版は物理キーを読みます（ヘルパー不要）')],
-        [tr(":ai <question>", ':ai 質問'), tr("AI - simple: chat with the local model", 'AI - simple: ローカルモデルとチャット')],
-        [':aidiff', tr("explain the diff on screen (x on the comparison)", '表示中の差分を説明（差分画面で x）')],
     ]],
     [tr("Shell panel", 'シェル'), [
         ['Shift+J  /  :shell', tr("the shell panel (it lives in the lower half)", 'シェルパネル（下半分に出る）')],
@@ -6734,16 +6734,20 @@ function buildCommands() {
     { name: 'ssh', about: tr("ssh to a host, in the shell panel (also Shift+S)", 'ホストへ ssh（シェルパネルで。Shift+S でも）'), run: cmdSshPicker },
     { name: 'paste', about: tr("paste the held files here (also Ctrl+V / y)", '保持したファイルをここへ貼り付け（Ctrl+V / y でも）'), run: paste },
     { name: 'local', about: tr("close the server and come back to this disk", 'サーバを閉じてローカルへ戻る'), run: cmdDisconnect },
-    { name: 'aicmd', about: tr("AI: a shell command from a description", 'AI: 説明からシェルコマンドを作る'), arg: tr('what you want', 'やりたいこと'), run: cmdAiCmd },
-    { name: 'ailog', alias: ['logtriage', 'triage'], about: tr("AI: triage the selected log", 'AI: 選択したログを診断する'), run: cmdAiLog },
+    { name: 'aicmd', needsAi: true, about: tr("AI: a shell command from a description", 'AI: 説明からシェルコマンドを作る'), arg: tr('what you want', 'やりたいこと'), run: cmdAiCmd },
+    { name: 'ailog', alias: ['logtriage', 'triage'], hidden: true, about: tr("AI: triage the selected log (:ai log)", 'AI: 選択したログを診断する（:ai log）'), run: cmdAiLog },
     // The argument is optional now that this opens a conversation rather than
     // asking one question: `:ai` on its own is cian-tui's `new_ai_chat`, an
     // empty window with the caret in it. It was required, so `:ai` stopped to
     // demand a question before it would show you the place to type one.
-    { name: 'ai', alias: ['chat'], about: tr("AI - simple: chat with the local model", 'AI - simple: ローカルモデルとチャット'), arg: tr('what to ask', '訊きたいこと'), optional: true, run: cmdAiAsk },
+    // **AI の入口は2語**（2026-09-20）。`:ai` が引数で振り分け、`:aicmd` だけは
+    // 別に残る（シェル向けで、答えが会話ではなく一行のコマンドだから）。
+    // 古い名前（`:aierror` `:aidiff` `:ailog` `:aicommit`）は通るが一覧には
+    // 出さない。説明が「ローカルモデル」だったのは嘘で、既定は社内の endpoint。
+    { name: 'ai', alias: ['chat'], needsAi: true, about: tr("AI: ask. :ai commit / error / diff / log for what is on screen", 'AI: 訊く。:ai commit / error / diff / log で画面のものを渡す'), arg: tr('what to ask, or commit / error / diff / log', '訊きたいこと、または commit / error / diff / log'), optional: true, run: cmdAi },
     // Not `explain`: that word is cian-tui's `:aierror` (commands.rs:327), and
     // having it mean "explain the diff" here made one name do two jobs.
-    { name: 'aidiff', alias: ['explaindiff'], about: tr("AI: explain the diff on screen", 'AI: 表示中の差分を説明する'), run: cmdAiDiff },
+    { name: 'aidiff', alias: ['explaindiff'], hidden: true, about: tr("AI: explain the diff on screen (:ai diff)", 'AI: 表示中の差分を説明する（:ai diff）'), run: cmdAiDiff },
     { name: 'office', about: tr("open the cloud copy of an Office document", 'Office 文書のクラウド側を開く'), run: () => cmdOffice('office') },
     { name: 'officelink', about: tr("write a .url to the cloud copy (this is the one to paste in a mail)", 'クラウド側への .url を作る（メールに貼るのはこれ）'), run: () => cmdOffice('officelink') },
     { name: 'reload', about: tr("reload init.lua", 'init.lua を読み直す'), run: cmdReload },
@@ -6784,10 +6788,10 @@ function buildCommands() {
     { name: 'scratch', alias: ['new'], about: tr("a scratch buffer (:w gives it a name)", '下書きを開く（:w で名前を付けて保存）'), run: cmdScratch },
     { name: 'limit', alias: ['speed', 'ratelimit'], about: tr("cap the transfer rate \u2014 :limit 2m / 500k / off", '転送の速さの上限 — :limit 2m / 500k / off'), arg: '2m / 500k / off', optional: true, run: cmdLimit },
     { name: 'summary', alias: ['summarize', 'summarise'], about: tr("AI: summarise the open file", 'AI: 開いているファイルを要約'), run: cmdSummary },
-    { name: 'aicommit', alias: ['commitmsg'], about: tr("AI: a commit message from the staged diff", 'AI: ステージ済みの差分からコミットメッセージを作る'), run: cmdAiCommit },
+    { name: 'aicommit', alias: ['commitmsg'], hidden: true, about: tr("AI: a commit message from the staged diff (:ai commit)", 'AI: ステージ済みの差分からコミットメッセージを作る（:ai commit）'), run: cmdAiCommit },
     // 一語で両方（2026-09-20）。どちらのリポジトリかはディレクトリが知っている。
     { name: 'commit', alias: ['svncommit'], about: tr("commit. git records it here, svn sends it to the server", 'コミット。git は手元に、svn はサーバに届きます'), run: cmdCommit },
-    { name: 'aierror', alias: ['explain'], about: tr("AI: explain the shell's last error", 'AI: シェルの直近のエラーを説明する'), run: cmdAiError },
+    { name: 'aierror', alias: ['explain'], hidden: true, about: tr("AI: explain the shell's last error (:ai error)", 'AI: シェルの直近のエラーを説明する（:ai error）'), run: cmdAiError },
     { name: 'ime', alias: ['inputmethod'], about: tr("input method \u2014 off in vim's normal mode (cian.ime)", 'IME 連携 — vim のノーマルモードで自動オフ（cian.ime）'), run: cmdIme },
     { name: 'stat', about: tr("attributes (same as :attr)", '属性（:attr と同じ）'), run: cmdAttr },
     { name: 'blame', about: tr("who last changed each line of the open file", '各行を最後に変えた人（開いているファイル）'), run: cmdBlame },
@@ -7276,9 +7280,21 @@ async function cmdAiLog() {
     answerIntoChat();
 }
 
+/// `:ai <質問>` — 会話を開いて、質問を**打ち込む**。送らない。
+///
+/// 送るのは Enter を押したとき。何がこの機械から出ていくかを最後に見るのは
+/// 本人で、それは F3 の要約を鍵の後ろに置いてあるのと同じ理由だ（2026-09-20）。
+/// 端末版も同じ（`new_ai_chat_with`）── ここだけ即送信だと、同じ一行が前端に
+/// よって「下書き」だったり「送信」だったりすることになる。
 async function cmdAiAsk(question) {
     openChat(tr('Chat', 'チャット'));
-    if (question && question.trim()) await askChat(question.trim());
+    const q = (question || '').trim();
+    if (q) {
+        el.cIn.value = q;
+        el.cIn.focus();
+        // キャレットは末尾に。打ち足してから送れる。
+        el.cIn.setSelectionRange(q.length, q.length);
+    }
 }
 
 /// The three things a file open in front of you is usually wanted for —
@@ -8077,7 +8093,13 @@ async function runCommand(cmd, arg, invokedAs) {
 
 /// `C` — every command, fuzzy.
 function openPalette() {
-    const rows = commands().map((c) => ({ label: `:${c.name}`, sub: c.about, cmd: c }));
+    // **使うときだけ生えてくる。** `cian.ai{}` を書いていない機械では、一覧の
+    // 先頭に AI が並んでいた ── いちばんよく開く窓の、いちばん上に、その機械では
+    // 何もできないものが（2026-09-20）。打てば今までどおり「未設定です」と
+    // 答えるので、道は塞いでいない。`hidden` は `:ai` の引数に畳んだ古い名前。
+    const rows = commands()
+        .filter((c) => !c.hidden && !(c.needsAi && !cfg.ai))
+        .map((c) => ({ label: `:${c.name}`, sub: c.about, cmd: c }));
     show(tr('command', 'コマンド'), tr(`${rows.length}`, `${rows.length} 個`), rows, {
         // The one the help has always called あいまい検索 and which walked
         // a hundred and thirty rows with j and k until now.
@@ -10288,6 +10310,20 @@ async function cmdCommit() {
     state[state.focus] = done.pane;
     draw(state.focus);
     say(tr('committed', 'コミットしました'));
+}
+
+/// `:ai` — 一語で、AI に訊くこと全部。
+///
+/// **引数は4つの合言葉か、質問そのもの。** `commit` `error` `diff` `log` は
+/// 「いま画面にあるものを渡す」で、それ以外は会話への質問になる。一語の質問
+/// （`:ai commit` と打って「commit とは何か」を訊きたい人）は想定していない。
+async function cmdAi(arg = '') {
+    const a = arg.trim();
+    if (a === 'commit') return cmdAiCommit();
+    if (a === 'error') return cmdAiError();
+    if (a === 'diff') return cmdAiDiff();
+    if (a === 'log') return cmdAiLog();
+    return cmdAiAsk(arg);
 }
 
 async function cmdAiCommit() {

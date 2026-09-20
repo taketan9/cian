@@ -194,15 +194,26 @@ impl App {
     }
 
     pub(crate) fn open_ai_chat(&mut self) {
+        if self.ai_ready_for_chat() {
+            self.new_ai_chat();
+        }
+    }
+
+    /// Configured, reachable, and said so — with the reason on screen when not.
+    ///
+    /// Split out so `:ai <question>` asks the same two questions in the same
+    /// order as `:ai` alone: a chat that opens with the question already typed
+    /// is worse than a plain "not configured" if there is nothing behind it.
+    pub(crate) fn ai_ready_for_chat(&mut self) -> bool {
         if !self.ai_configured() {
-            return;
+            return false;
         }
         if !self.ai_ready() {
             self.message =
                 Some("AI unavailable (python, packages, or sign-in) — feature hidden".into());
-            return;
+            return false;
         }
-        self.new_ai_chat();
+        true
     }
 
     /// A fresh, empty AI - simple chat — the menu's "Chat", and `Ctrl+N` from
@@ -210,6 +221,19 @@ impl App {
     pub(crate) fn new_ai_chat(&mut self) {
         let skin = ChatSkin::simple(tr(self.lang, "Chat", "チャット"));
         self.start_ai_chat_as(ChatMode::Ai, skin, Vec::new(), false);
+    }
+
+    /// The same chat, with what was typed after `:ai` already in the box.
+    ///
+    /// **Typed, not sent.** `:ai この設定は何` opens the conversation with the
+    /// question waiting on Enter, so the last look at what is about to leave
+    /// the machine happens before it leaves — the same reason
+    /// [`Self::summarize_viewer`] is behind a key rather than a menu row.
+    pub(crate) fn new_ai_chat_with(&mut self, question: &str) {
+        self.new_ai_chat();
+        if let Popup::AiChat { input, .. } = &mut self.popup {
+            input.push_str(question);
+        }
     }
 
     /// Summarise the file open in the F3 viewer. Unlike the metadata-only

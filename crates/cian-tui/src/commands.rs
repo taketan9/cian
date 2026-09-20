@@ -232,7 +232,26 @@ impl App {
             // protocol. `scp` named the fallback rather than the thing, and
             // `browse`/`remotepane` named an action and a piece of the UI.
             "remote" | "sftp" => self.start_scp(ScpDir::BrowsePane),
-            "ai" | "chat" => self.open_ai_chat(),
+            // **AI の入口は2語**（2026-09-20、本人: 実務ではほぼ使わない、たまに
+            // コマンドを訊くくらい）。`:ai` が引数で振り分け、`:aicmd` だけ別に
+            // 残る ── あれはシェル向けで、返るのが会話ではなく一行のコマンドだ
+            // から。古い名前（`:aierror` `:aidiff` `:ailog` `:aicommit`）は
+            // 通るが、一覧には出さない。
+            "ai" | "chat" => match rest {
+                "" => self.open_ai_chat(),
+                "commit" => self.start_ai_commit_message(),
+                "error" => self.explain_shell_error(),
+                "diff" => self.explain_diff(),
+                "log" => self.triage_log(),
+                // 一語の合言葉でなければ質問。`:ai commit` と打って「commit とは
+                // 何か」を訊きたい人は想定していない。**打ち込むだけで送らない**
+                // ── 何が機械から出ていくかを最後に見るのは本人。
+                q => {
+                    if self.ai_ready_for_chat() {
+                        self.new_ai_chat_with(q);
+                    }
+                }
+            },
             "aicmd" => {
                 if rest.is_empty() {
                     self.start_ai_shell_prompt();

@@ -13314,6 +13314,85 @@ use crate::ai::StoredChatExt;
     /// "one word for both" is exactly the promise that goes quietly wrong.
     /// `svn::is_working_copy` only looks for a `.svn` directory, so the
     /// branch can be tested for the price of `mkdir`.
+    /// `:ai` is the only word: the four things that had their own verb are
+    /// arguments now, and a typed question lands in the chat without being
+    /// sent (2026-09-20).
+    ///
+    /// **And on a machine with no `cian.ai{…}`, the palette does not carry
+    /// it.** Six AI rows sat at the top of the most-opened window in cian on
+    /// a machine that could not run any of them.
+    #[test]
+    fn ai_is_one_word_with_arguments_and_is_absent_when_unconfigured() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().to_path_buf();
+
+        // Unconfigured: nothing AI in the palette, and typing it says why.
+        let mut app = App::new(p.clone(), p.clone(), en_config()).unwrap();
+        app.start_command_palette();
+        match &app.popup {
+            Popup::Palette { items, .. } => {
+                assert!(
+                    !items.iter().any(|i| i.label.starts_with(":ai")),
+                    "no AI rows without cian.ai: {:?}",
+                    items.iter().map(|i| i.label.clone()).collect::<Vec<_>>(),
+                );
+                assert!(items.len() > 20, "the rest of the palette is still there");
+            }
+            other => panic!("no palette: {other:?}"),
+        }
+        app.popup = Popup::None;
+        app.command_buffer = "ai".into();
+        app.run_command();
+        let said = app.message.clone().unwrap_or_default();
+        assert!(said.contains("not configured"), "says why: {said:?}");
+
+        // Configured (mock answers offline, so no network and no python call
+        // is needed to see which way the verb went).
+        let mut config = en_config();
+        config.ai = Some(cian_lua::AiOptions {
+            python: "python3".into(),
+            auth_mode: "mock".into(),
+            ..Default::default()
+        });
+        let mut app = App::new(p.clone(), p, config).unwrap();
+        app.ai_ready = Some(true);
+
+        app.start_command_palette();
+        match &app.popup {
+            Popup::Palette { items, .. } => {
+                let ai: Vec<String> = items
+                    .iter()
+                    .map(|i| i.label.clone())
+                    .filter(|l| l.starts_with(":ai"))
+                    .collect();
+                assert_eq!(ai, vec![":ai".to_string(), ":aicmd".to_string()], "two ways in, not six");
+            }
+            other => panic!("no palette: {other:?}"),
+        }
+        app.popup = Popup::None;
+
+        // A question is typed into the chat, not sent.
+        app.command_buffer = "ai なぜ動かない".into();
+        app.run_command();
+        match &app.popup {
+            Popup::AiChat { input, log, .. } => {
+                assert_eq!(input, "なぜ動かない", "the question is waiting on Enter");
+                assert!(log.is_empty(), "and nothing has been sent yet");
+            }
+            other => panic!("`:ai <question>` did not open the chat: {other:?}"),
+        }
+        app.popup = Popup::None;
+
+        // `:ai commit` is the old `:aicommit`: it needs staged changes, and
+        // says so here rather than opening a chat.
+        app.command_buffer = "ai commit".into();
+        app.run_command();
+        assert!(
+            !matches!(app.popup, Popup::AiChat { .. }),
+            "`:ai commit` is not a question",
+        );
+    }
+
     #[test]
     fn one_commit_word_goes_to_whichever_vcs_the_directory_is_under() {
         let d = tempfile::tempdir().unwrap();

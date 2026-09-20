@@ -42,13 +42,9 @@ enum FileBatch {
 #[rustfmt::skip]
 pub(crate) fn command_list() -> &'static [(&'static str, (&'static str, &'static str), bool)] {
     &[
-        ("ai",         ("AI - simple: chat with the local model", "AI - simple: ローカルモデルとチャット"), false),
+        ("ai",         ("AI: ask. `:ai commit / error / diff / log` sends what is on screen", "AI: 訊く。`:ai commit / error / diff / log` で画面のものを渡します"), true),
         ("aicmd",      ("AI: shell command from a description", "AI: 説明からコマンド"), true),
-        ("aicommit",   ("AI: draft a commit message", "AI: コミットメッセージ下書き"), false),
         ("commit",     ("commit. git records it here, svn sends it to the server", "コミット。git は手元に、svn はサーバに届きます"), false),
-        ("aierror",    ("AI: explain the last shell error", "AI: 直前のエラーを説明"), false),
-        ("aidiff",     ("AI: explain the diff on screen", "AI: 差分を説明"), false),
-        ("ailog",      ("AI: triage the selected log", "AI: ログを診断"), false),
         ("du",         ("disk usage: what's biggest here", "容量分析"), false),
         ("preview",    ("cursor preview in the shell panel", "カーソル追従プレビュー"), false),
         ("queue",      ("operation queue: running + waiting", "操作キュー（実行中と待機）"), false),
@@ -95,8 +91,17 @@ impl App {
     /// Open the command palette (`C` / `:palette`).
     pub(crate) fn start_command_palette(&mut self) {
         let ja = self.lang == Lang::Ja;
+        // **使うときだけ生えてくる**（2026-09-20）。`cian.ai{}` を書いていない
+        // 機械では、この一覧の先頭に AI が6つ並んでいた ── いちばんよく開く
+        // 窓の、いちばん上に、その機械では何もできないものが。打てば今までどおり
+        // 「未設定です」と答えるので、道は塞いでいない。
+        //
+        // `ai_configured()` ではなく `self.ai` を直に見るのは、あれが画面に
+        // 知らせを出す関数だから ── 一覧を組み立てるだけで状態行が変わる。
+        let has_ai = self.ai.is_some();
         let items: Vec<PaletteItem> = command_list()
             .iter()
+            .filter(|(verb, _, _)| has_ai || !verb.starts_with("ai"))
             .map(|(verb, (en, jp), takes_arg)| PaletteItem {
                 label: format!(":{}", verb),
                 detail: (if ja { *jp } else { *en }).to_string(),
