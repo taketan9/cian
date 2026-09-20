@@ -1461,16 +1461,31 @@ mod log_destination_tests {
         assert_eq!(r.code, 0);
         assert_eq!(String::from_utf8_lossy(&r.out), "a\nb\n");
 
-        // **Shift_JIS goes through as Shift_JIS.** `tr` here only touches
-        // ASCII, so the Japanese bytes have to come back untouched — which is
-        // the whole reason nothing is re-encoded on the way in.
+        // **Shift_JIS goes through as Shift_JIS.** Nothing is re-encoded on
+        // the way in or out, so the bytes that arrive are the bytes that
+        // leave.
+        //
+        // Through `cat`, not `tr`. The first version of this used
+        // `tr a-z A-Z` to prove the ASCII half changed while the Japanese
+        // half did not, and it passed here and failed on the CI runner:
+        // **BSD `tr` validates its input against the locale**, and in a UTF-8
+        // one it refuses Shift_JIS bytes and prints nothing. That is the
+        // command's business, not cian's — cian hands over the file's own
+        // bytes, and a command that will not take them says so (the exit code
+        // below is how). Measuring byte-transparency with a tool that has an
+        // opinion about encodings measures the tool.
         let sjis = crate::viewer::TextEncoding::ShiftJis.encode("あいう abc\n");
-        let r = crate::proc::shell_filter(&sh, "tr a-z A-Z", &sjis, d.path()).unwrap();
+        let r = crate::proc::shell_filter(&sh, "cat", &sjis, d.path()).unwrap();
+        assert_eq!(r.out, sjis, "the same bytes came back");
         assert_eq!(
             crate::viewer::TextEncoding::ShiftJis.decode(&r.out),
-            "あいう ABC\n",
-            "the Japanese survived a filter that was never told about it",
+            "あいう abc\n",
+            "and they still read as the Japanese that went in",
         );
+
+        // And a filter that only ever sees ASCII does change it.
+        let r = crate::proc::shell_filter(&sh, "tr a-z A-Z", b"abc\n", d.path()).unwrap();
+        assert_eq!(String::from_utf8_lossy(&r.out), "ABC\n");
 
         // A command that fails says so, and says why, rather than handing back
         // an empty buffer that would look like a file emptied on purpose.
