@@ -10393,8 +10393,12 @@ async function cmdState(arg = '') {
     for (const f of r.files || []) {
         rows.push({
             label: f.name,
+            // 文の組み立てを `tr()` の中で終わらせる。外で足すと、`i18n.py` が
+            // 「日本語だけの断片が地の文に混ざっている」と読む ── 実際そう
+            // 見えるのは正しくて、訳す単位は行のほうだ。
             sub: f.path
-                ? `${f.path}${f.present ? '' : tr('   (not present)', '   (ありません)')}`
+                ? tr(`${f.path}${f.present ? '' : '   (not present)'}`,
+                     `${f.path}${f.present ? '' : '   (ありません)'}`)
                 : tr('(unresolved)', '(解決できません)'),
         });
     }
