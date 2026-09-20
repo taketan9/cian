@@ -7247,8 +7247,13 @@ use crate::ai::StoredChatExt;
                     while end < b.len() && (b[end].is_ascii_lowercase() || b[end] == '.') {
                         end += 1;
                     }
-                    // A bare `:` (the prompt itself) and `http:` are not names.
-                    if end > start && (i == 0 || b[i - 1] != '/') {
+                    // A bare `:` (the prompt itself) and `http:` are not
+                    // names. Neither is a name made of nothing but dots:
+                    // `:.!date` is vi's filter, where the dot is the *range*
+                    // (this line) and the command is what follows the bang.
+                    // Dots inside a name still count — `:tar.gz` is one.
+                    let is_range = b[start..end].iter().all(|c| *c == '.');
+                    if end > start && !is_range && (i == 0 || b[i - 1] != '/') {
                         out.push(b[start..end].iter().collect());
                     }
                     i = end;
@@ -13323,6 +13328,56 @@ use crate::ai::StoredChatExt;
     /// a machine that could not run any of them.
     /// `:touch` with no name stamps what is selected; with a name it makes
     /// that file (2026-09-20). Until then only the second half existed.
+    /// `:%!cmd` — vi's filter, in the viewer (2026-09-20).
+    ///
+    /// The three spellings, the encoding, the undo, and the one that matters
+    /// most: **a command that fails must not touch the file.** An empty
+    /// stdout from a failed command would otherwise read as "it worked, and
+    /// the answer was nothing".
+    #[test]
+    fn a_filter_replaces_what_it_was_pointed_at_and_a_failure_replaces_nothing() {
+        // The parser first — it is what tells the three ranges apart.
+        use crate::viewer::{split_filter, FilterScope};
+        assert_eq!(split_filter("%!sort"), Some((FilterScope::All, "sort")));
+        assert_eq!(split_filter(".!date"), Some((FilterScope::Line, "date")));
+        assert_eq!(split_filter("'<,'>!tr a-z A-Z"), Some((FilterScope::Selection, "tr a-z A-Z")));
+        assert_eq!(split_filter("s/a/b/"), None, "a substitute is not a filter");
+        assert_eq!(split_filter("%!"), None, "a range with no command is not one either");
+
+        if cfg!(windows) {
+            return; // `sort` and `tr` are not what they are here.
+        }
+
+        // The whole file.
+        let (_d, mut app) = viewer_on("c\nb\na\n");
+        app.run_substitute("%!sort");
+        assert_eq!(viewer_lines(&app), vec!["a", "b", "c"], "sorted in place");
+
+        // One undo puts the file back — the filter is one step, not three.
+        app.handle_key(key('u')).unwrap();
+        assert_eq!(viewer_lines(&app), vec!["c", "b", "a"], "one undo, whole filter");
+
+        // **A failure leaves it exactly as it was**, and says why.
+        app.run_substitute("%!echo nope >&2; exit 3");
+        assert_eq!(viewer_lines(&app), vec!["c", "b", "a"], "untouched");
+        let said = app.message.clone().unwrap_or_default();
+        assert!(said.contains("nope"), "the command's own words: {said:?}");
+
+        // One line, where the cursor is.
+        let (_d, mut app) = viewer_on("one\ntwo\nthree\n");
+        app.handle_key(key('j')).unwrap();
+        app.run_substitute(".!tr a-z A-Z");
+        assert_eq!(viewer_lines(&app), vec!["one", "TWO", "three"], "only the cursor's line");
+
+        // The selection, and a filter that returns fewer lines than it took.
+        let (_d, mut app) = viewer_on("a\na\nb\nkeep\n");
+        app.handle_key(key('V')).unwrap();
+        app.handle_key(key('j')).unwrap();
+        app.handle_key(key('j')).unwrap();
+        app.run_substitute("'<,'>!sort -u");
+        assert_eq!(viewer_lines(&app), vec!["a", "b", "keep"], "three lines became two");
+    }
+
     #[test]
     fn touch_stamps_the_selection_and_still_makes_a_file_when_named() {
         let d = tempfile::tempdir().unwrap();

@@ -3246,6 +3246,8 @@ function helpRows() {
         [':han :zen', tr("full-width ASCII \u2192 half / half-width kana \u2192 full", '全角ASCII→半角 / 半角カナ→全角')],
         [':expand :unexpand :reindent', tr("tabs \u2194 spaces, and a consistent indent", 'タブ↔スペース、インデントを揃える')],
         [':lf :crlf', tr("change the line endings (written on save)", '改行コードを変える（保存時に反映）')],
+        [tr(":%!cmd", ':%!コマンド'), tr("filter through a command. :.!cmd for this line, :'<,'>!cmd for the selection", "コマンドに通す。この行なら :.!cmd、選択範囲は :'<,'>!cmd")],
+        [tr("  the bytes", '  渡すもの'), tr("the file's own encoding, both ways. a command that fails changes nothing", 'ファイルの文字コードのまま渡して読み戻します。失敗したときは何も変えません')],
         // cian-tui's words for this pair, and its default: vim is what cian
         // was built around, notepad is the one you hand to a colleague.
         [tr("Editor keys", 'エディタのキー操作'), tr("vim (the default) / notepad \u2014 back in the listing, inside T\u2019s menu (:editstyle vim / :notepad too)", 'notepad / vim（既定）── 一覧に戻って T のメニューの中（:editstyle vim / :notepad でも）')],
@@ -6086,7 +6088,11 @@ function setStyle(i, remember = true) {
         ex.defineEx('summary', 'summary', () => cmdSummary());
         ex.defineEx('edit', 'edit', () => cmdEditExternal());
         ex.defineEx('theme', 'theme', (_cm, p) => cmdTheme((p.args || [])[0]));
-        ex.defineEx('combine', 'combine', (_cm, p) => cmdCombine((p.args || []).join(' ') + (p.argString || '')));
+        // `argString` だけ。`args` は同じものを分割したもので、足すと
+        // `:combine 3` が "33" になり、数として読めずに既定の2行に落ちる
+        // ── 2026-09-20 に `:%!` を入れたとき、同じ書き方で `sort` が
+        // `sortsort` になって見つかった。**この行はずっとそうだった。**
+        ex.defineEx('combine', 'combine', (_cm, p) => cmdCombine(((p.argString || (p.args || []).join(' ')) || '').trim()));
         // The line operations, which until now could not be reached at all:
         // each needs a file open, and cian's own `:` belongs to the listing,
         // which declines every key while a file is open. They were in the
@@ -6099,6 +6105,22 @@ function setStyle(i, remember = true) {
         // `:s/old/new/g`. monaco-vim has its own substitute, but it does not
         // know cian's — the engine holds the same one the terminal build
         // uses, so the two builds agree on what a pattern means.
+        // vi の filter。monaco-vim は範囲を解釈して `line1`/`line2` を渡す
+        // （`:%!` なら1行目から最終行、`:'<,'>!` なら選択範囲）。名前が `!`
+        // なので `defineEx` の綴りも `!` で、短縮形も同じ。
+        // **`argString` だけ。** monaco-vim は同じものを `args`（分割済み）と
+        // `argString`（生）の両方に入れるので、足すと `sort` が `sortsort` に
+        // なる。実機で一度そうなった。
+        //
+        // 範囲は `p.line` / `p.lineEnd`（0始まり）に入る ── `line1`/`line2`
+        // ではない。取り違えていたせいで `:.!tr a-z A-Z` がファイル全体を
+        // 大文字にした。実機で見るまで気づけない類のずれで、範囲の名前は
+        // `monaco-vim.js` の `parseInput_` にある。
+        ex.defineEx('!', '!', (_cm, p) => filterThroughShell(
+            ((p.argString || (p.args || []).join(' ')) || '').trim(),
+            p.line !== undefined ? p.line + 1 : undefined,
+            p.lineEnd !== undefined ? p.lineEnd + 1 : undefined,
+        ));
         ex.defineEx('subst', 's', (_cm, p) => cmdSubstitute('s' + (p.argString || '')));
         // `:g/re/d` and `:v/re/d`, spelled as vim spells them.
         ex.defineEx('global', 'g', (_cm, p) => runGlobal(p, false));
@@ -7964,6 +7986,52 @@ async function rewriteBuffer(method, params, said) {
     viewer.ed.pushUndoStop();
     say(said(r, lines));
     return r;
+}
+
+/// `:%!cmd` — vi の filter。**エディタの中だけ**、シェルは下の段と同じもの。
+///
+/// 端末版（viewer.rs `filter_through_shell`）と同じ約束を守る:
+/// ファイルの文字コードのまま渡して同じもので読み戻す（UTF-16 だけ UTF-8）、
+/// **失敗したらバッファを変えない**、そして一手で取り消せる。
+///
+/// 範囲は3つ。`%` はファイル全体、`.` はカーソル行、`'<,'>` は選択範囲 ──
+/// monaco-vim が範囲を解釈して `line1`/`line2` を渡してくるので、ここでは
+/// 「どこからどこまで」を数字で受け取る。
+async function filterThroughShell(cmd, from, to) {
+    if (!needViewer()) return;
+    if (from === undefined) {
+        // 範囲の無い `:!cmd` は vi では「走らせて見せる」で、filter ではない。
+        // cian の一覧側の `:!` が既にその意味なので、ここでは断って綴りを言う。
+        say(tr("give it a range: :%!cmd, :.!cmd, or :'<,'>!cmd",
+               "範囲を付けてください: :%!cmd、:.!cmd、:'<,'>!cmd"), true);
+        return;
+    }
+    const model = viewer.ed.getModel();
+    const last = model.getLineCount();
+    const lo = Math.max(1, Math.min(from, last));
+    let hi = Math.max(lo, Math.min(to ?? from, last));
+    // **ファイル末尾の改行は「行」ではない。** Monaco は "a\nb\n" を3行
+    // （a, b, ""）として持つので、`%` の範囲をそのまま送ると空行が1つ混ざり、
+    // `sort` がそれを先頭に持ってくる ── 実機で先頭に空行が生えた。vim が
+    // `%` を「3行」ではなく「2行」と読むのと同じ理由で、末尾の空行は外す。
+    if (hi === last && hi > lo && model.getLineContent(hi) === '') hi -= 1;
+    const lines = [];
+    for (let n = lo; n <= hi; n++) lines.push(model.getLineContent(n));
+
+    const r = await ask('shellfilter', { cmd, lines });
+    if (!r) return;
+    if (!r.ok) {
+        // バッファはそのまま。理由はコマンド自身の言葉で。
+        const why = r.err || `exit ${r.code}`;
+        say(tr(`${cmd}: ${why}. nothing changed`, `${cmd}: ${why}。何も変えていません`), true);
+        return;
+    }
+    viewer.ed.executeEdits('cian', [{
+        range: new (window.monaco.Range)(lo, 1, hi, model.getLineMaxColumn(hi)),
+        text: r.lines.join('\n'),
+    }]);
+    viewer.ed.pushUndoStop();
+    say(tr(`${cmd}: ${hi - lo + 1} line(s) → ${r.lines.length}`, `${cmd}: ${hi - lo + 1} 行 → ${r.lines.length} 行`));
 }
 
 async function textOp(op) {

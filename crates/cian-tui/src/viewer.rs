@@ -1888,6 +1888,120 @@ impl App {
         });
     }
 
+    /// `:%!cmd` — hand a stretch of the file to a program and take what it
+    /// gives back.
+    ///
+    /// **The bytes go out in the file's own encoding and come back read the
+    /// same way.** A Shift_JIS file handed to `sort` on a Windows machine has
+    /// to arrive as Shift_JIS: the tools there expect their code page, and
+    /// re-encoding on the way in would hand them mojibake to sort. UTF-16 is
+    /// the one exception — almost nothing reads it on stdin — so those go out
+    /// as UTF-8 and are read back as UTF-8.
+    ///
+    /// **A command that fails changes nothing.** Its exit code is what says
+    /// so, and its complaint goes to the status line; an empty stdout from a
+    /// failed command would otherwise empty the file, which is the one way a
+    /// filter can lose work that cannot be told apart from "it worked".
+    ///
+    /// The shell is the one the panel below uses, so a pipe typed here does
+    /// what the same pipe does down there.
+    pub(crate) fn filter_through_shell(&mut self, scope: FilterScope, line: &str) {
+        if matches!(self.popup, Popup::Viewer { editable: false, .. }) {
+            self.message = Some(
+                tr(self.lang, "this one is read-only", "これは読み取り専用です").into(),
+            );
+            return;
+        }
+        // Which lines, and the bytes to send.
+        let Popup::Viewer { view, line: at, anchor, visual, .. } = &self.popup else { return };
+        let total = view.lines.len();
+        if total == 0 {
+            return;
+        }
+        let range = match scope {
+            FilterScope::All => (0, total - 1),
+            FilterScope::Line => (*at, *at),
+            FilterScope::Selection => {
+                if visual.is_none() {
+                    self.message = Some(
+                        tr(self.lang, "nothing is selected. v or V first", "選択がありません。先に v か V").into(),
+                    );
+                    return;
+                }
+                (anchor.0.min(*at), anchor.0.max(*at).min(total - 1))
+            }
+        };
+        let text = view.lines[range.0..=range.1].join("\n") + "\n";
+        // UTF-16 is the exception: nothing reads it on a pipe.
+        let enc = match view.encoding {
+            cian_core::viewer::TextEncoding::Utf16Le | cian_core::viewer::TextEncoding::Utf16Be => {
+                cian_core::viewer::TextEncoding::Utf8
+            }
+            other => other,
+        };
+        let input = enc.encode(&text);
+
+        let shell = cian_pty::split_command(
+            &self.config.options.shell.clone().unwrap_or_else(cian_pty::default_shell),
+        );
+        let cwd = self.shell_cwd();
+        let done = match cian_core::proc::shell_filter(&shell, line, &input, &cwd) {
+            Ok(d) => d,
+            Err(e) => {
+                self.message = Some(format!("{line}: {e}"));
+                return;
+            }
+        };
+        if done.code != 0 {
+            // The file is untouched, and the reason is the command's own.
+            let why = if done.err.is_empty() {
+                format!("exit {}", done.code)
+            } else {
+                done.err.lines().next().unwrap_or_default().to_string()
+            };
+            self.message = Some(if self.lang == Lang::Ja {
+                format!("{line}: {why}。何も変えていません")
+            } else {
+                format!("{line}: {why}. nothing changed")
+            });
+            return;
+        }
+        let out = enc.decode(&done.out);
+        let mut new_lines: Vec<String> = out.split('\n').map(str::to_string).collect();
+        // A command's output ends in a newline; that is the end of the last
+        // line, not an empty line after it.
+        if new_lines.last().is_some_and(|l| l.is_empty()) {
+            new_lines.pop();
+        }
+        self.replace_viewer_lines(range, new_lines, line);
+    }
+
+    /// Put `new_lines` where `range` was, as one undo step.
+    fn replace_viewer_lines(&mut self, range: (usize, usize), new_lines: Vec<String>, verb: &str) {
+        let now = match &mut self.popup {
+            Popup::Viewer { view, undo, redo, dirty, hl, line, visual, .. } => {
+                push_viewer_undo(undo, redo, &view.lines, *line, 0);
+                let mut out = view.lines[..range.0].to_vec();
+                let n = new_lines.len();
+                out.extend(new_lines);
+                out.extend_from_slice(&view.lines[range.1 + 1..]);
+                view.lines = out;
+                *line = (*line).min(view.lines.len().saturating_sub(1));
+                *visual = None;
+                *dirty = true;
+                hl.clear();
+                n
+            }
+            _ => return,
+        };
+        let took = range.1 - range.0 + 1;
+        self.message = Some(if self.lang == Lang::Ja {
+            format!("{verb}: {took} 行 → {now} 行")
+        } else {
+            format!("{verb}: {took} line(s) → {now}")
+        });
+    }
+
     /// Run a `:s/old/new/flags` typed at the viewer's replace prompt.
     /// Run a `:s/old/new/flags` typed at the viewer's replace prompt.
     ///
@@ -1898,6 +2012,12 @@ impl App {
     pub(crate) fn run_substitute(&mut self, cmd: &str) {
         let cmd = cmd.trim();
         if cmd.is_empty() {
+            return;
+        }
+        // vi's filter: a stretch of the file handed to a program, and replaced
+        // by what it says back. Three ranges, the ones a hand types.
+        if let Some((scope, line)) = split_filter(cmd) {
+            self.filter_through_shell(scope, line);
             return;
         }
         // The same prompt carries the line-ending conversions: they are the
@@ -4860,6 +4980,41 @@ fn redo_step(
 /// would have drifted from the rest.
 /// Keep the cursor roughly where it sat on screen when the view changes
 /// under it: a third of the way down, rather than snapping to the top.
+/// Which stretch of the file a `!` filter was pointed at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FilterScope {
+    /// `:%!cmd` — the whole file.
+    All,
+    /// `:.!cmd` — the line the cursor is on.
+    Line,
+    /// `:'<,'>!cmd` — the v/V selection.
+    Selection,
+}
+
+/// Read a filter off the viewer's command line: the range, then the command.
+///
+/// **Only the three spellings a hand types.** vi accepts arbitrary line
+/// ranges (`:12,30!sort`); those are not here because nothing in cian's viewer
+/// numbers lines for the typing hand, and a range that cannot be seen is a
+/// range that gets typed wrong. A bare `:!cmd` is deliberately absent too:
+/// that one means "run and show me" in vi, and in cian it already means
+/// something else at the pane's command line.
+pub(crate) fn split_filter(cmd: &str) -> Option<(FilterScope, &str)> {
+    for (prefix, scope) in [
+        ("'<,'>!", FilterScope::Selection),
+        ("%!", FilterScope::All),
+        (".!", FilterScope::Line),
+    ] {
+        if let Some(rest) = cmd.strip_prefix(prefix) {
+            let rest = rest.trim();
+            if !rest.is_empty() {
+                return Some((scope, rest));
+            }
+        }
+    }
+    None
+}
+
 fn scroll_margin(_old_scroll: usize, line: usize) -> usize {
     line.min(6)
 }

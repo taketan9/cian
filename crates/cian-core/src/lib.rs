@@ -1447,6 +1447,39 @@ fn bench_formatters() {
 
 #[cfg(test)]
 mod log_destination_tests {
+    /// The filter behind `:%!cmd`: bytes in, bytes out, and a failure that
+    /// leaves the caller able to keep what it had.
+    #[test]
+    fn a_filter_moves_bytes_through_a_shell_and_reports_a_refusal() {
+        if cfg!(windows) {
+            return; // `sh` is not the shell there; the Windows path is CI's.
+        }
+        let d = tempfile::tempdir().unwrap();
+        let sh = vec!["/bin/sh".to_string()];
+
+        let r = crate::proc::shell_filter(&sh, "sort", b"b\na\n", d.path()).unwrap();
+        assert_eq!(r.code, 0);
+        assert_eq!(String::from_utf8_lossy(&r.out), "a\nb\n");
+
+        // **Shift_JIS goes through as Shift_JIS.** `tr` here only touches
+        // ASCII, so the Japanese bytes have to come back untouched — which is
+        // the whole reason nothing is re-encoded on the way in.
+        let sjis = crate::viewer::TextEncoding::ShiftJis.encode("あいう abc\n");
+        let r = crate::proc::shell_filter(&sh, "tr a-z A-Z", &sjis, d.path()).unwrap();
+        assert_eq!(
+            crate::viewer::TextEncoding::ShiftJis.decode(&r.out),
+            "あいう ABC\n",
+            "the Japanese survived a filter that was never told about it",
+        );
+
+        // A command that fails says so, and says why, rather than handing back
+        // an empty buffer that would look like a file emptied on purpose.
+        let r = crate::proc::shell_filter(&sh, "echo nope >&2; exit 3", b"keep me\n", d.path())
+            .unwrap();
+        assert_eq!(r.code, 3);
+        assert!(r.err.contains("nope"), "stderr is carried: {:?}", r.err);
+    }
+
     /// A log that cannot be written where it was asked for lands somewhere it
     /// can, rather than nowhere at all. The path that prompted this —
     /// `%USERPROFILE%\Desktop` on a machine whose Desktop is OneDrive's — does

@@ -23,6 +23,8 @@
 use std::ffi::OsStr;
 use std::process::Command;
 
+use anyhow::{Context, Result};
+
 /// Start building a command that will not open a console window of its own.
 pub fn quiet(program: impl AsRef<OsStr>) -> Command {
     let mut cmd = Command::new(program);
@@ -73,4 +75,87 @@ pub fn open_with_desktop(target: impl AsRef<OsStr>) -> std::io::Result<()> {
         .stderr(std::process::Stdio::null())
         .spawn()?;
     Ok(())
+}
+
+/// What a filtered run came back with.
+pub struct Filtered {
+    /// The shell's exit code, or -1 when it did not produce one (a signal).
+    pub code: i32,
+    /// Standard output, in whatever bytes the command wrote. **Not decoded**:
+    /// the caller knows the encoding the text came from, and is the one that
+    /// has to put it back in the same one.
+    pub out: Vec<u8>,
+    /// Standard error, lossily decoded, for putting on a status line.
+    pub err: String,
+}
+
+/// Which flag hands one command line to this shell for a single run.
+///
+/// Looked up by the program's stem, so an absolute path works
+/// (`C:\…\WindowsPowerShell\v1.0\powershell.exe`) and so does a bare name.
+/// PowerShell also gets `-NoProfile`: a filter is a one-shot, and somebody's
+/// profile printing a banner would land that banner in the middle of the file.
+fn one_shot_args(program: &str) -> &'static [&'static str] {
+    let stem = std::path::Path::new(program)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    match stem.as_str() {
+        "powershell" | "pwsh" => &["-NoProfile", "-NonInteractive", "-Command"],
+        "cmd" => &["/C"],
+        _ => &["-c"],
+    }
+}
+
+/// Run `line` through `shell`, write `input` to it, and collect what it says.
+///
+/// This is the engine behind `:%!cmd` — vi's filter, where a stretch of the
+/// file is handed to a program and replaced by what comes back.
+///
+/// **The bytes are the caller's business.** A file read as Shift_JIS is fed
+/// to the command as Shift_JIS and its answer is decoded the same way, because
+/// the tools on a Windows machine (`sort`, `findstr`) expect the code page
+/// they were built for, and re-encoding on the way in would hand them mojibake
+/// to sort. So this moves bytes and nothing else.
+///
+/// `shell` is the program and any fixed arguments it was configured with
+/// (`cian_pty::split_command` produces exactly this), and the one-shot flag is
+/// added here.
+pub fn shell_filter(
+    shell: &[String],
+    line: &str,
+    input: &[u8],
+    cwd: &std::path::Path,
+) -> Result<Filtered> {
+    use std::io::Write;
+    let Some((program, pre)) = shell.split_first() else {
+        anyhow::bail!("no shell configured");
+    };
+    let mut cmd = quiet(program);
+    cmd.args(pre);
+    cmd.args(one_shot_args(program));
+    cmd.arg(line);
+    cmd.current_dir(cwd);
+    cmd.stdin(std::process::Stdio::piped());
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    let mut child = cmd
+        .spawn()
+        .with_context(|| format!("could not start {program}"))?;
+    // Written on a thread: a command that writes a lot before reading it all
+    // (`sort` does) fills the pipe and waits, while this side is waiting to
+    // finish writing — and neither moves again.
+    let mut stdin = child.stdin.take().expect("piped");
+    let owned = input.to_vec();
+    let writer = std::thread::spawn(move || {
+        let _ = stdin.write_all(&owned);
+        // Dropped here, which is the EOF the command is waiting for.
+    });
+    let out = child.wait_with_output().context("running the filter")?;
+    let _ = writer.join();
+    Ok(Filtered {
+        code: out.status.code().unwrap_or(-1),
+        out: out.stdout,
+        err: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+    })
 }

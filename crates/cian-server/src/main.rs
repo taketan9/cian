@@ -2130,6 +2130,60 @@ impl Session {
             // does them, correctly, for the terminal build. `:han` and `:zen`
             // in particular are a table of Japanese width mappings that nobody
             // should own two copies of.
+            // `:%!cmd` — vi's filter. The window sends the stretch of lines it
+            // wants replaced; this runs them through the shell and hands back
+            // what came out, **in the file's own encoding both ways** (the
+            // terminal build does the same, viewer.rs `filter_through_shell`).
+            //
+            // A non-zero exit returns `ok: false` and the command's own
+            // complaint, and the window leaves the buffer alone: an empty
+            // stdout from a failed command, written into the file, is the one
+            // way a filter loses work while looking like it worked.
+            // **Named `shellfilter`, not `filter`** — that one is the listing's
+            // `/`, and two things called filter in one dispatcher is how the
+            // wrong one gets called.
+            "shellfilter" => {
+                let Some((path, file, _)) = self.open.as_ref() else {
+                    anyhow::bail!("開いているファイルがありません");
+                };
+                let line = req.params["cmd"].as_str().unwrap_or("").trim().to_string();
+                if line.is_empty() {
+                    anyhow::bail!("コマンドがありません");
+                }
+                let lines: Vec<String> = lines_of(req).unwrap_or_else(|| file.lines.clone());
+                // UTF-16 is the exception: nothing reads it on a pipe.
+                let enc = match file.encoding {
+                    cian_core::viewer::TextEncoding::Utf16Le
+                    | cian_core::viewer::TextEncoding::Utf16Be => {
+                        cian_core::viewer::TextEncoding::Utf8
+                    }
+                    other => other,
+                };
+                let input = enc.encode(&(lines.join("\n") + "\n"));
+                // The shell the panel below uses, read the same way it is read
+                // there (main.rs:575) — a pipe typed here does what the same
+                // pipe does down there.
+                let shell = cian_pty::split_command(
+                    &cian_lua::load().options.shell.unwrap_or_else(cian_pty::default_shell),
+                );
+                let cwd = path.parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
+                let done = cian_core::proc::shell_filter(&shell, &line, &input, &cwd)?;
+                if done.code != 0 {
+                    return Ok(serde_json::json!({
+                        "ok": false,
+                        "code": done.code,
+                        "err": done.err.lines().next().unwrap_or_default(),
+                    }));
+                }
+                let out = enc.decode(&done.out);
+                let mut got: Vec<String> = out.split('\n').map(str::to_string).collect();
+                // A command's output ends in a newline; that is the end of the
+                // last line, not an empty line after it.
+                if got.last().is_some_and(|l| l.is_empty()) {
+                    got.pop();
+                }
+                Ok(serde_json::json!({ "ok": true, "lines": got, "took": lines.len() }))
+            }
             "textop" => {
                 let Some((_, file, _)) = self.open.as_ref() else {
                     anyhow::bail!("開いているファイルがありません");

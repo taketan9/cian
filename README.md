@@ -179,6 +179,7 @@ Each open file keeps its own cursor, folds and unsaved edits. Closing a split re
 | a line wider than the panel | the view follows the cursor sideways rather than wrapping — a record keeps its shape. Bars on the right and bottom borders say how much is off screen, and appear only when some is |
 | `w` `b` `e` / `W` `B` `E` / `ge` | word by word (stopping at punctuation) and WORD by WORD (running to the next space); `ge` is the end of the word behind you |
 | `gJ` / `:combine` / `:combine!` / `:combine 3` | join the next line up — without a space, with one, or three lines. (`Shift+J` is the shell.) |
+| `:%!cmd` / `:.!cmd` / `:'<,'>!cmd` | filter the whole file / this line / the selection through a command and take what comes back. `:%!sort`, `:.!date`, `:'<,'>!tr a-z A-Z` |
 | `Ctrl+R` | redo |
 | `Ctrl+S` `Ctrl+C` `Ctrl+X` `Ctrl+V` `Ctrl+Z` `Ctrl+Y` `Ctrl+A` | save, copy, cut, paste, undo, redo, select all — in **all three modes**, reading, editing and over a selection. `Ctrl+C` / `Ctrl+X` take the selection, or the cursor's line when there is none. Each has a command for the terminal that keeps Ctrl: `:w` `:undo` `:redo` |
 | `~` | swap the case under the cursor |
@@ -196,6 +197,8 @@ Each open file keeps its own cursor, folds and unsaved edits. Closing a split re
 | `:sort` `:rsort` `:uniq` | line order and duplicates, over the file or the selection |
 | `:han` / `:zen` | width — `:han` normalises full-width ASCII *and* half-width katakana. Like every verb in this table it acts on a `v` / `V` selection when there is one, and on the whole file when there is not |
 | `:reindent` | put a document indented by three different hands onto one ladder |
+
+**`:%!` sends the file's own bytes.** A Shift_JIS file reaches the command as Shift_JIS and its answer is read back the same way, because the tools on a Windows machine (`sort`, `findstr`) expect the code page they were built for. UTF-16 is the one exception: almost nothing reads it on stdin, so those go out as UTF-8. The shell is the one the panel below uses, so a pipe typed here does what the same pipe does down there. **A command that fails changes nothing** — a non-zero exit puts its own complaint on the status line and leaves the buffer alone.
 
 **A save gives the file back.** What is written is the file's own characters — the BOM it arrived with, the line ending it arrived with, its tabs. All three are invisible on screen and all three are real edits, so none happens except on purpose (`:nobom`, `:lf` / `:crlf`, `:expand`). The title shows them: `· UTF-8 BOM`, `· CRLF`.
 
