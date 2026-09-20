@@ -13457,7 +13457,11 @@ use crate::ai::StoredChatExt;
     #[test]
     fn mirror_makes_the_other_pane_take_the_same_step() {
         let d = tempfile::tempdir().unwrap();
-        let root = std::fs::canonicalize(d.path()).unwrap();
+        // **Not `std::fs::canonicalize`.** On Windows that answers with the
+        // `\\?\` verbatim prefix, while every path cian holds has been
+        // through `dunce` (Pane::go_to), so the two spellings of the same
+        // directory compared unequal — green here, red on the CI runner.
+        let root = cian_core::simplify(d.path());
         // Two trees that agree on one name and disagree on another.
         for side in ["left", "right"] {
             std::fs::create_dir_all(root.join(side).join("2026")).unwrap();

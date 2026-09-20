@@ -1630,6 +1630,17 @@ mod log_destination_tests {
 /// Several masks separated by spaces are an OR (`*.log *.trc`), which is how
 /// AFXW's masks read and how nobody expects `*.log *.trc` to mean "both at
 /// once" — a name cannot end in two extensions.
+/// The path cian would hold for `p`: canonical, and **without Windows'
+/// `\\?\` verbatim prefix**.
+///
+/// `Pane::go_to` runs every directory through `dunce` for that reason, so
+/// anything comparing against a pane's `cwd` has to resolve paths the same
+/// way. A test that used `std::fs::canonicalize` instead passed on a Mac and
+/// failed on Windows, comparing two spellings of one directory.
+pub fn simplify(p: impl AsRef<std::path::Path>) -> PathBuf {
+    dunce::canonicalize(p.as_ref()).unwrap_or_else(|_| p.as_ref().to_path_buf())
+}
+
 pub fn mask_matcher(mask: &str) -> Option<crate::search::Matcher> {
     let mask = mask.trim();
     if mask.is_empty() {
