@@ -392,6 +392,11 @@ PLURAL_OK = {
     'notes',
     # 複数形ではない。unix のコマンド名と "save as"
     'ls', 'saveas', 'less', 'ps', 'gitstatus', 'status',
+    # 窓版が持っている名前で、**両前端で綴りを揃えるほうが優先**
+    # （2026-09-21、依頼221。`names.py` の①が 0 であることのほうが、
+    # 単数形の規則より大事だ）。`prefs` は `settings` の別名、
+    # `revealos` は「reveal + OS」で複数形ではない
+    'settings', 'prefs', 'revealos',
 }
 
 
