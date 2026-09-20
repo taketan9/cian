@@ -41,7 +41,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LUA = ROOT / "crates" / "cian-lua" / "src" / "lib.rs"
 SCHEMA = ROOT / "crates" / "cian-lua" / "src" / "settings_schema.rs"
-WHERE = ROOT / "crates" / "cian-tui" / "src" / "actions.rs"
+# cian が読む設定ファイルの一覧。端末版も engine もここを歩く（2026-09-20）。
+CONFIG_FILES_AT = ROOT / "crates" / "cian-lua" / "src" / "lib.rs"
 RENDERER = ROOT / "gui" / "renderer.js"
 SERVER = ROOT / "crates" / "cian-server" / "src" / "main.rs"
 
@@ -79,9 +80,14 @@ def api_names() -> list[str]:
 
 
 def where_files() -> list[str]:
-    """`:where` が挙げるファイル ── cian が読む設定ファイルの全部。"""
-    text = WHERE.read_text(encoding="utf-8")
-    m = re.search(r'for name in \[([^\]]*"state\.toml"[^\]]*)\]', text)
+    """cian が読む設定ファイルの全部（`:log` と `:where` が挙げるもの）。
+
+    2026-09-20 まで `actions.rs` に直書きされた配列を読んでいました。いまは
+    **`cian-lua` の `CONFIG_FILES` が正**で、端末版も engine もそこを歩きます
+    ── 一覧が2か所にあると、片方に足した日にこの検査が古いほうを数えます。
+    """
+    text = CONFIG_FILES_AT.read_text(encoding="utf-8")
+    m = re.search(r"pub const CONFIG_FILES: \[&str; \d+\] = \[([^\]]*)\]", text)
     if not m:
         return []
     return re.findall(r'"([a-z_]+\.(?:lua|toml))"', m.group(1))
@@ -118,11 +124,16 @@ def main() -> int:
     named = named_in_screen()
 
     # **下限。** 読めなくなったら「全部触れている」ではなく「読めていない」。
-    if len(api) < 10 or len(files) < 5 or not touched:
+    #
+    # ファイルの下限を 5 から 7 に上げました（2026-09-20）── 一覧が
+    # `cian-lua::CONFIG_FILES` に移った日に変異テストをして、**init.lua を
+    # 1行消しても 6/6 で緑のまま**だったからです。被覆率は「読んだ一覧の
+    # 何割か」しか答えないので、一覧そのものが縮んだことは数では出ません。
+    if len(api) < 10 or len(files) < 7 or not touched:
         print("=" * 72)
         print(f"  数える元が読めていません ── API {len(api)} 個 / ファイル {len(files)} 個"
               f" / 画面が触る {len(touched)} 個")
-        print("  `cian.set(` の書き方か `:where` の一覧が変わった可能性があります")
+        print("  `cian.set(` の書き方か `cian_lua::CONFIG_FILES` が変わった可能性があります")
         print("=" * 72)
         return 1
 

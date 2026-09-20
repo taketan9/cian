@@ -3168,7 +3168,7 @@ function helpRows() {
         [':renamelist', tr("rename by editing the list of names (Ctrl+S applies)", '名前の一覧を編集してリネーム（Ctrl+S で適用）')],
         [':zip / :tar / :targz', tr("pack the marks into an archive", 'マークをアーカイブにまとめる')],
         [':unzip / :lsar', tr("extract here / list the contents", 'ここに展開 / 中身を見る')],
-        [':log / :filelog', tr("the commit log / this file's history (git and svn)", 'コミットログ / このファイルの履歴（git・svn）')],
+        [':gitlog / :filelog', tr("the commit log / this file's history (git and svn)", 'コミットログ / このファイルの履歴（git・svn）')],
         [':gitdiff', tr("the selected file's diff", '選択ファイルの差分')],
         [':stage / :unstage / :discard', tr("git add / reset / discard the changes", 'git add / reset / 変更の破棄')],
         [':commit', tr("commit the staged changes, with a message you write", 'ステージ済みの変更を、自分で書いたメッセージでコミット')],
@@ -6710,7 +6710,11 @@ function buildCommands() {
     { name: 'targz', about: tr("tar.gz the marks", 'マークを tar.gz にまとめる'), run: () => cmdCompress('targz') },
     { name: 'unzip', alias: ['extract'], about: tr("extract the archive under the cursor, here", 'カーソルのアーカイブをここに展開'), run: cmdExtract },
     { name: 'lsar', about: tr("list an archive\u2019s contents", 'アーカイブの中身を見る'), run: cmdArchiveList },
-    { name: 'log', about: tr("the commit log (git / svn)", 'コミットログ（git / svn）'), run: () => cmdLog(false) },
+    // `:log` went to diagnostics (2026-09-20), so the commit log took the
+    // name a person says out loud. Both spellings reach one function: which
+    // VCS answers is the directory's business, not the verb's.
+    { name: 'gitlog', alias: ['svnlog'], about: tr("the commit log (git / svn)", 'コミットログ（git / svn）'), run: () => cmdLog(false) },
+    { name: 'log', about: tr("what this build is, and where it reads from. :log on|off starts and stops a diagnostic log", 'この版と、読んでいる設定の場所。:log on|off で診断ログの開始と停止'), arg: tr('on / off / a path', 'on / off / パス'), optional: true, run: cmdState },
     { name: 'filelog', about: tr("this file's history", 'このファイルの履歴'), run: () => cmdLog(true) },
     { name: 'gitdiff', alias: ['gdiff', 'svndiff'], about: tr("the selected file's diff (git / svn)", '選択ファイルの差分（git / svn）'), run: () => cmdVcsDiff(null) },
     { name: 'stage', alias: ['add', 'svnadd'], about: tr("git add", 'git add'), run: () => cmdVcs('stage') },
@@ -6748,7 +6752,7 @@ function buildCommands() {
     { name: 'macro', about: tr("run a macro (also @)", 'マクロを実行（@ でも）'), run: cmdMacros },
     { name: 'sync', alias: ['broadcast'], about: tr("shell: type into every pane at once (also Ctrl+S)", 'シェル: 全ペインにシンクロ入力（Ctrl+S でも）'), run: cmdSync },
     { name: 'snip', alias: ['snippet'], about: tr("a saved command, to the shell (also Ctrl+Shift+Enter)", '保存したコマンドをシェルへ（Ctrl+Shift+Enter でも）'), run: cmdSnippets },
-    { name: 'sessionlog', alias: ['log2'], about: tr("record the shell to a file, or stop", 'シェルの写しをファイルに取る／止める'), run: cmdShellLog },
+    { name: 'sessionlog', about: tr("record the shell to a file, or stop", 'シェルの写しをファイルに取る／止める'), run: cmdShellLog },
     { name: 'shellname', alias: ['tabname'], about: tr("name this shell tab (double-clicking the tab does it too)", 'このシェルタブに名前を付ける（タブを二度押しでも）'), arg: tr('name', '名前'), optional: true, run: cmdShellName },
     { name: 'zoom', about: tr("zoom whichever surface has the keys, and back (also F12)", 'いま選んでいる枠を広げる／戻す（F12 でも）'), run: zoomFocused },
     { name: 'df', about: tr("free space on the disk", 'ディスクの空き容量'), run: cmdDf },
@@ -10061,6 +10065,80 @@ async function cmdWc() {
 /// in the home directory, and that is not where anybody looks first. Editing
 /// the wrong file and wondering why nothing changed is the failure this
 /// answers.
+/// `:log` — the one thing to type when something is wrong.
+///
+/// 「ログをとってくれ」 is the sentence, so this is the verb (2026-09-20).
+/// It answers what `:version`, `:where` and `:ime` answered separately, and
+/// it is the only way to start a diagnostic log without restarting.
+///
+///   :log          this build, the config it reads, where the log goes
+///   :log on       start writing diagnostics (`:log <path>` to choose where)
+///   :log off      stop
+async function cmdState(arg = '') {
+    // `diag`, not `log`: the engine's `log` op is the commit log.
+    const r = await ask('diag', { action: arg.trim() });
+    if (!r) return;
+    // An action says what it did on the status line; without one there is
+    // nothing to say that the sheet does not show.
+    if (r.message) say(r.message);
+    const built = r.built_at
+        ? new Date(r.built_at * 1000).toLocaleString('ja-JP',
+            { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : tr('(unknown)', '(不明)');
+    const rows = [
+        { label: tr('Version', '版'), sub: `${r.version || '?'}   ${r.commit || ''}` },
+        // Second, not last: this is the line someone is told to send, and a
+        // sheet this long is scrolled past rather than read to the end.
+        {
+            label: tr('Saved to', '保存しました'),
+            sub: r.saved || tr('(could not be written)', '（書き出せませんでした）'),
+        },
+        { label: tr('Built', 'ビルド日時'), sub: built },
+        // The user agent rather than `process.versions`: the page does not
+        // hold Node, deliberately (see gui/preload.js), and the Chromium
+        // build is the half of the answer that explains a rendering fault.
+        { label: tr('Front end', '前面'), sub: (navigator.userAgent.match(/Electron\/[\d.]+|Chrome\/[\d.]+/g) || []).join('  ') || navigator.userAgent },
+        { label: tr('Typeface', '書体'), sub: `${resolvedFace()}   ${FONT.at}px` },
+        {
+            label: tr('Diagnostics', '診断ログ'),
+            // Where it is *going*, not where it was asked to go: an
+            // unwritable path falls back to the temp directory rather than to
+            // silence, and that difference is the reason to look here.
+            sub: r.log || tr(`off. :log on writes to ${r.default_log}`, `オフです。:log on で ${r.default_log} に書きます`),
+        },
+        {
+            label: tr('Portable', 'ポータブル'),
+            sub: r.portable
+                ? tr('YES. files next to the .exe win over the user config', 'はい。exe の隣のファイルがユーザ設定に優先します')
+                : tr('no', 'いいえ'),
+        },
+    ];
+    for (const f of r.files || []) {
+        rows.push({
+            label: f.name,
+            sub: f.path
+                ? `${f.path}${f.present ? '' : tr('   (not present)', '   (ありません)')}`
+                : tr('(unresolved)', '(解決できません)'),
+        });
+    }
+    rows.push({ label: tr('Written to', '書き込み先'), sub: r.config_dir || tr('(none)', '(なし)') });
+    if (r.home && r.userprofile && r.home !== r.userprofile) {
+        rows.push({
+            label: 'HOME / USERPROFILE',
+            sub: tr(`${r.home} / ${r.userprofile}. cian follows HOME`, `${r.home} / ${r.userprofile}。cian は HOME を見ます`),
+        });
+    }
+    // **`wrap`, or the paths are cut.** Every row here is an absolute path,
+    // and the sheet's second column ellipsises by default — which hid the
+    // half of `…/config/keymap.lua (ありません)` that says whether the file is
+    // there at all. What is being read is the whole question this screen is
+    // open to answer.
+    show('cian', tr('what this build is, and where it reads from', 'この版と、読んでいる場所'), rows, {
+        wrap: true,
+        foot: tr('Esc close   (:log on / :log off for diagnostics)', 'Esc 閉じる   （:log on / :log off で診断ログ）'),
+    });
+}
+
 async function cmdWhere() {
     const r = await ask('where', {});
     if (!r) return;

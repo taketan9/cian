@@ -214,7 +214,14 @@ impl App {
             "queue" => self.start_op_queue(),
             // The pane's directory history. It lost its `h` key to pane
             // movement, so it needs a name you can reach.
-            "back" => self.start_history(),
+            //
+            // `:history` is an alias here rather than on the commit log
+            // (2026-09-20). It meant the commit log in this build and the
+            // directory history in the window — **the same word, two
+            // features, depending on which front end you were looking at**.
+            // `parity.py` reads the words on screen, not what a verb does, so
+            // nothing had ever complained.
+            "back" | "history" => self.start_history(),
             // Strip UTF-8 BOMs from the selection (UTF-16 left alone).
             "nobom" | "stripbom" => self.start_nobom(),
             // Open the file in a specific vi-family editor in a new shell tab.
@@ -240,9 +247,16 @@ impl App {
             // work away. A name that means something else somewhere else, on a
             // command that cannot be undone, is not a convenience.
             "discard" | "revert" | "svnrevert" => self.git_discard_prompt(),
-            // One function reads whichever VCS is there, so `:gitlog` and
-            // `:svnlog` offered a choice that does not exist.
-            "log" | "history" => self.start_git_log(),
+            // **`:log` went to diagnostics** (2026-09-20, his call: 「ログを
+            // とってくれ」が一番自然), so the commit log took the name a
+            // person says out loud — "git のログ" — and svn's spelling of the
+            // same sentence. Both reach one function, which reads whichever
+            // VCS the directory is under: the two names are for the hand, not
+            // a choice about what happens.
+            "gitlog" | "svnlog" => self.start_git_log(),
+            // Everything that used to need knowing which of seven commands to
+            // type. See `cmd_log`.
+            "log" => self.cmd_log(rest),
             // The session log had no verb at all, while the menu item that
             // starts it was labelled `(:log)` — a name git had already taken.
             "sessionlog" => self.start_log_prompt(),
@@ -343,10 +357,15 @@ impl App {
 
             // Attributes and integrity.
             "chmod" => self.set_attr_command(rest),
+            // Bare toggles, like `:hidden` beside it. `true`/`1`/`false`/`0`
+            // were also taken, which is four more spellings to read and none
+            // of them is what a person types (2026-09-20, his call: 「短すぎる
+            // し意味がわからない」).
             "readonly" => match rest {
-                "on" | "true" | "1" => self.set_readonly_command(true),
-                "off" | "false" | "0" => self.set_readonly_command(false),
-                _ => self.message = Some(tr(self.lang, "usage: :readonly on|off", "使い方: :readonly on|off").into()),
+                "" => self.toggle_readonly_command(),
+                "on" => self.set_readonly_command(true),
+                "off" => self.set_readonly_command(false),
+                _ => self.message = Some(tr(self.lang, "usage: :readonly [on|off]", "使い方: :readonly [on|off]").into()),
             },
             "hash" | "sha256" | "md5" => {
                 // `:hash md5` or `:md5` both work.

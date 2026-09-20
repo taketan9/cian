@@ -4069,6 +4069,92 @@ impl Session {
                 "commit": env!("CIAN_COMMIT"),
                 "built_at": env!("CIAN_BUILT_AT").parse::<i64>().unwrap_or(0),
             })),
+            // What `:log` shows: "what is this build and where does it read
+            // from", and turning the diagnostic log on and off without a
+            // restart (2026-09-20). The window used to need three commands to
+            // ask this, and none of them could start a log at all.
+            //
+            // **Named `diag`, not `log`** — the op called `log` above is the
+            // commit log, and the verb that opens that one is `:gitlog` now.
+            // Two different things called log, one in each layer, is exactly
+            // the confusion this change exists to end.
+            //
+            // The file list walks `cian_lua::CONFIG_FILES`, the same array the
+            // terminal build renders, so the two answers cannot drift.
+            "diag" => {
+                let action = req.params["action"].as_str().unwrap_or("").trim().to_string();
+                let message = match action.as_str() {
+                    "" => None,
+                    "off" => Some(match cian_core::log::stop() {
+                        Some(p) => format!("log off — {}", p.display()),
+                        None => "the log was already off".to_string(),
+                    }),
+                    other => {
+                        let asked = (other != "on").then(|| std::path::PathBuf::from(other));
+                        Some(match cian_core::log::start(asked.as_deref()) {
+                            Ok(p) => format!("log on → {}", p.display()),
+                            Err(e) => format!("log: {e}"),
+                        })
+                    }
+                };
+                let files: Vec<serde_json::Value> = cian_lua::CONFIG_FILES
+                    .iter()
+                    .map(|name| {
+                        let p = cian_lua::config_read_path(name);
+                        serde_json::json!({
+                            "name": name,
+                            "path": p.as_ref().map(|p| p.display().to_string()),
+                            "present": p.as_ref().map(|p| p.exists()).unwrap_or(false),
+                        })
+                    })
+                    .collect();
+                // **The copy to send.** The terminal build writes the same
+                // file under the same name, because the reason to open this
+                // screen is that somebody asked what build you are on, and a
+                // screenshot is a worse answer than a file.
+                let mut plain = vec![
+                    format!("cian {} ({})", env!("CARGO_PKG_VERSION"), env!("CIAN_COMMIT")),
+                    format!("portable: {}", cian_lua::is_portable()),
+                    format!(
+                        "log: {}",
+                        cian_core::log::destination()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_else(|| "off".into())
+                    ),
+                    String::new(),
+                ];
+                for f in &files {
+                    plain.push(format!(
+                        "{}: {}{}",
+                        f["name"].as_str().unwrap_or(""),
+                        f["path"].as_str().unwrap_or("(unresolved)"),
+                        if f["present"].as_bool().unwrap_or(false) { "" } else { "  (not present)" },
+                    ));
+                }
+                let report_file = std::env::temp_dir().join("cian-state.txt");
+                let saved = std::fs::write(&report_file, plain.join("\n") + "\n")
+                    .ok()
+                    .map(|()| report_file.display().to_string());
+
+                Ok(serde_json::json!({
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "commit": env!("CIAN_COMMIT"),
+                    "built_at": env!("CIAN_BUILT_AT").parse::<i64>().unwrap_or(0),
+                    "portable": cian_lua::is_portable(),
+                    "saved": saved,
+                    "files": files,
+                    // Where the lines are going — which is not always where
+                    // they were asked for: an unwritable path falls back to
+                    // the temp directory rather than to silence.
+                    "log": cian_core::log::destination().map(|p| p.display().to_string()),
+                    "default_log": cian_core::log::default_path().display().to_string(),
+                    "exe_dir": cian_lua::exe_dir().map(|p| p.display().to_string()),
+                    "config_dir": cian_lua::user_config_dir().map(|p| p.display().to_string()),
+                    "home": std::env::var("HOME").ok(),
+                    "userprofile": std::env::var("USERPROFILE").ok(),
+                    "message": message,
+                }))
+            }
             // Mark by pattern. `*.rs` is what a person types; it becomes a
             // glob rather than a regex, because that is what the asterisk
             // means to everyone who is not writing one.

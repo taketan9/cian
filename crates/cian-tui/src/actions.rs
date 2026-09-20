@@ -260,6 +260,14 @@ impl App {
     /// `shortcuts.lua` (or init.lua …) is cian actually using? A portable copy
     /// next to the executable silently wins over `~/.config/cian`.
     pub(crate) fn show_config_paths(&mut self) {
+        let lines = self.config_report_lines();
+        self.open_popup(Popup::Notice { lines });
+    }
+
+    /// Which config files cian resolves, where the log is going, and the
+    /// environment that decides both. Split out of `show_config_paths` so
+    /// `:log` can put it under the version block without a second copy.
+    pub(crate) fn config_report_lines(&self) -> Vec<String> {
         let mut lines: Vec<String> = Vec::new();
         let portable = cian_lua::is_portable();
         lines.push(format!(
@@ -268,7 +276,7 @@ impl App {
         ));
         lines.push(String::new());
         // Each config file: the path cian resolves for reading, and its status.
-        for name in ["init.lua", "ssh.lua", "keymap.lua", "shortcuts.lua", "macro.lua", "count.lua", "state.toml"] {
+        for name in cian_lua::CONFIG_FILES {
             let p = cian_lua::config_read_path(name);
             let (path_str, status) = match &p {
                 Some(p) if p.exists() => {
@@ -309,7 +317,7 @@ impl App {
                     lines.push(format!("               → asked for {asked}, which could not be written"));
                 }
             }
-            None => lines.push("log:             off (set CIAN_LOG=<file> to turn it on)".into()),
+            None => lines.push("log:             off (`:log on` starts one, CIAN_LOG=<file> from startup)".into()),
         }
         lines.push(String::new());
         lines.push(format!(
@@ -332,6 +340,101 @@ impl App {
         if !home.is_empty() && !up.is_empty() && home != up {
             lines.push("note: HOME differs from USERPROFILE — cian uses HOME for ~/.config/cian.".into());
         }
+        lines
+    }
+
+    /// `:log` — the one thing to type when something is wrong.
+    ///
+    /// **「ログをとってくれ」that is the sentence**, so this is the verb
+    /// (2026-09-20, his call). It used to take seven: `:where` `:version`
+    /// `:key` `:ime` `:image` `:legacy` `:enhanced`, each answering a third of
+    /// the question, and knowing which one to type was the hard part. They
+    /// still work — a hand that knows `:where` should not be told it is wrong
+    /// — but this is the one in the palette and the manual.
+    ///
+    ///   `:log`          what this build is, where it reads from, what the
+    ///                   terminal can do — and a copy on disk to send
+    ///   `:log on`       start writing diagnostics (no restart)
+    ///   `:log <path>`   the same, somewhere you choose
+    ///   `:log off`      stop
+    pub(crate) fn cmd_log(&mut self, rest: &str) {
+        match rest.trim() {
+            "" => self.show_state_report(),
+            "off" => {
+                self.message = Some(match cian_core::log::stop() {
+                    Some(p) => format!("{} — {}", tr(self.lang, "log off", "ログを止めました"), p.display()),
+                    None => tr(self.lang, "the log was already off", "ログはもともとオフです").into(),
+                });
+            }
+            arg => {
+                let asked = (arg != "on").then(|| expand_path(arg));
+                match cian_core::log::start(asked.as_deref()) {
+                    // Where it *went*, which is not always where it was asked
+                    // for: a path that cannot be written to falls back to the
+                    // temp directory rather than to silence.
+                    Ok(p) => {
+                        self.message =
+                            Some(format!("{} → {}", tr(self.lang, "log on", "ログを開始しました"), p.display()))
+                    }
+                    Err(e) => self.message = Some(format!("{}: {e}", tr(self.lang, "log", "ログ"))),
+                }
+            }
+        }
+    }
+
+    /// Everything someone would have to ask for one question at a time.
+    ///
+    /// Written to a file as well as shown, because the reason to look at this
+    /// is that somebody asked what build you are on — and a screenshot of a
+    /// terminal is a worse answer than a file. The last line says where it
+    /// went, or why it could not be written.
+    pub(crate) fn show_state_report(&mut self) {
+        let mut lines = vec![crate::version_text()];
+        // What the terminal said it can do. "Images do not show" has two very
+        // different causes: no protocol offered (half-blocks, which should
+        // still appear), and a protocol offered that then draws nothing.
+        lines.push(format!(
+            "{} {}",
+            pad_to("images:", 16),
+            match self.gfx_picker.as_ref() {
+                Some(p) => format!("{:?}", p.protocol_type()),
+                None => tr(self.lang, "half-blocks (no protocol offered)", "半角ブロック（プロトコルなし）")
+                    .to_string(),
+            }
+        ));
+        // The two that answer "that shortcut does nothing on my machine".
+        lines.push(format!(
+            "{} {}",
+            pad_to("keyboard:", 16),
+            if self.kbd_enhanced { "enhanced" } else { "legacy" }
+        ));
+        lines.push(format!(
+            "{} {}",
+            pad_to("ime:", 16),
+            match (&self.config.ime, self.ime_on) {
+                (None, _) => tr(self.lang, "not configured", "未設定").to_string(),
+                (Some(_), Some(true)) => tr(self.lang, "configured, typing", "設定あり・入力中").to_string(),
+                (Some(_), Some(false)) => tr(self.lang, "configured, off", "設定あり・オフ").to_string(),
+                (Some(_), None) => tr(self.lang, "configured, not switched yet", "設定あり・未切替").to_string(),
+            }
+        ));
+        lines.push(format!("{} {}", pad_to("term:", 16), std::env::var("TERM").unwrap_or_else(|_| "?".into())));
+        lines.push(String::new());
+        lines.extend(self.config_report_lines());
+
+        // The copy to send. One fixed name: a second `:log` overwrites it,
+        // which is what someone taking two readings of the same fault wants.
+        //
+        // **The line goes second, not last.** In a real terminal this report
+        // is taller than the popup — the config paths alone are eight lines
+        // of absolute path — so the end of it is cut off. The path to the
+        // file you were told to send is the one line that must not be.
+        let file = std::env::temp_dir().join("cian-state.txt");
+        let saved = match std::fs::write(&file, lines.join("\n") + "\n") {
+            Ok(()) => format!("{} {}", tr(self.lang, "saved to", "保存しました:"), file.display()),
+            Err(e) => format!("{} {}: {e}", tr(self.lang, "could not save to", "保存できませんでした:"), file.display()),
+        };
+        lines.insert(1, saved);
         self.open_popup(Popup::Notice { lines });
     }
 
@@ -1992,6 +2095,28 @@ impl App {
                 }
             }
         }
+    }
+
+    /// `:readonly` with no argument, the way `:hidden` takes none.
+    ///
+    /// **What it flips is the first target's state**, applied to everything
+    /// selected: a mixed selection ends up uniform, which is the only answer
+    /// that leaves the screen agreeing with itself. `:readonly on` / `off`
+    /// are still there for when the answer has to be certain.
+    pub(crate) fn toggle_readonly_command(&mut self) {
+        let paths = self.target_paths();
+        let Some(first) = paths.first() else {
+            self.message = Some(tr(self.lang, "nothing selected", "選択されていません").into());
+            return;
+        };
+        let now = match cian_core::attrs::read_attrs(first) {
+            Ok(a) => a.readonly,
+            Err(e) => {
+                self.message = Some(format!("{e}"));
+                return;
+            }
+        };
+        self.set_readonly_command(!now);
     }
 
     pub(crate) fn set_readonly_command(&mut self, on: bool) {

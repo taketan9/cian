@@ -1452,20 +1452,43 @@ mod log_destination_tests {
     /// `%USERPROFILE%\Desktop` on a machine whose Desktop is OneDrive's — does
     /// not exist, and the silence cost an evening.
     ///
-    /// The resolution happens once per process, so this is one test rather than
-    /// several: a second would see the first one's answer.
+    /// **One test for the whole module**, because the destination is one
+    /// process-wide switch: two tests would take turns changing it out from
+    /// under each other, and the one that ran second would fail depending on
+    /// the thread schedule.
     #[test]
-    fn a_log_path_is_resolved_once_and_never_silently() {
-        // Off unless asked for, which is the normal case.
-        if std::env::var_os("CIAN_LOG").is_none() {
-            assert!(crate::log::destination().is_none(), "no CIAN_LOG, no log");
-            assert!(!crate::log::enabled());
-            return;
+    fn the_log_says_where_it_went_and_can_be_turned_on_at_runtime() {
+        let started_with = crate::log::destination();
+        match &started_with {
+            // Off unless asked for, which is the normal case.
+            None => assert!(!crate::log::enabled(), "no CIAN_LOG, no log"),
+            // Asked for: wherever it ended up, it takes a line.
+            Some(p) => {
+                crate::log::log("a line from the test suite");
+                assert!(p.exists(), "the log exists at {}", p.display());
+            }
         }
-        // Asked for: wherever it ended up, it takes a line.
-        let where_it_went = crate::log::destination().expect("CIAN_LOG is set");
-        crate::log::log("a line from the test suite");
-        assert!(where_it_went.exists(), "the log exists at {}", where_it_went.display());
+
+        // Turned on from inside a running cian — the reason this is not a
+        // startup-only switch. The fault worth logging is the one that does
+        // not happen twice, so "quit and set a variable" is not an answer.
+        let d = tempfile::tempdir().unwrap();
+        let asked = d.path().join("runtime.log");
+        let got = crate::log::start(Some(&asked)).expect("a writable path is taken");
+        assert_eq!(got, asked, "a writable path is used as asked");
+        assert!(crate::log::enabled());
+        crate::log::log("a line written after :log on");
+        let body = std::fs::read_to_string(&asked).unwrap();
+        assert!(body.contains("after :log on"), "the line landed: {body:?}");
+        assert!(body.contains("--- log started ---"), "and the file says when: {body:?}");
+
+        // And off again, back to whatever the process started with, so the
+        // rest of the suite sees what it expects.
+        assert_eq!(crate::log::stop(), Some(asked), "stop says where it had been going");
+        assert!(!crate::log::enabled(), "off is off");
+        if let Some(p) = started_with {
+            crate::log::start(Some(&p)).unwrap();
+        }
     }
 }
 

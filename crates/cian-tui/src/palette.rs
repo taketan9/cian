@@ -42,7 +42,6 @@ enum FileBatch {
 #[rustfmt::skip]
 pub(crate) fn command_list() -> &'static [(&'static str, (&'static str, &'static str), bool)] {
     &[
-        ("ime",        ("input-method switching: state and helper", "日本語入力の自動切替: 状態と設定"), false),
         ("ai",         ("AI - simple: chat with the local model", "AI - simple: ローカルモデルとチャット"), false),
         ("aicmd",      ("AI: shell command from a description", "AI: 説明からコマンド"), true),
         ("aicommit",   ("AI: draft a commit message", "AI: コミットメッセージ下書き"), false),
@@ -76,7 +75,7 @@ pub(crate) fn command_list() -> &'static [(&'static str, (&'static str, &'static
         ("stage",      ("git add the selection", "git add"), false),
         ("unstage",    ("git reset the selection", "git reset"), false),
         ("discard",    ("discard worktree changes", "変更を破棄"), false),
-        ("log",       ("commit log", "コミットログ"), false),
+        ("gitlog",     ("commit log (git / svn)", "コミットログ（git / svn）"), false),
         ("gitdiff",    ("working-tree diff vs HEAD", "作業ツリーの差分"), false),
         ("back",       ("this pane's directory history", "このペインの移動履歴"), false),
         ("jump",       ("fuzzy-jump to a recent directory", "最近のディレクトリへ移動"), false),
@@ -87,7 +86,7 @@ pub(crate) fn command_list() -> &'static [(&'static str, (&'static str, &'static
         ("edit",       ("open in the external editor", "外部エディタで開く"), false),
         ("reload",     ("reload init.lua", "init.lua を再読込"), false),
         ("menu",       ("the right-click menu", "右クリックメニュー"), false),
-        ("where",      ("show config / state file paths", "設定ファイルの場所"), false),
+        ("log",        ("what this build is, where it reads from, what the terminal can do", "この版・設定の在り処・端末の素性（診断）"), true),
     ]
 }
 

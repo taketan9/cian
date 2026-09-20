@@ -294,13 +294,13 @@ Bare text is literal, with nothing to escape; slashes make it a regex ([Rust `re
 | `:readonly on\|off` | toggle the read-only bit |
 | `:hash md5` / `:hash sha256` | checksum the selection |
 | `:count` | count files, lines and source steps |
-| `:where` | which config files are being read, and from where |
+| `:log` | what this build is, which config it reads and from where, what the terminal can do (`:where` still answers the config half on its own) |
 
 **Bundling.** `:zip` / `:tar` / `:targz` pack the marked files, `:zip -e` makes an encrypted zip, and `:unzip` (right-click **▸ Extract here**) unpacks the file under the cursor into a fresh sub-folder. A locked zip still lists its members on F3, and asks for the password before extracting.
 
 The status line always shows free space on the active pane's drive — amber past 80 % used, red past 95 %.
 
-**git and svn just work.** Each entry gets a badge (`●` staged, `✚` modified, `?` untracked, `‼` conflict), the status line shows the branch (or `svn r123`), and F3 marks changed lines against HEAD. `:stage` `:unstage` `:discard` `:log` `:gitdiff`, and `B` in the viewer for blame — all under right-click **Git ▸** / **SVN ▸**. cian shells out to your own `git` / `svn`.
+**git and svn just work.** Each entry gets a badge (`●` staged, `✚` modified, `?` untracked, `‼` conflict), the status line shows the branch (or `svn r123`), and F3 marks changed lines against HEAD. `:stage` `:unstage` `:discard` `:gitlog` `:gitdiff`, and `B` in the viewer for blame — all under right-click **Git ▸** / **SVN ▸**. cian shells out to your own `git` / `svn`.
 
 ---
 
@@ -644,7 +644,7 @@ For the terminal build, carry `cian-tui-win-x64.exe.zip` (5MB) across too. One e
   cian never edits the ACL itself. On a machine other people are signed into, that is a change to *their* access, not only yours.
 
   **A privilege is local to the machine holding it.** Against `\\other-host\share` the far end decides, from its own ACL and your identity there, so this helps only if you are an administrator there too.
-- **Trouble?** `CIAN_LOG=/tmp/cian.log` captures diagnostics. A panic restores the terminal on the way out, so you are never left needing `reset`.
+- **Trouble? `:log`.** One screen with what this build is, where it reads its config from, and what the terminal said it can do — written to a file as well, so it can be sent. `:log on` starts a diagnostic log there and then (`:log <path>` to choose where, `:log off` to stop, `CIAN_LOG=/tmp/cian.log` to have one from startup). A panic restores the terminal on the way out, so you are never left needing `reset`.
 
 ---
 

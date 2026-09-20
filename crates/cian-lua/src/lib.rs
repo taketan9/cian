@@ -505,6 +505,21 @@ pub fn is_portable() -> bool {
         .unwrap_or(false)
 }
 
+/// Every file cian reads a setting out of, in the order they are looked for.
+///
+/// One list, because `:log` is asked "where does it read from" by two front
+/// ends and a third answer would be a fourth place to forget a file. The
+/// terminal build renders it as lines, the engine as JSON; both walk this.
+pub const CONFIG_FILES: [&str; 7] = [
+    "init.lua",
+    "ssh.lua",
+    "keymap.lua",
+    "shortcuts.lua",
+    "macro.lua",
+    "count.lua",
+    "state.toml",
+];
+
 /// Where to **read** config file `name` from. A copy sitting next to the
 /// executable wins (portable: carry cian + its `*.lua` on a stick and they take
 /// precedence); otherwise the user config directory.
