@@ -219,12 +219,20 @@ impl App {
             // the windowed build collected — so in a terminal they were three
             // words that did nothing. The window has its own `:view` and keeps
             // both looks; the terminal has one look and says so.
-            "view" => match rest {
-                "" => self.look_inside(),
-                other => {
-                    self.message = Some(format!(
-                        "{other}? — :view opens the file under the cursor",
-                    ))
+            // `classic` / `details` は窓版で `:view` の別名（表示モード）。
+            // 端末版は見た目が一つなので、**その面が無いことを言う** ── 名前が
+            // 通らないのと、この端末には無いのとは別のことだ。
+            "view" | "classic" | "details" => match (verb, rest) {
+                ("view", "") => self.look_inside(),
+                _ => {
+                    self.message = Some(
+                        tr(
+                            self.lang,
+                            "the two looks are the window's. a terminal has one, and :view opens the file under the cursor",
+                            "表示モードの切替はウィンドウ版のものです。端末版の見た目は一つで、:view はカーソル位置のファイルを開きます",
+                        )
+                        .into(),
+                    )
                 }
             },
             "diff" | "compare" => self.open_diff(),
@@ -352,7 +360,7 @@ impl App {
             // way *back* to vim keys is the panel's menu rather than a command
             // anyway: notepad style has no command line to type one at.
             "notepad" | "editstyle" | "vimkey" => self.edit_style_command(verb, rest.trim()),
-            "files" => self.start_file_finder(),
+            "files" | "finder" => self.start_file_finder(),
             "recent" | "oldfiles" => self.start_recent_files(),
             "each" => self.run_each(rest),
             "undo" => self.undo_last(),
@@ -475,7 +483,7 @@ impl App {
             "aierror" | "explain" => self.explain_shell_error(),
             "aidiff" | "explaindiff" => self.explain_diff(),
             "ailog" | "logtriage" | "triage" => self.triage_log(),
-            "duplicate" | "dup" => self.start_dupes(),
+            "duplicate" | "dup" | "dedup" => self.start_dupes(),
             "theme" | "colorscheme" | "colourscheme" => {
                 if rest.is_empty() {
                     self.start_theme_picker();
@@ -575,6 +583,70 @@ impl App {
             // about, and `:unar` is another program's name.
             "unzip" | "extract" | "untar" => self.extract_selected(),
 
+            // **窓版で打てるものは、端末版でも打てる**（2026-09-21、本人）。
+            //
+            // ここから下は「機能は両方にあるが、端末版では打つ場所が違った」
+            // ものたち。窓版の `:` は面が一つなので一覧からでもエディタの語が
+            // 通るが、端末版はビューアの中の `:` にしか無かった。
+            //
+            // ビューアが答える語は、開いていればそのまま渡す。開いていなければ
+            // 「先に開いて」と言う ── unknown command と言われるより、何が
+            // 足りないかが分かる。
+            // 素の `:s` `:g` `:v` は窓版が持っている。**三つは別の機能だ** ──
+            // `:s` は置換の入力欄、`:g` は一致した行を消す、`:v` は一致した行
+            // だけ残す。ビューアの中では `s/…/…/` `g/…/d` の形でも打てる。
+            "s" if matches!(self.popup, Popup::Viewer { .. }) => self.start_replace_bar(),
+            // 二つに分ける ── 一つの腕に並べると「同じ機能の別名」になり、
+            // 実際は逆のことをする二つなので、機械にも人にも嘘になる。
+            "g" if matches!(self.popup, Popup::Viewer { .. }) => self.viewer_line_filter(rest, false),
+            "v" if matches!(self.popup, Popup::Viewer { .. }) => self.viewer_line_filter(rest, true),
+            v if crate::viewer::viewer_answers(v)
+                || v.starts_with("s/")
+                || v.starts_with("g/")
+                || v.starts_with("v/") =>
+            {
+                if matches!(self.popup, Popup::Viewer { .. }) {
+                    self.run_substitute(raw.as_str());
+                } else {
+                    self.message = Some(
+                        tr(
+                            self.lang,
+                            "that one works on an open file. Enter or F3 first",
+                            "これは開いているファイルに効きます。先に Enter か F3 で開いてください",
+                        )
+                        .into(),
+                    );
+                }
+            }
+            // 機能はあるのに名前が無かったもの。キーは今までどおり効く。
+            "branch" => self.toggle_branch_view(),
+            "bookmark" => self.start_shortcuts(),
+            "visual" => self.visual_start(),
+            "zoom" => self.toggle_zoom(),
+            "forward" => self.pane_go_forward(),
+            "local" => self.leave_remote_pane(),
+            "tab" => self.ask_new_tab(),
+            "tabclose" => {
+                if let Some(t) = self.active_file_tabs_mut() {
+                    t.close_active();
+                }
+            }
+            "revealos" | "showinfinder" => self.reveal_in_os(),
+            "diffedit" => self.open_diff(),
+            "lsar" => self.look_inside(),
+            "filelog" => self.start_git_log(),
+            // **端末版には無いもの。** 名前が通らないのではなく、その面が無い。
+            // 黙って unknown command と言うより、どこで同じことができるかを言う。
+            "settings" | "prefs" => {
+                self.message = Some(
+                    tr(
+                        self.lang,
+                        "no settings screen in a terminal. edit init.lua (`:log` says where it is)",
+                        "端末版に設定画面はありません。init.lua を直接直してください（場所は `:log`）",
+                    )
+                    .into(),
+                )
+            }
             other => self.message = Some(format!("unknown command: :{}", other)),
         }
     }

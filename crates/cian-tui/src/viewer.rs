@@ -2260,7 +2260,7 @@ impl App {
         }
         // The Markdown preview, by name — the key that used to do it (`p`)
         // now pastes, and Ctrl+E is not a key every terminal will hand over.
-        if matches!(cmd, "preview" | "source" | "md") {
+        if matches!(cmd, "preview" | "source" | "md" | "render") {
             self.toggle_markdown_preview();
             return;
         }
@@ -4207,6 +4207,23 @@ impl App {
 
     /// `:g/re/d` — drop every line that matches (or, for `:v`, every line
     /// that does not). One undo step, and it says how many went.
+    /// `:g <正規表現>` / `:v <正規表現>` ── 一致した行を消す／一致した行だけ
+    /// 残す。窓版が名前で持っているもので、ビューアの中の `g/…/d` と同じ仕事。
+    pub(crate) fn viewer_line_filter(&mut self, pattern: &str, keep: bool) {
+        if pattern.trim().is_empty() {
+            self.message = Some(
+                tr(
+                    self.lang,
+                    "usage: :g <regex> deletes the lines it matches (:v keeps only those)",
+                    "使い方: :g <正規表現> で一致した行を削除（:v は一致した行だけ残す）",
+                )
+                .into(),
+            );
+            return;
+        }
+        self.viewer_global_delete(pattern.trim(), keep);
+    }
+
     pub(crate) fn viewer_global_delete(&mut self, pattern: &str, invert: bool) {
         if pattern.is_empty() {
             self.message = Some(tr(self.lang, "no pattern", "パターンがありません").into());
@@ -4980,6 +4997,48 @@ fn redo_step(
 /// would have drifted from the rest.
 /// Keep the cursor roughly where it sat on screen when the view changes
 /// under it: a third of the way down, rather than snapping to the top.
+/// ビューアの `:` が答える語。**一覧側の `:` から回すためにある。**
+///
+/// 窓版の `:` は面が一つなので、`:sort` も `:blame` も一覧から打てる。端末版は
+/// ビューアの中の `:` にしか無く、「窓では打てるのに端末では打てない」が43語
+/// あった（2026-09-21、本人）。機能はどちらにもあるので、**打つ場所を揃える**:
+/// 一覧の `:` でこれらを受けたら、開いているビューアへそのまま渡す。
+///
+/// この表と下の `run_substitute` の腕は**一致していなければならない**。
+/// `viewer_verbs_are_all_answered` が、語ごとに viewer.rs の中を確かめている。
+/// **機能ごとに1行**。同じ行に並ぶのは同じことをする綴りで、行が分かれて
+/// いれば別の機能 ── `names.py` がこの形で「本名と別名」を読む。
+pub(crate) const VIEWER_VERBS: &[&[&str]] = &[
+    &["sort"],
+    &["rsort"],
+    &["uniq"],
+    &["han"],
+    &["zen"],
+    &["expand"],
+    &["unexpand"],
+    &["reindent"],
+    &["ws"],
+    &["lf"],
+    &["crlf"],
+    &["cr"],
+    &["combine", "join"],
+    &["outline"],
+    &["blame"],
+    &["enc", "encoding"],
+    &["ruler", "cross"],
+    &["mermaid", "diagram"],
+    &["summary", "summarise", "summarize"],
+    // `render` だけ。`preview` `source` `md` は**一覧の `:` では別の意味**
+    // （カーソル追従プレビュー・init.lua 再読込・mkdir）なので、ビューアの中
+    // でしか通さない。窓版も同じ割り当てだ。
+    &["render"],
+];
+
+/// ビューアがこの語を答えるか。
+pub(crate) fn viewer_answers(verb: &str) -> bool {
+    VIEWER_VERBS.iter().any(|g| g.contains(&verb))
+}
+
 /// Which stretch of the file a `!` filter was pointed at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FilterScope {

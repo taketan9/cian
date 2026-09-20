@@ -33,11 +33,14 @@ ROOT = Path(__file__).resolve().parent.parent
 TUI = ROOT / "crates" / "cian-tui" / "src" / "commands.rs"
 GUI = ROOT / "gui" / "renderer.js"
 PALETTE = ROOT / "crates" / "cian-tui" / "src" / "palette.rs"
+VIEWER = ROOT / "crates" / "cian-tui" / "src" / "viewer.rs"
 
-# ②③の天井。**前端に片方しか無い機能があるので 0 にはなりません。**
-# 減らすのは触った面から少しずつ。増えたらここで落ちます。
-ONLY_ONE_SIDE_CEILING = 44
-ALIAS_GAP_CEILING = 5
+# ②③の天井。**2026-09-21 に 0 になりました**（依頼221）── 窓版で打てる43語が
+# 端末版で打てなかったのを、一覧の `:` からビューアへ回す・機能はあるのに名前が
+# 無かったものに名前を付ける・本当に窓版だけのものは理由を言う、の3つで潰した。
+# 0 を割るには、どちらかにしか無い名前を足すことになります。
+ONLY_ONE_SIDE_CEILING = 0
+ALIAS_GAP_CEILING = 0
 
 # 同じ機能の、意図した別名。ここに書いたものは③に数えません（理由つき）。
 ALIAS_OK = {
@@ -67,6 +70,20 @@ def tui_commands() -> list[list[str]]:
     return out
 
 
+def viewer_verbs() -> list[list[str]]:
+    """ビューアの `:` が答える語。
+
+    端末版はこれらを**一覧の `:` からも**受ける（2026-09-21、依頼221）ので、
+    「打てる名前」として数えます ── `commands.rs` の腕は `VIEWER_VERBS` を
+    見るガードで、名前が直接書いていないため、表のほうを読みます。
+    """
+    text = VIEWER.read_text(encoding="utf-8")
+    m = re.search(r"pub\(crate\) const VIEWER_VERBS: &\[&\[&str\]\] = &\[(.*?)\n\];", text, re.DOTALL)
+    if not m:
+        return []
+    return [re.findall(r'"([^"]+)"', g) for g in re.findall(r"&\[([^\]]*)\]", m.group(1))]
+
+
 def gui_commands() -> list[list[str]]:
     """窓版の `buildCommands()`。`name` が本名、`alias` が別名。"""
     text = GUI.read_text(encoding="utf-8")
@@ -84,7 +101,7 @@ def gui_commands() -> list[list[str]]:
 
 def main() -> int:
     listing = "--list" in sys.argv
-    tui = tui_commands()
+    tui = tui_commands() + viewer_verbs()
     gui = gui_commands()
     if len(tui) < 50 or len(gui) < 50:
         print("=" * 72)

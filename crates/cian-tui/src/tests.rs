@@ -13460,6 +13460,61 @@ use crate::ai::StoredChatExt;
     /// いて、リモートペインはたいてい焦点を持っているので実質いつもシアン
     /// だった）。端末版は焦点の分岐より後にリモートの分岐が来るので正しい ──
     /// **正しいことを、正しいと書いておく。**
+    /// **窓版で打てるものは、端末版でも打てる**（2026-09-21、依頼221）。
+    ///
+    /// 窓版の `:` は面が一つなので `:sort` も `:blame` も一覧から通る。端末版は
+    /// ビューアの中の `:` にしか無く、43語が「窓では打てるのに端末では打てない」
+    /// 状態だった。機能はどちらにもあるので、打つ場所のほうを揃える。
+    #[test]
+    fn the_listing_colon_reaches_the_viewers_verbs_too() {
+        // ビューアの表と、ビューアが実際に答える語が食い違っていないこと。
+        // 表は一覧の `:` を回す先を決めるので、嘘があると「受けたのに何も
+        // 起きない」になる。
+        // **表そのものを除いてから探す。** viewer.rs の中で viewer.rs を
+        // 探すと、表に嘘の語を足してもその表自身に当たって緑のままになる
+        // （2026-09-21 に変異テストで見た ── `cellWidth` が自分を測って
+        // いた件と同じ形）。
+        let whole = include_str!("viewer.rs");
+        let table_at = whole.find("pub(crate) const VIEWER_VERBS").expect("表がある");
+        let table_end = whole[table_at..].find("\n];").expect("表の終わり") + table_at;
+        let src = format!("{}{}", &whole[..table_at], &whole[table_end..]);
+        for group in crate::viewer::VIEWER_VERBS {
+            for verb in *group {
+                assert!(
+                    src.contains(&format!("\"{verb}\"")),
+                    "VIEWER_VERBS の :{verb} を viewer.rs が答えていません",
+                );
+            }
+        }
+
+        let (_d, mut app) = viewer_on("c\nb\na\n");
+        // 一覧の `:` から。ビューアは開いている。
+        app.set_command_line("sort");
+        app.mode = Mode::Command;
+        app.run_command();
+        assert_eq!(viewer_lines(&app), vec!["a", "b", "c"], "一覧の : からソートできた");
+
+        // 開いていなければ、何が足りないかを言う（unknown command ではなく）。
+        let (_d, mut app) = app_with(&["a.txt"]);
+        run_cmd(&mut app, "sort");
+        let said = app.message.clone().unwrap_or_default();
+        assert!(said.contains("Enter"), "開き方を言う: {said:?}");
+        assert!(!said.contains("unknown"), "unknown command とは言わない: {said:?}");
+
+        // 機能はあったのに名前が無かったもの。ブランチビューは worker が
+        // 走るので、ここで見るのは「仕事が始まったか」まで ── 中身は
+        // `find_job` を回す別の検査の持ち場だ。
+        run_cmd(&mut app, "branch");
+        assert!(app.find_job.is_some(), ":branch がブランチビューを走らせる");
+        let said = app.message.clone().unwrap_or_default();
+        assert!(!said.contains("unknown"), "名前は通る: {said:?}");
+
+        // 端末版に無い面は、無いと言う。
+        run_cmd(&mut app, "settings");
+        let said = app.message.clone().unwrap_or_default();
+        assert!(said.contains("init.lua"), "どこで直すかを言う: {said:?}");
+    }
+
     #[test]
     fn a_remote_pane_wears_carmine_even_when_it_has_the_keys() {
         let (_d, mut app) = app_with(&["a.txt"]);

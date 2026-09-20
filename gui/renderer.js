@@ -6773,7 +6773,7 @@ function buildCommands() {
     { name: 'renamepattern', about: tr("bulk rename by a pattern: {name}_{n3}.{ext}", '一括リネーム: {name}_{n3}.{ext}'), arg: tr('pattern', 'パターン'), run: cmdRenamePattern },
     { name: 'zip', about: tr("zip the marks (:zip -e for a password)", 'マークを zip に（:zip -e でパスワード付き）'), arg: '-e', optional: true, run: (a) => cmdCompress('zip', /-e/.test(a || '')) },
     { name: 'tar', about: tr("tar the marks", 'マークを tar にまとめる'), run: () => cmdCompress('tar') },
-    { name: 'targz', about: tr("tar.gz the marks", 'マークを tar.gz にまとめる'), run: () => cmdCompress('targz') },
+    { name: 'targz', alias: ['tar.gz'], about: tr("tar.gz the marks", 'マークを tar.gz にまとめる'), run: () => cmdCompress('targz') },
     { name: 'unzip', alias: ['extract', 'untar'], about: tr("extract the archive under the cursor, here", 'カーソルのアーカイブをここに展開'), run: cmdExtract },
     { name: 'lsar', about: tr("list an archive\u2019s contents", 'アーカイブの中身を見る'), run: cmdArchiveList },
     // `:log` went to diagnostics (2026-09-20), so the commit log took the
@@ -6861,13 +6861,13 @@ function buildCommands() {
     { name: 'aierror', alias: ['explain'], hidden: true, about: tr("AI: explain the shell's last error (:ai error)", 'AI: シェルの直近のエラーを説明する（:ai error）'), run: cmdAiError },
     { name: 'ime', alias: ['inputmethod'], about: tr("input method \u2014 off in vim's normal mode (cian.ime)", 'IME 連携 — vim のノーマルモードで自動オフ（cian.ime）'), run: cmdIme },
     { name: 'blame', about: tr("who last changed each line of the open file", '各行を最後に変えた人（開いているファイル）'), run: cmdBlame },
-    { name: 'enc', about: tr("re-read the open file under another encoding", '開いているファイルの文字コードを変えて読み直す'), arg: 'utf8 / sjis / utf16le / utf16be', optional: true, run: cmdEncoding },
+    { name: 'enc', alias: ['encoding'], about: tr("re-read the open file under another encoding", '開いているファイルの文字コードを変えて読み直す'), arg: 'utf8 / sjis / utf16le / utf16be', optional: true, run: cmdEncoding },
     { name: 'ws', about: tr("show or hide tabs, trailing spaces and the rest", 'タブ・行末の空白などを見せる／隠す'), run: toggleWs },
-    { name: 'ruler', about: tr("show or hide the column ruler", '桁の目盛りを出す／消す'), run: toggleRuler },
+    { name: 'ruler', alias: ['cross'], about: tr("show or hide the column ruler", '桁の目盛りを出す／消す'), run: toggleRuler },
     { name: 's', about: tr("replace in the open file, s/old/new/g", '開いているファイルを置換 s/古い/新しい/g'), arg: 's/…/…/', run: cmdSubstitute },
     { name: 'g', about: tr("delete the matching lines (:g/re/d)", '一致した行を削除（:g/re/d）'), arg: tr('regex', '正規表現'), run: (a) => cmdLineFilter(a, false) },
     { name: 'v', about: tr("keep only the matching lines (:v/re/d)", '一致した行だけ残す（:v/re/d）'), arg: tr('regex', '正規表現'), run: (a) => cmdLineFilter(a, true) },
-    { name: 'combine', about: tr("join the next line (:combine 3 for three; :combine! without a space)", '次の行を連結（:combine 3 で3行、:combine! は空白なし）'), arg: tr('how many lines', '行数'), optional: true, run: cmdCombine },
+    { name: 'combine', alias: ['join'], about: tr("join the next line (:combine 3 for three; :combine! without a space)", '次の行を連結（:combine 3 で3行、:combine! は空白なし）'), arg: tr('how many lines', '行数'), optional: true, run: cmdCombine },
     { name: 'theme', alias: ['colorscheme', 'colourscheme'], about: tr("twenty-one palettes \u2014 choosing one dresses the window (also in T\u2019s menu)", '配色 21 種 — 選ぶとその場で変わります（T のメニューにも）'), arg: tr('name', '名前'), optional: true, run: cmdTheme },
     { name: 'redraw', alias: ['refresh!'], about: tr("redraw the screen", '画面を描き直す'), run: () => { draw('left'); draw('right'); say(tr('redrawn', '描き直しました')); } },
     { name: 'preview', about: tr("follow the cursor and show what it is on (again stops)", 'カーソルのファイルを追って表示（もう一度で止める）'), run: togglePreview },
@@ -6875,7 +6875,7 @@ function buildCommands() {
     // draws them in the preview, but the browser is still the place you go to
     // make one big enough to read — so the verb exists here too, and does the
     // same thing.
-    { name: 'mermaid', about: tr("draw the mermaid diagrams (:mermaid! for a browser)", 'mermaid 図を描く（:mermaid! でブラウザ）'), run: (a, as_) => (as_ === 'mermaid!' ? cmdMermaidOut() : cmdMermaid()), alias: ['mermaid!'] },
+    { name: 'mermaid', alias: ['diagram'], about: tr("draw the mermaid diagrams (:mermaid! for a browser)", 'mermaid 図を描く（:mermaid! でブラウザ）'), run: (a, as_) => (as_ === 'mermaid!' ? cmdMermaidOut() : cmdMermaid()), alias: ['mermaid!'] },
     // **`:source` は外した**（2026-09-20）。端末版ではそれが init.lua の
     // 読み直しで、設定を直して `:source` と打った人にここで Markdown が
     // 組まれるのは、同じ語が前端で別の機能を指す `:history` と同じ事故。
@@ -6906,6 +6906,9 @@ function buildCommands() {
     { name: 'unexpand', about: tr("leading spaces \u2192 tabs", '行頭のスペース → タブ'), run: () => textOp('unexpand') },
     { name: 'reindent', about: tr("re-indent to a consistent step", 'インデントを揃える'), run: () => textOp('reindent') },
     { name: 'lf', about: tr("line endings to LF", '改行を LF にする'), run: () => setEol('lf') },
+    // 端末版のビューアが `cr` を持っている（Eol::Cr）。CRLF とは別の改行で、
+    // 別名にすると「CR にしたつもりで CRLF になる」が起きる。
+    { name: 'cr', about: tr("line endings to CR (old Mac)", '改行を CR にする（古い Mac）'), run: () => setEol('cr') },
     { name: 'crlf', about: tr("line endings to CRLF", '改行を CRLF にする'), run: () => setEol('crlf') },
     { name: 'update', alias: ['svnupdate'], about: tr("svn update the working copy. svn only", 'svn update で作業コピーを更新。svn のみ'), run: () => cmdSvn('update') },
     { name: 'resolve', alias: ['svnresolve'], about: tr("svn resolve --accept working. svn only", 'svn resolve --accept working。svn のみ'), run: () => cmdSvn('resolve') },

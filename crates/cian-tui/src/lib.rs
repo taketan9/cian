@@ -4167,6 +4167,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry("  CIAN_LEGACY_KEYS=1", None, "start without the enhanced-keyboard request — try it if every Ctrl shortcut is dead", "拡張キーボード要求なしで起動 — Ctrl 系が全滅するときに試す"),
                 entry(":log", None, "what this build is, where it reads from, what the terminal can do — and a copy on disk to send", "この版・設定の在り処・端末の素性を1枚で（送れるようにファイルにも書きます）"),
                 entry("  :log on / off", None, "start or stop writing diagnostics, without restarting (:log <path> to choose)", "診断ログの開始／停止（再起動不要。:log <パス> で場所を指定）"),
+                entry("  the viewer's verbs", None, "`:sort` `:blame` `:ws` … also work from the listing's `:` while a file is open", "`:sort` `:blame` `:ws` などは、ファイルを開いていれば一覧の `:` からも打てます"),
                 entry("the : line", None, "← → Home End move the caret, ↑ ↓ walk what you have run, Tab finishes a verb or a path", "← → Home End でカーソル、↑ ↓ で打った行、Tab で動詞やパスを補完"),
                 entry(":mark", None, "mark by wildcard;  :mark *.rs   :unmark *", "ワイルドカードでマーク；  :mark *.rs   :unmark *"),
                 entry(":ai", None, "AI: ask. needs cian.ai in init.lua, and nothing leaves the machine until you send it", "AI: 訊く。init.lua の cian.ai が要ります。送るまで何もこの機械から出ません"),

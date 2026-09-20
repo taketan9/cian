@@ -2284,8 +2284,12 @@ impl Session {
                 let Some((_, file, _)) = self.open.as_mut() else {
                     anyhow::bail!("開いているファイルがありません");
                 };
+                // **`cr` も受ける。** 端末版のビューアは3つとも持っていて
+                // （Eol::Cr は古い Mac の改行）、窓版だけ無かった。_ が LF に
+                // 落ちるので、`:cr` と打った人は黙って LF にされていた。
                 file.eol = match req.params["kind"].as_str() {
                     Some("crlf") => cian_core::viewer::Eol::Crlf,
+                    Some("cr") => cian_core::viewer::Eol::Cr,
                     _ => cian_core::viewer::Eol::Lf,
                 };
                 Ok(serde_json::json!({ "eol": format!("{:?}", file.eol) }))
