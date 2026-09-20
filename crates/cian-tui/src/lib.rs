@@ -4108,7 +4108,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
             ("Commands (type : then the name — Linux-style)", "コマンド（: に続けて名前を入力 — Linux風）"),
             vec![
                 entry(":mkdir", None, "make a directory;  :mkdir -p a/b/c", "ディレクトリ作成；  :mkdir -p a/b/c"),
-                entry(":touch", None, "create a file, or bump its mtime", "ファイル作成／mtimeを更新"),
+                entry(":touch", None, "no name: stamp the selection with now (directories too). a name: make that file", "名前なし: 選択の日時をいまに（ディレクトリも）。名前あり: そのファイルを作成"),
                 entry(":cp / :mv", None, "no arg → other pane;  or  :mv <dest>", "引数なし→反対ペイン；  または  :mv <宛先>"),
                 entry(":rm", None, "delete the selection (to trash)", "選択物を削除（ゴミ箱へ）"),
                 entry(":cd", None, ":cd <path>  /  :cd ..  /  :cd -  /  :cd ~", ":cd <パス>  /  :cd ..  /  :cd -  /  :cd ~"),

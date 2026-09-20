@@ -501,6 +501,7 @@ dependencies = [
  "cian-pty",
  "cian-scp",
  "crossterm",
+ "filetime",
  "image",
  "ratatui",
  "ratatui-image",

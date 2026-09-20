@@ -6817,7 +6817,7 @@ function buildCommands() {
     // The short ones the terminal build has, spelled the same way. A person who
     // knows `:mkdir -p` should not have to find out that this one is different.
     { name: 'mkdir', alias: ['md'], about: tr("make a folder (:mkdir -p a/b/c)", 'ディレクトリを作る（:mkdir -p a/b/c）'), arg: tr('name', '名前'), run: cmdMkdir },
-    { name: 'touch', about: tr("create a file, or touch its time", 'ファイルを作る／時刻を更新'), arg: tr('name', '名前'), run: cmdTouch },
+    { name: 'touch', about: tr("no name: stamp the selection with now. a name: make that file", '名前なし: 選択の日時をいまに。名前あり: そのファイルを作る'), arg: tr('name (leave it out to stamp the selection)', '名前（省略すると選択の日時を更新）'), optional: true, run: cmdTouch },
     { name: 'cp', alias: ['copy'], about: tr("copy \u2014 to the other pane with no argument, or :cp <where>", 'コピー — 引数なしで反対ペインへ、:cp <行き先> でそこへ'), arg: tr('where to', '行き先'), optional: true, run: (a) => a ? cmdTo('copyto', a) : operate('copy') },
     { name: 'mv', alias: ['move'], about: tr("move \u2014 to the other pane with no argument, or :mv <where>", '移動 — 引数なしで反対ペインへ、:mv <行き先> でそこへ'), arg: tr('where to', '行き先'), optional: true, run: (a) => a ? cmdTo('moveto', a) : operate('move') },
     { name: 'rm', alias: ['del', 'delete'], about: tr("delete (to the trash)", '削除（ゴミ箱へ）'), run: () => operate('delete') },
@@ -6902,8 +6902,19 @@ async function cmdMkdir(spec) {
     say(tr(`created ${name}`, `${name} を作りました`));
 }
 
+/// `:touch` — `touch(1)` の二つの半分を、名前の有無で分ける。
+///
+/// **名前なし: 選んでいるもの（マーク、無ければカーソル）の日時をいまに。**
+/// **名前あり: そのファイルを作る。** 2026-09-20、本人の指定。それまで後者
+/// しか無く、選択に新しい日時を打つ道だけが無かった。
 async function cmdTouch(name) {
-    if (!name) { say(tr('no name given', '名前がありません'), true); return; }
+    if (!name) {
+        const r = await ask('touchnow', { pane: state.focus });
+        if (!r) return;
+        await reread();
+        say(tr(`timestamp on ${r.changed} item(s)`, `${r.changed} 件の日時を更新しました`));
+        return;
+    }
     const r = await ask('create', { pane: state.focus, name, dir: false, touch: true });
     if (!r) return;
     state[state.focus] = r.pane ?? r;

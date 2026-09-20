@@ -1184,6 +1184,20 @@ impl Session {
                 pane.reload()?;
                 Ok(serde_json::json!({ "changed": paths.len(), "on": on }))
             }
+            // `:touch` with no name: the clock on what is selected, moved to
+            // now (2026-09-20). Making a file is the `create` op with
+            // `touch: true`, the other half of the same verb — which half you
+            // get depends on whether a name was typed, as in `touch(1)`.
+            "touchnow" => {
+                let which = req.params["pane"].as_str().unwrap_or("left").to_string();
+                let paths = self.targets(&which)?;
+                for p in &paths {
+                    cian_core::ops::touch_now(p)?;
+                }
+                let pane = self.pane_mut(&which)?;
+                pane.reload()?;
+                Ok(serde_json::json!({ "changed": paths.len() }))
+            }
             // Checksums. Cancellable because a checksum of something large is
             // the one "quick look" in here that is not quick.
             "hash" => {

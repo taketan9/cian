@@ -291,7 +291,8 @@ Bare text is literal, with nothing to escape; slashes make it a regex ([Rust `re
 |---|---|
 | `:attr` | permissions and owner |
 | `:chmod 644` | change the mode (Windows: `:readonly`) |
-| `:readonly on\|off` | toggle the read-only bit |
+| `:readonly` | toggle the read-only bit (`:readonly on` / `off` when it has to be certain) |
+| `:touch` | stamp what is selected with now, directories included. `:touch <name>` makes that file |
 | `:hash md5` / `:hash sha256` | checksum the selection |
 | `:count` | count files, lines and source steps |
 | `:log` | what this build is, which config it reads and from where, what the terminal can do (`:where` still answers the config half on its own) |

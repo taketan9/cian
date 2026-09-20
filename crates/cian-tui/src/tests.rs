@@ -13321,6 +13321,49 @@ use crate::ai::StoredChatExt;
     /// **And on a machine with no `cian.ai{…}`, the palette does not carry
     /// it.** Six AI rows sat at the top of the most-opened window in cian on
     /// a machine that could not run any of them.
+    /// `:touch` with no name stamps what is selected; with a name it makes
+    /// that file (2026-09-20). Until then only the second half existed.
+    #[test]
+    fn touch_stamps_the_selection_and_still_makes_a_file_when_named() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = std::fs::canonicalize(d.path()).unwrap();
+        std::fs::write(dir.join("a.txt"), "one\n").unwrap();
+        std::fs::create_dir(dir.join("sub")).unwrap();
+        // An hour ago, so "now" is unmistakable on filesystems with a coarse
+        // clock.
+        let old = filetime::FileTime::from_unix_time(
+            filetime::FileTime::now().unix_seconds() - 3600,
+            0,
+        );
+        for p in [dir.join("a.txt"), dir.join("sub")] {
+            filetime::set_file_times(&p, old, old).unwrap();
+        }
+
+        let mut app = App::new(dir.clone(), dir.clone(), en_config()).unwrap();
+        // Both of them, including the directory — `touch(1)` stamps those too,
+        // and it is the one thing an open handle cannot do.
+        for name in ["a.txt", "sub"] {
+            let i = app.active_pane().unwrap().entries.iter().position(|e| e.name == name).unwrap();
+            app.active_pane_mut().unwrap().cursor = i;
+            app.handle_key(code(KeyCode::Char(' '))).unwrap();
+        }
+        app.command_buffer = "touch".into();
+        app.run_command();
+        for name in ["a.txt", "sub"] {
+            let meta = std::fs::metadata(dir.join(name)).unwrap();
+            let secs = filetime::FileTime::from_last_modification_time(&meta).unix_seconds();
+            assert!(
+                secs > old.unix_seconds() + 60,
+                "{name} was stamped with now, not {old:?}",
+            );
+        }
+
+        // Named: the half that was always here.
+        app.command_buffer = "touch made.txt".into();
+        app.run_command();
+        assert!(dir.join("made.txt").exists(), ":touch <name> still makes a file");
+    }
+
     #[test]
     fn ai_is_one_word_with_arguments_and_is_absent_when_unconfigured() {
         let dir = tempfile::tempdir().unwrap();

@@ -520,10 +520,28 @@ impl App {
     }
 
     /// `touch <name>...`: create empty files, or bump the mtime of existing ones.
+    /// `:touch` — `touch(1)`'s two halves, told apart by whether a name is given.
+    ///
+    /// **No name: move the clock on what is selected** (the marks, or the file
+    /// under the cursor) to now. **A name: make that file.** Which is what
+    /// `touch(1)` does, and the shape his hand already knows (2026-09-20, his
+    /// call). Until then only the second half was here, so the one thing the
+    /// selection could not have was a fresh timestamp.
+    ///
+    /// Directories are included. `ops::touch_now` goes through `filetime`
+    /// rather than an open handle, which is the only way to stamp one.
     pub(crate) fn cmd_touch(&mut self, args: &[&str]) {
         let names: Vec<&str> = args.iter().copied().filter(|a| !a.starts_with('-')).collect();
         if names.is_empty() {
-            self.message = Some(tr(self.lang, "usage: :touch <name>", "使い方: :touch <名前>").into());
+            let paths = self.target_paths();
+            if paths.is_empty() {
+                self.message = Some(tr(self.lang, "nothing selected", "選択されていません").into());
+                return;
+            }
+            let (ok, err) = self.apply_to_each(&paths, |p| cian_core::ops::touch_now(p));
+            self.reload_both();
+            let what = tr(self.lang, "timestamp", "日時を更新");
+            self.message = Some(self.each_report(what, ok, paths.len(), err));
             return;
         }
         let Some(cwd) = self.cwd() else { return };

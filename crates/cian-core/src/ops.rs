@@ -367,6 +367,24 @@ pub fn touch(parent: &Path, name: &str) -> Result<PathBuf> {
     Ok(p)
 }
 
+/// Move an existing path's clock to now, without creating or opening it.
+///
+/// **Not [`touch`].** That one is the `touch(1)` that makes a file, and it
+/// bumps the clock through an open handle — which a directory does not have
+/// on any platform, and which would create the path if it were gone. This is
+/// the other half of the verb: the thing already exists, and only its
+/// timestamp is the point (`filetime`, the same crate the transfers use to
+/// carry mtimes across).
+///
+/// Both times are set. Leaving atime alone means reading the file back with
+/// `filetime::set_file_times` twice, and "last accessed" moving with "last
+/// modified" is what `touch` itself does.
+pub fn touch_now(path: &Path) -> Result<()> {
+    let now = filetime::FileTime::now();
+    filetime::set_file_times(path, now, now)
+        .with_context(|| format!("touch {}", path.display()))
+}
+
 /// Bulk copy with a single conflict policy applied to every source.
 pub fn copy_many(srcs: &[PathBuf], dest_dir: &Path, on_conflict: Conflict) -> OpReport {
     let mut report = OpReport::default();

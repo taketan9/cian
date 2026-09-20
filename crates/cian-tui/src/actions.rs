@@ -2041,7 +2041,7 @@ impl App {
     /// Run `f` over every path, counting what worked and keeping the first
     /// complaint. Nothing stops early: a sweep that gives up halfway leaves the
     /// selection in two states and tells you about neither.
-    fn apply_to_each<F>(&self, paths: &[PathBuf], mut f: F) -> (usize, Option<String>)
+    pub(crate) fn apply_to_each<F>(&self, paths: &[PathBuf], mut f: F) -> (usize, Option<String>)
     where
         F: FnMut(&PathBuf) -> anyhow::Result<()>,
     {
@@ -2062,7 +2062,7 @@ impl App {
 
     /// What a sweep over several files did, in one line: how many took, how
     /// many did not, and why the first one did not.
-    fn each_report(&self, what: &str, ok: usize, total: usize, err: Option<String>) -> String {
+    pub(crate) fn each_report(&self, what: &str, ok: usize, total: usize, err: Option<String>) -> String {
         let failed = total.saturating_sub(ok);
         let ja = self.lang == crate::theme::Lang::Ja;
         match (failed, err) {
