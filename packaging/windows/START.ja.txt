@@ -6,8 +6,12 @@ cian — Windows x64（Electron 同梱）
 
   cian.exe            これを叩く
   resources\app\      cian 本体（前面・エンジン・エディタの資材）
+  vim\                :vim で開く vim。入っていないパソコンのために同梱
   examples\init.lua   設定の見本
   default-config\     共有マシンで全員に配りたい設定の置き場（後述）
+
+**自分の vim が PATH にあれば、そちらが使われます。** 同梱のものは他に何も
+無いときだけです。自分の _vimrc が効くほうを使いたいはずなので。
 
 初回に出るかもしれないもの
 ==========================

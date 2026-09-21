@@ -34,3 +34,9 @@ gui/vendor/
 # — a file that ships is a file the next version overwrites, which is the whole
 # reason this exists instead of editing run.bat.
 gui/electron.txt
+
+# 同梱する vim（`python3 scripts/fetch-vim.py` が落とす、25MB）。
+# **資材に積むものであって、リポジトリに置くものではない** ── CI が
+# リリースのたびに落として `cian-src-win.zip` に入れる。手元にあるのは
+# `node gui/pack.js` を試すときだけだ。
+/vim/

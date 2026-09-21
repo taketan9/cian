@@ -4,7 +4,7 @@ cian — ソース一式（社内で組み立てる） Windows x64
 社内で cian.exe を組み立てるための一式です。crmaine の crmaine-src と
 同じ考え方で、持ち込むのはこの zip とエンジン 1 個だけです。
 
-  cian-src-win.zip           この一式（約 10MB）
+  cian-src-win.zip           この一式（約 18MB）
   cian-server-win-x64.exe.zip  エンジン。別の資材として置いてあります
                              （展開すると cian-server-win-x64.exe が出ます）
 
@@ -14,6 +14,7 @@ cian — ソース一式（社内で組み立てる） Windows x64
 同梱しているもの
   gui\                       前面一式と vendor\（Monaco・monaco-vim・
                              mermaid・同梱フォント）。npm install は要りません
+  vim\                       端末版の vim（約 21MB、展開後）。:vim で使います
   examples\init.lua          設定の見本
   packaging\windows\         この読み物一式
   Cargo.toml                 版番号をここから読みます
@@ -43,10 +44,31 @@ cian — ソース一式（社内で組み立てる） Windows x64
   何を入れるかだけ見たいときは
        node gui\pack.js --where --platform win32
 
+同梱の vim について
+  vim が入っていないパソコンでも :vim が使えるように、端末版の vim を
+  一緒に運んでいます。組み立てると cian.exe の隣に vim\ が並びます。
+
+  自分で入れた vim が PATH にあれば、そちらが優先されます。自分の _vimrc が
+  効くほうを使いたいはずだからです。同梱のものは、他に何も無いときだけ
+  使われます。
+
+  cian-tui.exe（端末版）も同じ vim を使えます。cian.exe と同じフォルダに
+  置いてください。
+
+  入れ替えたいときは vim\ の中身を差し替えて構いません。フォルダの名前
+  （vim92 など）は見ていないので、新しい版をそのまま置けます。
+
+  GUI 版の gvim・:help・翻訳メッセージ・綴り辞書は入れていません
+  （3 つで 25MB あり、無くても vim は動きます）。
+
 うまくいかないとき
   「cian-server not found」   --engine を渡していないか、綴りが違います
   一覧の字が等幅にならない   gui\vendor\fonts\cian.ttf が欠けています。
                              zip を展開し直してください
+  「vim\ が無い」            この一式ではなく git の作業ツリーから叩いて
+                             います。zip を展開し直すか、ネットワークの
+                             ある場所で python3 scripts\fetch-vim.py を
+                             一度叩いてください
   版が 0.0.0 になる          Cargo.toml と同じ階層で叩いていません
 
 エンジンも社内で作りたいとき

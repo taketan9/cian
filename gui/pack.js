@@ -203,6 +203,13 @@ function checkOut(target, appDir, platform) {
     const launcher = platform === 'win32' ? path.join(target, `${NAME}.exe`)
                                           : path.join(target, `${NAME}.app`);
     if (!fs.existsSync(launcher)) bad.push(`${path.basename(launcher)} が無い`);
+    // **Windows は vim も検証する。** 一式（`cian-src-win.zip`）には必ず
+    // 入っている ── 入っていなければ、`:vim` の効かない cian ができて、
+    // それは黙って出る。無い理由は「一式ではなく git の作業ツリーから
+    // 叩いた」がほとんどなので、取り方をそのまま言う。
+    if (platform === 'win32' && !fs.existsSync(path.join(target, 'vim'))) {
+        bad.push('vim/ が無い ── python3 scripts/fetch-vim.py で落とすか、cian-src-win.zip から組み立てる');
+    }
     if (fs.existsSync(path.join(appDir, '..', 'default_app.asar'))) {
         bad.push('resources/default_app.asar が残っている（Electron の既定画面が開く）');
     }
@@ -242,7 +249,31 @@ function packWindows(target, dist) {
         fs.renameSync(from, path.join(target, `${NAME}.exe`));
         console.log(`  + ${NAME}.exe`);
     }
+    // **同梱の vim を cian.exe の隣へ。** 会社の Windows には vim が無く、
+    // 入れることもできない ── `:vim` がそこで止まっていた。cian は隣に
+    // 置いたものを使えるので（`editor::beside_exe`）、ここに写せば届く。
+    //
+    // `resources/app/` ではなく**いちばん上**に置く。人が自分で入れ替える
+    // ときに見える場所であること、そして cian.exe の隣が portable-first の
+    // 置き場所だからだ（エンジンは2階下にいるが、そこから上へ探している）。
+    //
+    // Mac には要らない ── `/usr/bin/vim` が必ずある。
+    const vim = path.join(ROOT, 'vim');
+    if (fs.existsSync(vim)) {
+        copyDir(vim, path.join(target, 'vim'));
+        console.log(`  + vim/（${mb(dirSize(vim))}）`);
+    }
     return path.join(target, 'resources', 'app');
+}
+
+/// ディレクトリの中身の合計。同梱の vim の大きさを言うためだけにある。
+function dirSize(dir) {
+    let n = 0;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        n += e.isDirectory() ? dirSize(p) : fs.statSync(p).size;
+    }
+    return n;
 }
 
 /// exe のアイコンは PE リソースなので、差し替えに `rcedit` が要る（GitHub の

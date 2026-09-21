@@ -19,7 +19,7 @@
 
 | 使いたいもの | 落とすもの | 中身 |
 |---|---|---|
-| Windows でウィンドウ版 | `cian-src-win.zip`（10MB）＋ `cian-server-win-x64.exe.zip`（3MB） | 前面一式・エディタの実行時・同梱フォント、それにエンジン。展開して `node gui\pack.js` を1回叩くと `cian.exe` ができます（`npm install` も Rust も不要）。**Electron 本体だけ別途必要**（247MB、社内に既にあるものを使う前提）。手順は同梱の `packaging\windows\SRC.ja.txt` |
+| Windows でウィンドウ版 | `cian-src-win.zip`（18MB）＋ `cian-server-win-x64.exe.zip`（3MB） | 前面一式・エディタの実行時・同梱フォント・同梱 vim、それにエンジン。展開して `node gui\pack.js` を1回叩くと `cian.exe` ができます（`npm install` も Rust も不要）。**Electron 本体だけ別途必要**（247MB、社内に既にあるものを使う前提）。手順は同梱の `packaging\windows\SRC.ja.txt` |
 | エンジンだけ差し替え | `cian-server-win-x64.exe.zip`（3MB） | ウィンドウ版が喋る相手。前面は JavaScript なので、更新はたいていこれ1つで足ります |
 | 端末版 | `cian-tui-win-x64.exe.zip`（5MB） | 一本の実行ファイルだけ。Electron も書体も要りません |
 | ビルドする人向け | `cian-source-offline.zip`（182MB） | 依存クレートを全部同梱したソース一式 — [ソースからビルド](#ソースからビルド)を参照。Actions から `everything = true` で手動実行 |
@@ -608,7 +608,7 @@ flowchart TD
 ## Windows へオフライン導入
 
 持ち込むのは 13MB です。ネットにつながる機械で
-[リリース](https://github.com/taketan9/cian/releases) から `cian-src-win.zip`（10MB）と
+[リリース](https://github.com/taketan9/cian/releases) から `cian-src-win.zip`（18MB）と
 `cian-server-win-x64.exe.zip`（3MB）を取り、`SHA256SUMS` と照合して持ち込みます：
 
 ```powershell
