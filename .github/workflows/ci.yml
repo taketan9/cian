@@ -108,3 +108,38 @@ jobs:
       # that a pull request which adds twenty Japanese-only strings says so.
       - name: How far the second language has got
         run: python3 scripts/i18n.py
+
+      # ── ここから下の5本は、長いあいだ手元でしか走っていなかった ────────
+      #
+      # 2026-09-21 に足した。**僕が忘れた日は誰も測らない**のが、検査として
+      # いちばん弱い形だった ── `audit.py` から `i18n.py` までの5本が CI に
+      # いて、残りの5本が「押す前に思い出したら走る」だった。どれも下限か
+      # 天井を持っていて外れれば非零を返すので、門として立つ。
+      #
+      # `gui/drive.js` と `scripts/tui-drive.py` は今までどおり入れない ──
+      # 画面と Electron が要る。押す前に走らせるものだ。
+
+      # 画面の幅を字数で測っているところ。**英語では字数と桁数が同じなので
+      # 通る** ── 日本語でだけボタンが `[ コピ` で切れる。2026-09-06 に同じ
+      # 形のバグが1日で6つ出て、この物差しが生まれた。
+      - name: The width of things on screen
+        run: python3 scripts/widths.py
+
+      # init.lua の設定を、窓版がいくつ読んでいるか。「設定を直したのに
+      # 効かない」は cian で最頻のバグなのに、そこだけ物差しが無かった。
+      - name: How many settings the window actually reads
+        run: python3 scripts/configcover.py
+
+      # ヘルプが挙げるキーのうち、一度でも押されたことがある割合。押して
+      # いないキーは動く証拠が無いキーで、実際そこから壊れたものが出た。
+      - name: Which keys have ever been pressed
+        run: python3 scripts/keycover.py
+
+      # 設定画面が、cian の読む設定を触れるか／どこで直すかを言えているか。
+      - name: What the settings screen can reach
+        run: python3 scripts/settingscover.py
+
+      # 同じ機能を、両前端が同じ名前で呼んでいるか。`parity.py` は言葉の
+      # 揃いを見るが、**打てる名前の食い違い**はこちらにしか出ない。
+      - name: The same names in both front ends
+        run: python3 scripts/names.py
