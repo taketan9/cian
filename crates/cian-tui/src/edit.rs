@@ -204,26 +204,42 @@ impl App {
             return;
         };
         let words = match forced {
-            // A named editor: use it only if it is actually on PATH.
-            Some(name) if cian_core::editor::on_path(name) => vec![name.to_string()],
-            Some(name) => {
-                self.message = Some(format!("{name} not found on PATH"));
-                return;
-            }
+            // **PATH に無くても、隣に置いてあれば使う。** 会社の Windows は
+            // vim が入っておらず入れることもできないので、`:vim` がここで
+            // 止まるのがいちばん困る形だった。判断は `cian_core::editor::named`
+            // （窓版の `whichedit` と同じ1か所）。
+            Some(name) => match cian_core::editor::named(name) {
+                Some(cmd) => vec![cmd],
+                None if matches!(name, "vi" | "vim") => {
+                    self.message = Some(tr(
+                        self.lang,
+                        "vim is not on PATH. put one in a vim folder next to cian, or install it",
+                        "vim が PATH にありません。cian の隣の vim フォルダに置くか、インストールしてください",
+                    ).into());
+                    return;
+                }
+                None => {
+                    self.message = Some(if self.lang == crate::theme::Lang::Ja {
+                        format!("{name} が PATH にありません")
+                    } else {
+                        format!("{name} is not on PATH")
+                    });
+                    return;
+                }
+            },
             None => match crate::edit::resolve_editor(&self.config) {
                 Some(w) => w,
                 None => {
                     self.message = Some(tr(
                         self.lang,
-                        "no editor found — install nvim/vim/vi, or set cian.set_option(\"editor\", …)",
-                        "エディタが見つかりません — nvim/vim/vi を入れるか cian.set_option(\"editor\", …) を設定",
+                        "no editor found. put one in a vim folder next to cian, or set cian.set_option(\"editor\", …)",
+                        "エディタが見つかりません。cian の隣の vim フォルダに置くか、cian.set_option(\"editor\", …) を設定してください",
                     ).into());
                     return;
                 }
             },
         };
-        // Quote the path so a name with spaces survives the shell.
-        let cmd = format!("{} \"{}\"", words.join(" "), path.display());
+        let cmd = editor_command_line(&words, &path);
         let cwd = self.shell_cwd();
         self.shell.new_tab_running(&cwd, cmd);
         self.focus(crate::FocusedPane::Shell);
@@ -321,6 +337,18 @@ pub(crate) fn resolve_editor(config: &cian_lua::Config) -> Option<Vec<String>> {
     // `$VISUAL`/`$EDITOR` しか見ておらず、`cian.set_option("editor", …)` が
     // 端末版でだけ効いていた（2026-09-06、`configcover.py` が見つけた）。
     cian_core::editor::resolve(config.options.editor.as_deref())
+}
+
+/// エディタの語とファイルから、シェルに渡す1行。
+///
+/// **語ごとに括る。** まとめて括ると `code -w` のような設定が「`code -w` と
+/// いう名前の1つの実行ファイル」になり、語ごとに括らないと
+/// `C:\Program Files\...\vim.exe` が2語に割れる。**隣に置いた vim で初めて
+/// 後者が起きる** ── 今まではどれも PATH 上の短い名前だった。
+pub(crate) fn editor_command_line(words: &[String], path: &std::path::Path) -> String {
+    let quoted: Vec<String> =
+        words.iter().map(|w| cian_core::editor::shell_word(w)).collect();
+    format!("{} \"{}\"", quoted.join(" "), path.display())
 }
 
 #[cfg(test)]

@@ -2216,6 +2216,18 @@ impl Session {
             // **Named `shellfilter`, not `filter`** — that one is the listing's
             // `/`, and two things called filter in one dispatcher is how the
             // wrong one gets called.
+            // `:vi` / `:vim` / `:nvim` ── 名指しされたエディタの居場所。
+            //
+            // 窓版はこれまで `vim %f` という文字列をシェルに打つだけで、
+            // vim が入っていない機械では `command not found` で終わっていた。
+            // **会社の Windows がそれだ。** 隣に置いたものを使うかどうかの
+            // 判断は `cian_core::editor::named`（端末版と同じ1か所）。
+            "whichedit" => {
+                let name = req.params["name"].as_str().unwrap_or("vi");
+                let cmd = cian_core::editor::named(name)
+                    .map(|c| cian_core::editor::shell_word(&c));
+                Ok(serde_json::json!({ "cmd": cmd }))
+            }
             "shellfilter" => {
                 let Some((path, file, _)) = self.open.as_ref() else {
                     anyhow::bail!("開いているファイルがありません");

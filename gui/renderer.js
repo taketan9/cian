@@ -10466,14 +10466,29 @@ async function cmdEditorTab(_arg, invokedAs) {
     const pane = state[state.focus];
     const row = pane.entries[pane.cursor];
     if (!row || row.parent || row.is_dir) { say(tr('choose a file first', 'ファイルを選んでください'), true); return; }
-    const editor = invokedAs && invokedAs !== 'vi' ? invokedAs : 'vi';
+    const want = invokedAs && invokedAs !== 'vi' ? invokedAs : 'vi';
+    // **PATH に無くても、隣に置いてあれば使う。** 会社の Windows には vim が
+    // 入っておらず入れることもできない ── ここまでは `vim %f` をそのまま
+    // シェルに打っていたので、そういう機械では `command not found` で
+    // 終わっていた。どれを起動するかは engine が答える（`cian_core::editor`、
+    // 端末版と同じ1か所）。括りも向こうで済んでいる。
+    const w = await ask('whichedit', { name: want });
+    if (!w || !w.cmd) {
+        say(want === 'nvim'
+            ? tr(`${want} is not on PATH`, `${want} が PATH にありません`)
+            : tr('vim is not on PATH. put one in a vim folder next to cian, or install it',
+                 'vim が PATH にありません。cian の隣の vim フォルダに置くか、インストールしてください'),
+            true);
+        return;
+    }
+    const editor = w.cmd;
     if (!term.on) await openShell();
     const t = await ask('shelltab', { pane: state.focus, ...shellSize() });
     if (!t) return;
     takeShell(t);
     setShellFocus(true);
     await ask('run', { pane: state.focus, line: `${editor} %f` });
-    say(tr(`opened in ${editor} (F10 closes the tab)`, `${editor} で開きました（F10 でタブごと閉じる）`));
+    say(tr(`opened in ${want} (F10 closes the tab)`, `${want} で開きました（F10 でタブごと閉じる）`));
 }
 
 async function cmdEditStyle(arg, invokedAs) {

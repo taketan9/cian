@@ -219,6 +219,28 @@ use crate::ai::StoredChatExt;
         assert_eq!(app.focused, FocusedPane::Shell, "shell focused for the macro");
     }
 
+    /// **隣に置いた vim で初めて、空白を含む実行ファイル名が来る。**
+    /// 今までエディタはどれも PATH 上の短い名前で、まとめて括っても語ごとに
+    /// 括っても同じだった。`C:\\Program Files\\…` はどちらの向きにも壊れる
+    /// ので、語ごとという決め方をテストで留める。
+    #[test]
+    fn the_editor_line_quotes_each_word_that_needs_it() {
+        use crate::edit::editor_command_line;
+        let p = std::path::Path::new("/tmp/a b.txt");
+        // 設定された複数語 ── まとめて括ってはいけない
+        assert_eq!(
+            editor_command_line(&["code".into(), "-w".into()], p),
+            "code -w \"/tmp/a b.txt\""
+        );
+        // 隣の vim ── 空白のある1語は括る
+        assert_eq!(
+            editor_command_line(&["C:/Program Files/cian/vim/vim92/vim.exe".into()], p),
+            "\"C:/Program Files/cian/vim/vim92/vim.exe\" \"/tmp/a b.txt\""
+        );
+        // ふつうの名前は今までどおり
+        assert_eq!(editor_command_line(&["vim".into()], p), "vim \"/tmp/a b.txt\"");
+    }
+
     #[test]
     fn edit_queues_the_file_for_the_external_editor() {
         let (_d, mut app) = app_with(&["note.txt"]);
