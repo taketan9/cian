@@ -853,6 +853,54 @@ async function main() {
         ['u', 'エディタの外へ出す前に'], ['wait:200', ''],
         ['Esc', ''], ['Esc', ''], ['Esc', '閉じる'], ['wait:600', ''],
 
+        // ── `:%!cmd` ── vi の filter ─────────────────────────────────────
+        //
+        // **この道は一度も機械で通っていなかった。** 端末版には split_filter
+        // のテストがあるが、窓版はそこを通らない ── monaco-vim の ex が範囲を
+        // 解釈して `defineEx('!')` に渡す、その繋ぎ目にしか無い。実機で見つけた
+        // 2つ（`sort` が `sortsort` になる argString の二重と、範囲が `line1`
+        // ではなく `line`/`lineEnd` に来る取り違え）はどちらもそこにあった。
+        // **打ってみるまで、ソースのどこにも矛盾が無い。**
+        //
+        // 物差しは**中身に依らないもの**にしてある。`sort` の結果を JS の
+        // sort と比べると、比べる相手が自分の照合順を持ってしまう ── 砂場の
+        // 中身が変わった日に、黙るか嘘の赤を出すかのどちらかになる。`wc -l`
+        // の答えは「元の行数」ひとつで、中身が何であれ決まる。
+        //
+        // 状態行は**日本語の文面では見ない**。窓は両方の言葉で喋るので、
+        // 文面で当てると英語で回した日に黙る。コマンド名が出ているか、綴りの
+        // `%!` が出ているか ── どちらの言葉でも変わらないものだけを見る。
+        ['land:d1.txt', 'd1.txt の行へ'], ['Enter', '開く'], ['wait:3000', ''],
+        ['read:(()=>{window.__f=viewer.ed.getValue();return "元 "+window.__f.split("\\n").length+" 行を控えた";})()', ''],
+        ['Esc', 'ノーマルへ'],
+        ['type::%!wc -l', ':%!wc -l'], ['Enter', '流す'], ['wait:2500', ''],
+        ['want:viewer.ed.getValue().trim() === String(window.__f.split("\\n").length)', '% はバッファ全体を渡した'],
+        ['type:u', '一手で取り消す'], ['wait:900', ''],
+        ['want:viewer.ed.getValue() === window.__f', 'u が filter を丸ごと戻した'],
+
+        // `.` は**カーソル行だけ**。ここが `%` と同じ範囲になっていたのが、
+        // 実機で `:.!tr a-z A-Z` がファイル全体を大文字にしたときの形だ。
+        // 「2行目だけが大文字で、他の行は1バイトも動いていない」を見る。
+        ['read:(()=>{viewer.ed.setPosition({lineNumber:2,column:1});return "カーソルを2行目へ";})()', ''],
+        ['type::.!tr a-z A-Z', ':.!tr a-z A-Z'], ['Enter', '流す'], ['wait:2500', ''],
+        ['want:(()=>{const a=window.__f.split("\\n"),b=viewer.ed.getValue().split("\\n");return a.length===b.length&&b.every((l,i)=>i===1?l===a[1].toUpperCase():l===a[i]);})()', '. はカーソル行だけを渡した'],
+        ['type:u', '取り消す'], ['wait:900', ''],
+
+        // 失敗したらバッファを変えない ── **filter の仕事を失う唯一の形**が
+        // 「失敗した stdout（たいてい空）で上書きする」で、しかもそれは成功と
+        // 見分けがつかない。中身が残ることと、理由が画面に出ることの両方。
+        ['type::%!cian-no-such-command', '無いコマンドに流す'], ['Enter', ''], ['wait:2500', ''],
+        ['want:viewer.ed.getValue() === window.__f', '失敗してもバッファは元のまま'],
+        ['want:(document.getElementById("status")||{textContent:""}).textContent.includes("cian-no-such-command")', '断った理由が画面に出ている'],
+
+        // 範囲の無い `:!cmd` は vi では「走らせて見せる」で filter ではない。
+        // cian は一覧側の `:!` にその意味を渡してあるので、ここでは断って
+        // 綴りを言う ── 黙って何もしないと「効かない」と読まれる。
+        ['type::!date', '範囲なしの :!'], ['Enter', ''], ['wait:1500', ''],
+        ['want:viewer.ed.getValue() === window.__f', '範囲なしは何も変えない'],
+        ['want:(document.getElementById("status")||{textContent:""}).textContent.includes("%!")', '綴りを教えている'],
+        ['Esc', ''], ['Esc', ''], ['Esc', '閉じる'], ['wait:600', ''],
+
         // ── 残りの四つ。**どれも「状態を作らないと届かない」キー** ────────
         //
         // 押していないキーが4つ残っていた理由は同じで、grep の結果／差分／
