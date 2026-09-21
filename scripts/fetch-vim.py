@@ -34,6 +34,14 @@ import sys
 import urllib.request
 import zipfile
 
+# **Windows の runner は stdout が cp1252 で、この道具の日本語が落ちる。**
+# 実際に v3.4.3 の梱包が1行目の print で転けた ── 落とす前に、言葉で。
+# 呼び出し側に `PYTHONIOENCODING` を立てさせない ── 次に別の場所から呼んだ
+# ときに同じことが起きる。決めるのはここだ。
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8", errors="replace")
+
 # 配布元 https://github.com/vim/vim-win32-installer/releases
 # **上げるのは意図してやること。** 黙って追従すると、社内に配った vim が
 # ある日入れ替わる。
