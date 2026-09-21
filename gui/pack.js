@@ -210,6 +210,23 @@ function checkOut(target, appDir, platform) {
     if (platform === 'win32' && !fs.existsSync(path.join(target, 'vim'))) {
         bad.push('vim/ が無い ── python3 scripts/fetch-vim.py で落とすか、cian-src-win.zip から組み立てる');
     }
+    // **エンジンが vim まで届く階にいること。**
+    //
+    // エンジンは隣から**上へ3階まで**しか探さない（`editor::beside`）。
+    // いまの Electron では `resources/app/` にいて `cian.exe` の隣がちょうど
+    // 3階目 ── **余裕がゼロ**だ。階が1つ増えた日に `:vim` が静かに効かなく
+    // なり、しかも zip は今までどおり出る。
+    //
+    // 数え方を Rust と揃えて書き写すと、片方を直したときに割れる。ここでは
+    // **構造のほう**を見る ── vim は `cian.exe` の隣、エンジンはその2階下。
+    // どちらかが動いたらここが鳴るので、そのとき Rust の上限を見直せばいい。
+    if (platform === 'win32' && fs.existsSync(path.join(target, 'vim'))) {
+        const rel = path.relative(target, appDir).split(path.sep).length;
+        if (rel !== 2) {
+            bad.push(`エンジンが cian.exe の ${rel} 階下にいる（2 のはず）`
+                + ' ── editor::beside は上へ3階までしか探さないので、:vim が届かなくなる');
+        }
+    }
     if (fs.existsSync(path.join(appDir, '..', 'default_app.asar'))) {
         bad.push('resources/default_app.asar が残っている（Electron の既定画面が開く）');
     }
