@@ -1959,11 +1959,7 @@ impl App {
             } else {
                 done.err.lines().next().unwrap_or_default().to_string()
             };
-            self.message = Some(if self.lang == Lang::Ja {
-                format!("{line}: {why}。何も変えていません")
-            } else {
-                format!("{line}: {why}. nothing changed")
-            });
+            self.message = Some(filter_failure(line, &why, self.lang == Lang::Ja));
             return;
         }
         let out = enc.decode(&done.out);
@@ -5058,6 +5054,32 @@ pub(crate) enum FilterScope {
 /// range that gets typed wrong. A bare `:!cmd` is deliberately absent too:
 /// that one means "run and show me" in vi, and in cian it already means
 /// something else at the pane's command line.
+/// 失敗した filter の一行。
+///
+/// **頭にコマンドを足すのは、相手が名乗っていないときだけ。** シェルの
+/// `command not found: xyz` に `xyz:` を被せると、同じ名前が1行に二度出る。
+/// 逆に終了コードしか返さない相手（`grep` が1を返して黙るなど）では、
+/// **何が失敗したのかがこの行にしか無い**ので足す。
+///
+/// 見るのは最初の語だけ ── シェルが名乗るのはプログラム名で、引数までは
+/// 繰り返さない。
+pub(crate) fn filter_failure(line: &str, why: &str, ja: bool) -> String {
+    let named = line
+        .split_whitespace()
+        .next()
+        .is_some_and(|prog| why.contains(prog));
+    let head = if named {
+        String::new()
+    } else {
+        format!("{line}: ")
+    };
+    if ja {
+        format!("{head}{why}。何も変えていません")
+    } else {
+        format!("{head}{why}. nothing changed")
+    }
+}
+
 pub(crate) fn split_filter(cmd: &str) -> Option<(FilterScope, &str)> {
     for (prefix, scope) in [
         ("'<,'>!", FilterScope::Selection),

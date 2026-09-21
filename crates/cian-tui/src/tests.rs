@@ -13378,6 +13378,30 @@ use crate::ai::StoredChatExt;
         assert_eq!(viewer_lines(&app), vec!["a", "b", "keep"], "three lines became two");
     }
 
+    /// **同じ名前を1行に二度出さない。** シェルの `command not found: xyz` に
+    /// `xyz:` を被せていた ── 画面に出る言葉で、実機で読んで初めて気づいた。
+    /// 逆に終了コードしか返さない相手では、何が失敗したのかがこの行にしか
+    /// 無いので頭を残す。
+    #[test]
+    fn a_failed_filter_names_the_command_only_when_the_shell_did_not() {
+        use crate::viewer::filter_failure;
+        // シェルが名乗っている ── 頭は付けない
+        assert_eq!(
+            filter_failure("nosuch", "zsh:1: command not found: nosuch", false),
+            "zsh:1: command not found: nosuch. nothing changed"
+        );
+        // 引数付きでも、見るのは最初の語
+        assert_eq!(
+            filter_failure("tr a-z A-Z", "tr: missing operand", true),
+            "tr: missing operand。何も変えていません"
+        );
+        // 終了コードだけ ── 何が失敗したのかはここにしか無い
+        assert_eq!(
+            filter_failure("grep foo", "exit 1", true),
+            "grep foo: exit 1。何も変えていません"
+        );
+    }
+
     /// The `:` line, which until 2026-09-20 could only grow and shrink at the
     /// end: a caret that moves, the lines already run, and Tab.
     #[test]

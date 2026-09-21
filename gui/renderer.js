@@ -8109,8 +8109,16 @@ async function filterThroughShell(cmd, from, to) {
     if (!r) return;
     if (!r.ok) {
         // バッファはそのまま。理由はコマンド自身の言葉で。
+        //
+        // **頭にコマンドを足すのは、相手が名乗っていないときだけ。** シェルの
+        // `command not found: xyz` に `xyz:` を被せると、同じ名前が1行に二度
+        // 出る。逆に終了コードしか返さない相手（`grep` が1を返して黙るなど）
+        // では、何が失敗したのかがこの行にしか無いので足す。端末版も同じ
+        // 決め方をしている（viewer.rs `filter_failure`）。
         const why = r.err || `exit ${r.code}`;
-        say(tr(`${cmd}: ${why}. nothing changed`, `${cmd}: ${why}。何も変えていません`), true);
+        const prog = cmd.split(/\s+/)[0];
+        const head = prog && why.includes(prog) ? '' : `${cmd}: `;
+        say(tr(`${head}${why}. nothing changed`, `${head}${why}。何も変えていません`), true);
         return;
     }
     viewer.ed.executeEdits('cian', [{
