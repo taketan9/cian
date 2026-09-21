@@ -170,9 +170,7 @@ fn binding_on(line: &str) -> Option<(String, String)> {
 /// `key` が `None` なら、その動作に付いている**有効な行をコメントに戻す**
 /// （行は消さない ── 1行の設定と同じで、そこに説明が付いていることがある）。
 pub fn set_keymap_in(text: &str, action: &str, key: Option<&str>) -> String {
-    let nl = if text.contains("\r\n") { "\r\n" } else { "\n" };
-    let mut lines: Vec<String> =
-        text.split('\n').map(|l| l.trim_end_matches('\r').to_string()).collect();
+    let (nl, mut lines) = crate::settings_edit::split_lines(text);
     let trailing = lines.last().map(|l| l.is_empty()).unwrap_or(false);
     if trailing {
         lines.pop();

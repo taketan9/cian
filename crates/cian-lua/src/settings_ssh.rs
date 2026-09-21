@@ -197,9 +197,7 @@ fn render(h: &HostRow, indent: &str) -> String {
 ///   消したはずのものが一覧に残る
 /// * `cian.ssh{}` がどこにも無ければ、末尾に新しく書く
 pub fn set_host_in(text: &str, name: &str, row: Option<&HostRow>) -> String {
-    let nl = if text.contains("\r\n") { "\r\n" } else { "\n" };
-    let mut lines: Vec<String> =
-        text.split('\n').map(|l| l.trim_end_matches('\r').to_string()).collect();
+    let (nl, mut lines) = crate::settings_edit::split_lines(text);
     let trailing = lines.last().map(|l| l.is_empty()).unwrap_or(false);
     if trailing {
         lines.pop();

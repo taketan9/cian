@@ -118,9 +118,19 @@ pub const ADDED_HEAD: &str = "-- ここから下は設定画面が書きます�
 /// **Lua の字面**をそのまま渡す ── `"8"`、`"true"`、`"\"nvim\""`、
 /// `"{ \"bak\", \"dmp\" }"`。引用符を付けるのは呼び出し側の仕事で、
 /// ここで型を推し量ると `"true"` という文字列が真偽値になる。
-pub fn set_option_in(text: &str, name: &str, value: Option<&str>) -> String {
+/// ファイルを行に分け、**戻すときの改行を一緒に覚える**。
+///
+/// 5か所が同じ2行を書いていた（`audit.py` の「同じ行が4回」）。別々に書くと、
+/// 片方だけ直したときにそこだけ改行が変わる ── `\r\n` のファイルを `\n` で
+/// 書き戻すと git が全行を変更として出すので、**この2つは一緒でなければ
+/// 意味が無い**。だから1つの関数が両方を返す。
+pub(crate) fn split_lines(text: &str) -> (&'static str, Vec<String>) {
     let nl = if text.contains("\r\n") { "\r\n" } else { "\n" };
-    let mut lines: Vec<String> = text.split('\n').map(|l| l.trim_end_matches('\r').to_string()).collect();
+    (nl, text.split('\n').map(|l| l.trim_end_matches('\r').to_string()).collect())
+}
+
+pub fn set_option_in(text: &str, name: &str, value: Option<&str>) -> String {
+    let (nl, mut lines) = split_lines(text);
     // 末尾の改行で割れた空行は、書き戻すときに復元する。
     let trailing = lines.last().map(|l| l.is_empty()).unwrap_or(false);
     if trailing {
@@ -234,9 +244,7 @@ pub fn get_field_in(text: &str, call: &str, key: &str) -> Option<String> {
 ///
 /// `value` が `None` ならその項目をコメントに戻す（行は消さない）。
 pub fn set_field_in(text: &str, call: &str, key: &str, value: Option<&str>) -> String {
-    let nl = if text.contains("\r\n") { "\r\n" } else { "\n" };
-    let mut lines: Vec<String> =
-        text.split('\n').map(|l| l.trim_end_matches('\r').to_string()).collect();
+    let (nl, mut lines) = split_lines(text);
     let trailing = lines.last().map(|l| l.is_empty()).unwrap_or(false);
     if trailing {
         lines.pop();
@@ -491,6 +499,32 @@ pub fn write_init(path: &std::path::Path, text: &str) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 括ったものが、また分かれないように。
+    ///
+    /// **改行の種類と行の分け方は一組**で、5か所が別々に持っていた。片方だけ
+    /// 直すと、そこだけ `\r\n` のファイルが `\n` で書き戻される ── git が
+    /// 全行を変更として出す形になる。会社の Windows で使うものなので、ここは
+    /// 黙って揃えてはいけない。
+    #[test]
+    fn splitting_remembers_the_line_ending_it_has_to_put_back() {
+        let (nl, lines) = split_lines("a\r\nb\r\n");
+        assert_eq!(nl, "\r\n", "CRLF のファイルは CRLF で戻す");
+        assert_eq!(lines, vec!["a", "b", ""], "行に \\r は残さない");
+        assert_eq!(lines.join(nl), "a\r\nb\r\n", "そのまま戻る");
+
+        let (nl, lines) = split_lines("a\nb\n");
+        assert_eq!(nl, "\n");
+        assert_eq!(lines.join(nl), "a\nb\n");
+
+        // 混ざっているファイルは CRLF 扱い（1つでもあれば Windows で作られた
+        // ものと見る）。分けたあとの行に `\r` は残らない。
+        let (nl, lines) = split_lines("a\r\nb\n");
+        assert_eq!(nl, "\r\n");
+        // 末尾の改行のあとの空文字も1行として持つ ── 書き戻すときに
+        // 「ファイルが改行で終わっていた」を再現するのがこの空行だ。
+        assert_eq!(lines, vec!["a", "b", ""]);
+    }
 
     const SAMPLE: &str = "\
 -- 設定の見本

@@ -93,9 +93,7 @@ fn render(s: &Snip, indent: &str) -> String {
 
 /// `name` のスニペットを、足す・直す・消す。`row` が `None` なら消す。
 pub fn set_snip_in(text: &str, name: &str, row: Option<&Snip>) -> String {
-    let nl = if text.contains("\r\n") { "\r\n" } else { "\n" };
-    let mut lines: Vec<String> =
-        text.split('\n').map(|l| l.trim_end_matches('\r').to_string()).collect();
+    let (nl, mut lines) = crate::settings_edit::split_lines(text);
     let trailing = lines.last().map(|l| l.is_empty()).unwrap_or(false);
     if trailing {
         lines.pop();
