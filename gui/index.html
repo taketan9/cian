@@ -374,7 +374,12 @@ html, body {
    carmine border for exactly this: the rows look like files, and mistaking
    somebody's server for your own disk is the one confusion worth spending a
    colour on. */
-.pane.remote { outline: 2px solid var(--m-remote); outline-offset: -2px; }
+/* `-3px`。焦点枠（3px）の帯をちょうど外す ── `-2px` だと重なって、上に描かれる
+   ほうに負ける（それが 2026-09-20 に「サーバの枠がシアン」になっていた正体だ）。
+   色は `.pane.active.remote::after` でも直してあるので、これは二重の備え:
+   どちらか片方が消えても、カーマインは残る。`.dropping` が最初から `-3px` な
+   のと同じ理由。 */
+.pane.remote { outline: 2px solid var(--m-remote); outline-offset: -3px; }
 /* Where you are. The most-read line in a file manager, and it was set two
    points smaller than the date column and in the dim colour — the priorities
    the wrong way round. Full size now, with the parents dim and the folder you

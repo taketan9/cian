@@ -613,6 +613,18 @@ async function main() {
         ['read:(()=>{document.querySelector(".pane.active").classList.add("remote");return "remote を付けた"})()', ''],
         ['want:getComputedStyle(document.querySelector(".pane.active"),"::after").borderTopColor.replace(/\\s/g,"") === getComputedStyle(document.documentElement).getPropertyValue("--m-remote").replace(/\\s/g,"")', 'サーバの枠はカーマイン'],
         ['read:(()=>{document.querySelector(".pane.active").classList.remove("remote");return "戻した"})()', ''],
+        // **焦点枠の内側に描く outline は、焦点枠を避けていること。**
+        //
+        // カーマインが消えていたのは、詰まるところ `outline-offset` が `-2px`
+        // で、焦点枠の 3px の帯と重なっていたからだった（`.dropping` は
+        // `-3px` で、ちょうど外している）。**1文字の違いで、読んでも分からない。**
+        // だから読まずに測る: 内側 outline の食い込みが焦点枠の太さ以上なら、
+        // 覆われようがない。
+        ['want:["remote","dropping"].every((c)=>{const p=document.querySelector(".pane.active");p.classList.add(c);const cs=getComputedStyle(p),af=getComputedStyle(p,"::after");const off=Math.abs(parseFloat(cs.outlineOffset)||0),w=parseFloat(af.borderTopWidth)||0;const ok=cs.outlineStyle==="none"||off>=w;p.classList.remove(c);return ok;})', '内側の outline が焦点枠を避けている'],
+        // シェルの状態（記録中・シンクロ）は**自分の border** で言うので、
+        // 焦点枠（padding box の内側）とは帯が別 ── 覆われない。太さが 0 に
+        // なったらその前提が崩れる。
+        ['want:(()=>{el.shell.classList.add("logging");const w=parseFloat(getComputedStyle(el.shell).borderTopWidth)||0;el.shell.classList.remove("logging");return w>0;})()', '記録中の上辺が焦点枠の外にある'],
 
         // AI の会話窓。**AI が設定されていなくても開く** ── 面と鍵と重なりは
         // モデルと無関係で、それがここで見たいもの。実際に答えが返るところは
