@@ -256,6 +256,12 @@ struct Session {
     /// remote path, and where the copy is. Same shape and same reason as the
     /// archive member below.
     remote_member: Option<(cian_scp::Target, String, std::path::PathBuf)>,
+    /// 比べるために落とした複製 ── `一時ファイル → (どのサーバ, 向こうの道)`。
+    ///
+    /// 保存はここを見て上げ直し、閉じたときにここを見て消す。**表にしてあるのは
+    /// 左右の2つが同時に在りうるから**で、単体で開いたときの `remote_member` とは
+    /// 別に持つ（片方だけ閉じることがある）。
+    fetched: std::collections::HashMap<std::path::PathBuf, (cian_scp::Target, String)>,
     /// A member of an archive, opened by extracting it: which archive, which
     /// member, and where the copy is. Kept so a save knows where to put it
     /// back — a temporary file with no idea where it came from is a file that
@@ -343,6 +349,7 @@ impl Session {
             pair: None,
             member: None,
             remote_member: None,
+            fetched: std::collections::HashMap::new(),
             ime_saved: None,
             hex: None,
             redo: Stack::default(),
@@ -409,6 +416,89 @@ impl Session {
     /// ペインの道はサーバの中の道で、手元には無い ── 読もうとして
     /// `stat /opt/…` が赤く出るだけだった（crmaine の紹介動画、2026-09-23）。
     /// 落としてから比べる道はまだ無いので、**何をすればいいかを言って断る**。
+    /// 比べる側のファイルを、手元の道にして返す。
+    ///
+    /// サーバのペインなら**一時ファイルへ落として**その道を返し、どこから来たかを
+    /// `fetched` に覚える（保存は上げ直し、閉じたら消す）。`ok` が立っていない
+    /// うちは、大きいものを黙って落とさない ── 先に訊くために `needs_ok` を返す。
+    fn here_or_fetched(&mut self, which: &str, ok: bool, ceiling: Option<u64>)
+        -> anyhow::Result<Result<std::path::PathBuf, u64>> {
+        let (path, name, is_dir) = self.selected(which)?;
+        let Some(target) = self.remotes.get(which).cloned() else {
+            return Ok(Ok(path));
+        };
+        if is_dir {
+            anyhow::bail!("サーバのディレクトリは比べられません。先に手元へ落としてください");
+        }
+        let len = {
+            let pane = self.pane_mut(which)?;
+            pane.entries.get(pane.cursor).map(|e| e.len).unwrap_or(0)
+        };
+        // **開けない大きさなら、落とす前に断る。** 並べて直す画面は 8MB で
+        // 断る（grep と同じ天井 ── 開けるものは直せる、を揃えてある）ので、
+        // 落としてから断るのは待たせるだけだ。
+        if let Some(c) = ceiling {
+            if len > c {
+                anyhow::bail!("{}MB を超えるので並べられません", c / (1024 * 1024));
+            }
+        }
+        if !ok && len > cian_scp::ASK_ABOVE_BYTES {
+            return Ok(Err(len));
+        }
+        let remote_path = path.display().to_string();
+        let dir = Self::fetch_dir();
+        std::fs::create_dir_all(&dir)?;
+        let at = dir.join(format!("{which}-{name}"));
+        let stop = std::sync::atomic::AtomicBool::new(false);
+        let mut noop = |_: u64, _: u64| {};
+        let mut ctl = cian_scp::Ctl {
+            cancel: &stop,
+            on_progress: &mut noop,
+            limit_bps: self.limit_bps,
+        };
+        cian_scp::download(&target, &remote_path, &at, &mut ctl)?;
+        self.fetched.insert(at.clone(), (target, remote_path));
+        Ok(Ok(at))
+    }
+
+    /// 落とした複製を片付ける。**閉じたら消す**（本人、2026-09-23）── 保存せずに
+    /// 閉じたなら複製ごと捨てる。大きさに関係なく残さない。
+    fn drop_fetched(&mut self) {
+        for at in self.fetched.keys() {
+            let _ = std::fs::remove_file(at);
+        }
+        self.fetched.clear();
+        // 空になった置き場も畳む。**残るのは中身ではなく殻**だが、サーバから
+        // 落としたものの入れ物が溜まり続けるのは気持ちのいい話ではない。
+        let _ = std::fs::remove_dir(Self::fetch_dir());
+    }
+
+    fn fetch_dir() -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("cian-compare-{}", std::process::id()))
+    }
+
+    /// 保存した先がサーバから落としたものなら、上げ直す。
+    /// サーバから落としたものなら、向こうでの名前。
+    fn remote_name(&self, at: &std::path::Path) -> Option<String> {
+        let (_, remote) = self.fetched.get(at)?;
+        Some(remote.rsplit('/').next().unwrap_or(remote).to_string())
+    }
+
+    fn put_back(&mut self, at: &std::path::Path) -> anyhow::Result<()> {
+        let Some((target, remote_path)) = self.fetched.get(at).cloned() else {
+            return Ok(());
+        };
+        let stop = std::sync::atomic::AtomicBool::new(false);
+        let mut noop = |_: u64, _: u64| {};
+        let mut ctl = cian_scp::Ctl {
+            cancel: &stop,
+            on_progress: &mut noop,
+            limit_bps: self.limit_bps,
+        };
+        cian_scp::upload(&target, at, &remote_path, None, &mut ctl)?;
+        Ok(())
+    }
+
     fn both_sides_are_here(&mut self, verb: &str) -> anyhow::Result<()> {
         for which in ["left", "right"] {
             if self.pane_mut(which)?.remote_view().is_some() {
@@ -1193,7 +1283,13 @@ impl Session {
                 // The stamp is taken *after* the write, so the copy we now
                 // hold is the one on disk.
                 let st = cian_core::stamp::of(path);
+                let path = path.clone();
                 self.open = Some((path.clone(), file, st));
+                // 比べるために落としてきたものなら、同じ手でサーバへ戻す。
+                // **名乗るのは向こうの名前** ── 一時ファイルの名前を出しても、
+                // どのファイルを保存したのか読む人には分からない。
+                let name = self.remote_name(&path).unwrap_or(name);
+                self.put_back(&path)?;
                 Ok(serde_json::json!({ "saved": name, "lines": lines }))
             }
             // ---- What is here, measured rather than felt ----
@@ -1433,12 +1529,31 @@ impl Session {
             // directories recursively. Asking the window to work out which
             // would put the decision where the files are not.
             "compare" => {
-                self.both_sides_are_here("比べられません")?;
-                let (lp, ln, ld) = self.selected("left")?;
-                let (rp, rn, rd) = self.selected("right")?;
+                let ok = req.params["ok"].as_bool().unwrap_or(false);
+                let (lp0, ln, ld) = self.selected("left")?;
+                let (rp0, rn, rd) = self.selected("right")?;
                 if ld != rd {
                     anyhow::bail!("{ln} と {rn} は種類が違います");
                 }
+                // ディレクトリ同士はそのまま（サーバのものは `here_or_fetched`
+                // が断る ── 木を SFTP で歩くのは桁が違う）。**天井は両方に
+                // 掛ける** ── `=` は差分を取った後で並べる画面へ進むので、
+                // 一覧のときだけ落とせても、そのあと必ず断られる。
+                let (lp, rp) = if ld {
+                    self.both_sides_are_here("比べられません")?;
+                    (lp0, rp0)
+                } else {
+                    let cap = Some(cian_core::grepedit::MAX_BYTES);
+                    let l = match self.here_or_fetched("left", ok, cap)? {
+                        Ok(p) => p,
+                        Err(len) => return Ok(big(&ln, len)),
+                    };
+                    let r = match self.here_or_fetched("right", ok, cap)? {
+                        Ok(p) => p,
+                        Err(len) => return Ok(big(&rn, len)),
+                    };
+                    (l, r)
+                };
                 let stop = std::sync::atomic::AtomicBool::new(false);
                 if ld {
                     let d = cian_core::dirdiff::compare(&lp, &rp, &stop, &mut |_| {});
@@ -2907,6 +3022,15 @@ impl Session {
             // arrangement — everything downstream works on a path, and the
             // engine remembers where the copy came from so Ctrl+S can put it
             // back. A temporary that has forgotten its origin can only be lost.
+            // 比べるために落とした複製を片付ける。**閉じたら消す** ── 窓が
+            // 並べた画面を閉じるとき、単体のリモート表示を閉じるときに呼ぶ。
+            "dropfetched" => {
+                self.drop_fetched();
+                if let Some((_, _, at)) = self.remote_member.take() {
+                    let _ = std::fs::remove_file(at);
+                }
+                Ok(serde_json::json!({ "dropped": true }))
+            }
             "remoteview" => {
                 let which = req.params["pane"].as_str().unwrap_or("left").to_string();
                 let Some(target) = self.remotes.get(&which).cloned() else {
@@ -4582,12 +4706,23 @@ impl Session {
             // screen. This is the same two files asked for differently: there,
             // "what differs"; here, "let me fix it".
             "twofiles" => {
-                self.both_sides_are_here("並べられません")?;
-                let (lp, ln, ld) = self.selected("left")?;
-                let (rp, rn, rd) = self.selected("right")?;
+                let ok = req.params["ok"].as_bool().unwrap_or(false);
+                let (_, ln, ld) = self.selected("left")?;
+                let (_, rn, rd) = self.selected("right")?;
                 if ld || rd {
                     anyhow::bail!("ファイル同士でないと並べられません");
                 }
+                // **サーバのものは落としてから並べる。** 大きいものは先に訊く
+                // ので、`needs_ok` を返して窓に決めさせる（`here_or_fetched`）。
+                let cap = Some(cian_core::grepedit::MAX_BYTES);
+                let lp = match self.here_or_fetched("left", ok, cap)? {
+                    Ok(p) => p,
+                    Err(len) => return Ok(big(&ln, len)),
+                };
+                let rp = match self.here_or_fetched("right", ok, cap)? {
+                    Ok(p) => p,
+                    Err(len) => return Ok(big(&rn, len)),
+                };
                 let l = cian_core::grepedit::read_text(&lp)?;
                 let r = cian_core::grepedit::read_text(&rp)?;
                 let lang = cian_core::highlight::detect(&lp).map(|x| format!("{x:?}"));
@@ -4614,7 +4749,10 @@ impl Session {
                     .map(|s| s.to_string_lossy().into_owned())
                     .unwrap_or_default();
                 let n = file.lines.len();
+                let path = path.clone();
                 self.pair = Some((path.clone(), file));
+                let name = self.remote_name(&path).unwrap_or(name);
+                self.put_back(&path)?;
                 Ok(serde_json::json!({ "saved": name, "lines": n }))
             }
             // One named file to one named directory. Used by the comparison
@@ -5895,6 +6033,18 @@ impl Session {
             other => Err(anyhow::anyhow!("no such method: {other}")),
         }
     }
+}
+
+/// 「大きいけれど落とすか」を窓に訊かせる返事。
+///
+/// エンジンは訊けない（画面を持たない）ので、**訊くべきだという事実**を返して
+/// 窓に決めさせる。承知したら `ok: true` を付けて同じ操作を呼び直す。
+fn big(name: &str, len: u64) -> serde_json::Value {
+    serde_json::json!({
+        "needs_ok": true,
+        "name": name,
+        "mb": (len as f64 / 1024.0 / 1024.0 * 10.0).round() / 10.0,
+    })
 }
 
 fn main() -> anyhow::Result<()> {

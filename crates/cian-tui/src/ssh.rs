@@ -871,6 +871,119 @@ impl App {
         });
     }
 
+    /// 比べる2つのうち、サーバにあるほうを落としてから差分を開く。
+    ///
+    /// **落とすのはワーカーで**、待っている間も画面は動く（F3 の取り寄せと
+    /// 同じ形）。返り値は「こちらで引き受けた」── `false` なら手元同士の比較
+    /// として続く。
+    ///
+    /// 断るのは2つ。サーバのディレクトリ（木を SFTP で歩くのは桁が違う）と、
+    /// 8MB を超えるファイル（エディタの天井と同じ ── 落としても開けない）。
+    /// 4MB を超えるものは、落とす前に訊く。
+    pub(crate) fn start_remote_diff(&mut self, a: &cian_core::Entry, b: &cian_core::Entry) -> bool {
+        let sides = [
+            (crate::FocusedPane::Left, a),
+            (crate::FocusedPane::Right, b),
+        ];
+        let mut jobs: Vec<(cian_scp::Target, String, std::path::PathBuf)> = Vec::new();
+        let mut paths: Vec<std::path::PathBuf> = Vec::new();
+        for (side, e) in sides {
+            let Some((target, _)) = self.remote_targets[Self::side_idx(side)].clone() else {
+                paths.push(e.path.clone());
+                continue;
+            };
+            if e.is_dir {
+                self.message = Some(tr(self.lang,
+                    "a folder on the server cannot be compared. copy it here first",
+                    "サーバのディレクトリは比べられません。先に手元へ落としてください").into());
+                return true;
+            }
+            if e.len > cian_core::grepedit::MAX_BYTES {
+                let mb = cian_core::grepedit::MAX_BYTES / (1024 * 1024);
+                self.message = Some(if self.lang == crate::theme::Lang::Ja {
+                    format!("{mb}MB を超えるので比べられません")
+                } else {
+                    format!("larger than {mb} MB — too big to compare")
+                });
+                return true;
+            }
+            if e.len > cian_scp::ASK_ABOVE_BYTES && !self.diff_fetch_agreed {
+                self.diff_fetch_pending = Some((a.clone(), b.clone()));
+                self.open_popup(crate::Popup::ConfirmFetchDiff {
+                    name: e.name.clone(),
+                    mb: e.len as f64 / 1024.0 / 1024.0,
+                });
+                return true;
+            }
+            let dir = std::env::temp_dir().join("cian-compare");
+            let _ = std::fs::create_dir_all(&dir);
+            let at = dir.join(format!("{}-{}", Self::side_idx(side), e.name));
+            jobs.push((target, e.path.to_string_lossy().into_owned(), at.clone()));
+            paths.push(at);
+        }
+        self.diff_fetch_agreed = false;
+        let temps: Vec<std::path::PathBuf> = jobs.iter().map(|(_, _, at)| at.clone()).collect();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let limit = self.transfer_limit;
+        std::thread::spawn(move || {
+            let cancel = std::sync::atomic::AtomicBool::new(false);
+            let mut prog = |_: u64, _: u64| {};
+            let mut r = Ok(());
+            for (target, remote, at) in jobs {
+                let mut ctl = cian_scp::Ctl { cancel: &cancel, on_progress: &mut prog, limit_bps: limit };
+                if let Err(e) = cian_scp::download(&target, &remote, &at, &mut ctl) {
+                    r = Err(e.to_string());
+                    break;
+                }
+            }
+            let _ = tx.send(r);
+        });
+        self.remote_diff = Some(crate::RemoteDiff {
+            rx,
+            left: paths[0].clone(),
+            right: paths[1].clone(),
+            lname: a.name.clone(),
+            rname: b.name.clone(),
+            temps,
+        });
+        self.message = Some(tr(self.lang, "fetching to compare…", "比べるために取り寄せています…").into());
+        true
+    }
+
+    /// 取り寄せが終わったら差分を開く。`poll_remote_view` と同じ形。
+    pub(crate) fn poll_remote_diff(&mut self) -> bool {
+        let Some(rd) = &self.remote_diff else { return false };
+        match rd.rx.try_recv() {
+            Ok(result) => {
+                let crate::RemoteDiff { left, right, lname, rname, temps, .. } =
+                    self.remote_diff.take().unwrap();
+                match result {
+                    Ok(()) => {
+                        self.message = None;
+                        self.diff_temps = temps;
+                        self.open_diff_paths(&left, &right, &lname, &rname);
+                    }
+                    Err(e) => {
+                        for at in temps {
+                            let _ = std::fs::remove_file(at);
+                        }
+                        self.message = Some(if self.lang == crate::theme::Lang::Ja {
+                            format!("取り寄せに失敗しました: {e}")
+                        } else {
+                            format!("could not fetch it: {e}")
+                        });
+                    }
+                }
+                true
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => false,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.remote_diff = None;
+                true
+            }
+        }
+    }
+
     /// F3 on a remote pane: fetch the file under the cursor to a temp path on a
     /// worker thread, then open it in the viewer when it lands. Returns true if
     /// it started a fetch (so the caller skips the local viewer).

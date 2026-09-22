@@ -4797,6 +4797,24 @@ fn draw_simple_dialog(
 ) {
     let popup: &Popup = popup;
     let (title, body, footer) = match popup {
+        Popup::ConfirmFetchDiff { name, mb } => {
+            let title = tr(lang, " fetch ", " 取り寄せ ").to_string();
+            let lines = if lang == Lang::Ja {
+                vec![
+                    format!("{name} はサーバにある {mb:.1}MB のファイルです"),
+                    String::new(),
+                    "比べるには、まず手元へ複製します".to_string(),
+                ]
+            } else {
+                vec![
+                    format!("{name} is {mb:.1}MB on the server"),
+                    String::new(),
+                    "comparing copies it here first".to_string(),
+                ]
+            };
+            let foot = tr(lang, " y/Enter=fetch  n/Esc=cancel ", " y/Enter=取り寄せる  n/Esc=取消 ");
+            (title, lines, foot.to_string())
+        }
         Popup::ConfirmDelete { targets } => {
             let title = tr(lang, " delete ", " 削除 ").to_string();
             let head = if lang == Lang::Ja {
@@ -5345,6 +5363,10 @@ fn draw_simple_dialog(
     // Clickable buttons for the dialogs. Each stands in for the key it mirrors,
     // so the keyboard shortcuts in the footer keep working unchanged.
     let buttons: Vec<(&str, ZoneKind)> = match popup {
+        Popup::ConfirmFetchDiff { .. } => vec![
+            (tr(lang, "Fetch", "取り寄せる"), ZoneKind::Enter),
+            (tr(lang, "Cancel", "取消"), ZoneKind::Esc),
+        ],
         Popup::ConfirmDelete { .. } => vec![
             (tr(lang, "Trash", "ゴミ箱"), ZoneKind::Enter),
             (tr(lang, "Delete!", "完全削除"), ZoneKind::Char('a')),

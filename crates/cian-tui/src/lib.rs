@@ -254,6 +254,19 @@ struct RemoteView {
     name: String,
 }
 
+/// 比べるために落としている最中の2つ。
+///
+/// 落とすのはワーカーで、待っている間も画面は動く（`RemoteView` と同じ形）。
+/// 届いたら差分を開き、**閉じたら `temps` を消す**。
+struct RemoteDiff {
+    rx: std::sync::mpsc::Receiver<Result<(), String>>,
+    left: PathBuf,
+    right: PathBuf,
+    lname: String,
+    rname: String,
+    temps: Vec<PathBuf>,
+}
+
 /// A queued host-crossing move: copy each source file to the destination, then
 /// delete the source. A `None` target means that end is the local machine; the
 /// source paths are absolute (local paths or remote absolute paths as strings).
@@ -314,6 +327,11 @@ struct PaletteItem {
 enum Popup {
     None,
     ConfirmDelete { targets: Vec<PathBuf> },
+    /// サーバのファイルを、比べるために落としてよいか。
+    ///
+    /// **頼まれていない転送だから訊く。** 4MB を超えるものだけ（`ASK_ABOVE_BYTES`）。
+    /// 8MB を超えるものは落としても開けないので、ここまで来ずに断っている。
+    ConfirmFetchDiff { name: String, mb: f64 },
     /// The operation queue (`:queue`): the running op and everything waiting.
     OpQueue { cursor: usize },
     /// Files about to lose their UTF-8 BOM (`:nobom`).
@@ -2613,6 +2631,13 @@ pub struct App {
     remote_pane_ls: Option<(FocusedPane, RemoteLsRx)>,
     /// A remote file being downloaded to a temp path so `F3` can view it.
     remote_view: Option<RemoteView>,
+    /// 比べるために落としている最中のもの、と落とした複製。
+    remote_diff: Option<RemoteDiff>,
+    /// 「大きいけど落とすか」に答えたかどうかと、答えを待っている2つ。
+    diff_fetch_agreed: bool,
+    diff_fetch_pending: Option<(cian_core::Entry, cian_core::Entry)>,
+    /// 差分を閉じたら消す複製（`dismiss_to_viewer` が見る）。
+    diff_temps: Vec<PathBuf>,
     /// Runtime overrides for two config options, flipped from the toggles menu
     /// (`T`). `None` = follow init.lua; `Some(v)` = the user's live choice.
     notify_runtime: Option<bool>,
@@ -2948,6 +2973,10 @@ impl App {
             remote_mut: None,
             remote_pane_ls: None,
             remote_view: None,
+            remote_diff: None,
+            diff_fetch_agreed: false,
+            diff_fetch_pending: None,
+            diff_temps: Vec::new(),
             notify_runtime: None,
             verify_runtime: None,
             recent_files: Vec::new(),
@@ -4979,6 +5008,9 @@ impl App {
         }
         // Install a finished remote directory listing into the download browser.
         if self.remote_pane_ls.is_some() && self.poll_remote_pane_ls() {
+            redraw = true;
+        }
+        if self.remote_diff.is_some() && self.poll_remote_diff() {
             redraw = true;
         }
         if self.remote_view.is_some() && self.poll_remote_view() {

@@ -13969,6 +13969,58 @@ use crate::ai::StoredChatExt;
         assert_eq!(viewer_lines(&app), ["String joined() {", "}"], "di{{");
     }
 
+    /// **サーバのものは、比べる前に断る2つがある。** ディレクトリ（木を SFTP で
+    /// 歩くのは桁が違う）と、8MB を超えるファイル（エディタの天井と同じ ──
+    /// 落としても開けないので、落としてから断るのは待たせるだけだ）。
+    /// どちらも通信せずに戻るので、偽のサーバで確かめられる。
+    #[test]
+    fn a_remote_side_is_refused_before_anything_is_fetched() {
+        let (_d, mut app) = app_with(&["a.txt"]);
+        app.remote_targets[1] = Some((
+            cian_scp::Target {
+                host: "example".into(),
+                port: 22,
+                user: "who".into(),
+                password: String::new(),
+                key: None,
+                key_pass: None,
+            },
+            "/srv".into(),
+        ));
+        let here = cian_core::Entry {
+            name: "a.txt".into(),
+            name_lower: "a.txt".into(),
+            path: std::path::PathBuf::from("/tmp/a.txt"),
+            is_dir: false,
+            len: 10,
+            modified: None,
+            cloud: false,
+            is_parent: false,
+        };
+        let folder = cian_core::Entry { is_dir: true, ..here.clone() };
+        assert!(app.start_remote_diff(&here, &folder), "引き受けた");
+        let said = app.message.clone().unwrap_or_default();
+        assert!(said.contains("folder on the server"), "ディレクトリは断る: {said}");
+
+        let huge = cian_core::Entry { len: cian_core::grepedit::MAX_BYTES + 1, ..here.clone() };
+        app.message = None;
+        assert!(app.start_remote_diff(&here, &huge), "引き受けた");
+        let said = app.message.clone().unwrap_or_default();
+        assert!(said.contains("8 MB"), "大きすぎるものは断る: {said}");
+        assert!(app.remote_diff.is_none(), "落としにいっていない");
+
+        // 4MB を超えるものは、落とす前に訊く。
+        let mid = cian_core::Entry { len: cian_scp::ASK_ABOVE_BYTES + 1, ..here.clone() };
+        app.message = None;
+        assert!(app.start_remote_diff(&here, &mid), "引き受けた");
+        assert!(
+            matches!(app.popup, Popup::ConfirmFetchDiff { .. }),
+            "訊いている: {:?}",
+            app.popup
+        );
+        assert!(app.remote_diff.is_none(), "答える前に落としにいっていない");
+    }
+
     /// V + d deletes the selected lines; v + d splices within lines.
     #[test]
     fn viewer_visual_delete() {
@@ -15618,6 +15670,10 @@ mod every_popup_behaves {
         let files = vec![file.clone()];
         vec![
             ("ConfirmDelete", Popup::ConfirmDelete { targets: files.clone() }),
+            (
+                "ConfirmFetchDiff",
+                Popup::ConfirmFetchDiff { name: "one.txt".into(), mb: 5.6 },
+            ),
             ("OpQueue", Popup::OpQueue { cursor: 0 }),
             ("ConfirmNoBom", Popup::ConfirmNoBom { targets: files.clone() }),
             (

@@ -6467,6 +6467,10 @@ async function closeView(ask_first = true) {
     scratch.on = false;
     if (pair.vims) { for (const v of pair.vims) v.dispose(); pair.vims = null; }
     if (pair.ed) { pair.ed.dispose(); pair.ed = null; }
+    // **落とした複製は、閉じたら消す**（本人、2026-09-23）── 大きさに関係なく。
+    // 保存せずに閉じたなら複製ごと捨てる。単体で開いたリモートのファイルも同じ。
+    if (pair.base || remoteMember.on) ask('dropfetched', {}).catch(() => {});
+    pair.base = null;
     pair.on = false;
     // Only when the door is being used, not when stepping between files.
     if (ask_first) openFiles.list = [];
@@ -9056,9 +9060,28 @@ const DIFF_ENCS = [null, 'sjis', 'utf8', 'utf16le', 'utf16be'];
 const ENC_NAME = { sjis: 'Shift_JIS', utf8: 'UTF-8', utf16le: 'UTF-16LE', utf16be: 'UTF-16BE' };
 let diffEnc = null;
 
+/// サーバのファイルを、比べるために落としてよいか。
+///
+/// **エンジンは訊けない**（画面を持たない）ので、`needs_ok` を返してここで訊く。
+/// 20MB を超えたときだけ ── 頼まれていない転送を黙って始めないための一呼吸。
+/// 承知したら同じ操作を `ok` 付きで呼び直す（`cian-scp::ASK_ABOVE_BYTES`）。
+async function okToFetch(r) {
+    if (!r || !r.needs_ok) return false;
+    return confirm(
+        tr(`${r.name} is ${r.mb}MB on the server`, `${r.name} はサーバにある ${r.mb}MB のファイルです`),
+        tr('comparing copies it here first', '比べるには、まず手元へ複製します'));
+}
+
 async function cmdCompare() {
     say(tr('comparing…', '比べています…'));
-    const r = await ask('compare', { folded: diffFolded, enc: diffEnc || undefined });
+    let agreed = false;
+    let r = await ask('compare', { folded: diffFolded, enc: diffEnc || undefined });
+    if (r && r.needs_ok) {
+        if (!await okToFetch(r)) { say(tr('stopped', 'やめました')); return; }
+        agreed = true;
+        say(tr('fetching…', '取り寄せています…'));
+        r = await ask('compare', { folded: diffFolded, enc: diffEnc || undefined, ok: true });
+    }
     if (!r) return;
     if (r.kind === 'dirs') {
         // Same as the file case, and for the same reason (actions.rs:1276):
@@ -9127,7 +9150,9 @@ async function cmdCompare() {
         // reached rather than the first. `L` still gets the list, which keeps
         // what a list is better at: `f` to unfold, `c` and `w` to take it out
         // of the window, `x` to ask about it.
-        if (!compareAsList) { closeReport(); await cmdDiffEdit(); return; }
+        // **承知は引き継ぐ。** `=` は差分と並べる画面でエンジンに二度訊くので、
+        // 渡さないと同じファイルについて二度訊かれる。
+        if (!compareAsList) { closeReport(); await cmdDiffEdit(agreed); return; }
         compareAsList = false;
     }
     // A difference is read by its differences, so the identical runs between
@@ -9332,8 +9357,13 @@ function pairDirty() {
         || m.modified.getAlternativeVersionId() !== pair.base[1];
 }
 
-async function cmdDiffEdit() {
-    const r = await ask('twofiles', {});
+async function cmdDiffEdit(agreed = false) {
+    let r = await ask('twofiles', agreed ? { ok: true } : {});
+    if (r && r.needs_ok) {
+        if (!await okToFetch(r)) { say(tr('stopped', 'やめました')); return; }
+        say(tr('fetching…', '取り寄せています…'));
+        r = await ask('twofiles', { ok: true });
+    }
     if (!r) return;
     let monaco;
     try {

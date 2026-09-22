@@ -29,6 +29,7 @@
 Windows では動かない（`sftp-server` が無い）。**CI の3-OS には入れていない** ──
 Windows で必ず落ちる検査は、落ちても誰も見なくなる。
 """
+import glob
 import json
 import os
 import shutil
@@ -467,22 +468,45 @@ def main():
         # 180); the check that it refused a remote pane outlived it here and
         # kept this run red for a command that no longer exists.
 
-        print("比べるものは、どちらも手元のもの")
-        # **サーバのファイルは、手元のファイルとして読めない。** `compare` も
-        # `twofiles` も道をそのまま `read_text` に渡すので、サーバの中の道は
-        # 手元に無く、`stat /opt/…` が赤く出るだけだった（crmaine、2026-09-23）。
-        # 落としてから比べる道はまだ無いので、何をすればいいかを言って断る。
+        print("サーバのファイルを落として比べる")
+        # **落としてから比べる**（2026-09-23）。道をそのまま `read_text` に
+        # 渡していたころは、サーバの中の道が手元に無く `stat /opt/…` が赤く
+        # 出るだけだった。いまは一時ファイルへ落とし、閉じたら消す。
         #
-        # **手元のサーバでは道が両方に在るので、素通りしてしまう** ── だから
-        # 中身ではなく、ペインがサーバに繋がっているかで断っているかを見る。
-        e.call("remotelist", pane="right", path=root)
-        for op in ("compare", "twofiles"):
-            try:
-                e.call(op)
-                check(f"{op} がサーバのペインを断る", "通ってしまった", "断る")
-            except Exception as err:  # noqa: BLE001 — 断り文句そのものを見る
-                check(f"{op} がサーバのペインを断る",
-                      "手元へ落として" in str(err), True)
+        # **手元のサーバでは道が両方に在る**ので、「落とさなくても読めてしまう」
+        # ── だから中身ではなく、**落とした複製が在るか**で見る。
+        lv = e.call("list", pane="left", path=local)
+        lrows = [x["name"] for x in (lv.get("pane") or lv)["entries"]]
+        v = e.call("remotelist", pane="right", path=root)
+        rrows = [x["name"] for x in (v.get("pane") or v)["entries"]]
+        at = {"left": lrows.index("up.txt"), "right": rrows.index("one.txt")}
+        r = e.call("twofiles", cursors=at)
+        check("サーバ側の中身が読めた", r["right"]["lines"], ["changed"])
+        copies = glob.glob(os.path.join(tempfile.gettempdir(), "cian-compare-*", "*"))
+        check("落とした複製が在る", len(copies) >= 1, True)
+
+        # 大きいものは落とさずに断る ── エディタの天井（8MB）を超えるものは、
+        # 落としても開けない。落としてから断るのは待たせるだけだ。
+        big = os.path.join(root, "big.bin")
+        with open(big, "wb") as f:
+            f.write(b"x" * (9 * 1024 * 1024))
+        v = e.call("remotelist", pane="right", path=root)
+        rrows = [x["name"] for x in (v.get("pane") or v)["entries"]]
+        before = len(glob.glob(os.path.join(tempfile.gettempdir(), "cian-compare-*", "*")))
+        try:
+            e.call("twofiles", cursors={"left": lrows.index("up.txt"),
+                                        "right": rrows.index("big.bin")})
+            check("8MB を超えるものは断る", "通ってしまった", "断る")
+        except Exception as err:  # noqa: BLE001 — 断り文句そのものを見る
+            check("8MB を超えるものは断る", "8MB" in str(err), True)
+        after = len(glob.glob(os.path.join(tempfile.gettempdir(), "cian-compare-*", "*")))
+        check("断ったなら落としていない", after, before)
+
+        # 閉じたら消す ── 大きさに関係なく、複製を残さない。
+        e.call("dropfetched")
+        check("閉じたら複製が消える",
+              glob.glob(os.path.join(tempfile.gettempdir(), "cian-compare-*", "*")), [])
+
     finally:
         e.close()
         if keep:

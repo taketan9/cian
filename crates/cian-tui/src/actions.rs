@@ -1299,6 +1299,12 @@ impl App {
             self.message = Some(tr(self.lang, "select a file (or a folder) in each pane to compare", "比較するには各ペインでファイル（またはディレクトリ）を選んでください").into());
             return;
         };
+        // **サーバのものは落としてから比べる**（2026-09-23）。道をそのまま
+        // 読んでいたころは、サーバの中の道が手元に無く「開けません」で終わって
+        // いた。落として比べ、閉じたら消す ── 読むだけなので書き戻しは無い。
+        if self.remote_targets.iter().any(|t| t.is_some()) && self.start_remote_diff(&a, &b) {
+            return;
+        }
         // Two directories: a recursive tree comparison. Two files: a line diff.
         if a.is_dir && b.is_dir {
             self.start_dir_compare(a.path.clone(), b.path.clone(), a.name.clone(), b.name.clone());
@@ -1308,6 +1314,25 @@ impl App {
             self.message = Some(tr(self.lang, "compare two files, or two folders. not one of each", "ファイル同士かディレクトリ同士で比較してください（混ぜられません）").into());
             return;
         }
+        self.open_diff_paths(&a.path, &b.path, &a.name, &b.name);
+    }
+
+    /// 2つの道の差分を開く。`open_diff` の後半で、**落としてきた複製でも同じ**
+    /// ── 見せる名前だけは元のものを渡す（一時ファイルの名前は人に意味が無い）。
+    pub(crate) fn open_diff_paths(
+        &mut self,
+        left: &std::path::Path,
+        right: &std::path::Path,
+        lname: &str,
+        rname: &str,
+    ) {
+        /// 見せる名前と、実際に読む道。落としてきた複製では二つが食い違う。
+        struct Named {
+            path: std::path::PathBuf,
+            name: String,
+        }
+        let a = Named { path: left.to_path_buf(), name: lname.to_string() };
+        let b = Named { path: right.to_path_buf(), name: rname.to_string() };
         match cian_core::diff::diff_files(&a.path, &b.path) {
             Ok(result) => {
                 // Identical files get a clear notice rather than a diff of

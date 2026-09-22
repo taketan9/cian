@@ -493,6 +493,16 @@ impl App {
             // for. (Overwrite/permanent stays on its own key so it is never
             // the accidental default.)
             KeyCode::Char('y') | KeyCode::Enter => match &self.popup {
+                // 「大きいけど落とすか」に はい ── 承知を立てて、同じ2つで
+                // やり直す（`start_remote_diff`）。
+                Popup::ConfirmFetchDiff { .. } => {
+                    self.dismiss_to_viewer();
+                    if let Some((a, b)) = self.diff_fetch_pending.take() {
+                        self.diff_fetch_agreed = true;
+                        self.start_remote_diff(&a, &b);
+                    }
+                    Ok(())
+                }
                 Popup::ConfirmDelete { .. } => self.finish_delete(DeleteMode::Trash),
                 Popup::ConfirmZipAdd { .. } => self.confirm_zip_add(),
                 Popup::ConfirmZipDelete { .. } => self.confirm_zip_delete(),

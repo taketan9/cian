@@ -675,6 +675,11 @@ async function main() {
         // `-3px` で、ちょうど外している）。**1文字の違いで、読んでも分からない。**
         // だから読まずに測る: 内側 outline の食い込みが焦点枠の太さ以上なら、
         // 覆われようがない。
+        // **リモートの枠は、焦点にかかわらず 3px。** リモートかどうかは
+        // 「いまどちらのペインにいるか」と無関係な事実だ（本人、2026-09-23）。
+        // アクティブは焦点の枠がカーマインに染まり、非アクティブは内側の線が
+        // 出る ── どちらも 3px で、重ねない（重ねると 6px になる）。
+        ['want:(()=>{const band=(n)=>{n.classList.add("remote");const cs=getComputedStyle(n),af=getComputedStyle(n,"::after");const o=cs.outlineStyle==="none"?0:parseFloat(cs.outlineWidth)||0;const f=parseFloat(af.borderTopWidth)||0;n.classList.remove("remote");return Math.max(o,f);};return band(document.querySelector(".pane.active"))===3&&band(document.querySelector(".pane:not(.active)"))===3;})()', 'サーバの枠は焦点にかかわらず 3px'],
         ['want:["remote","dropping"].every((c)=>{const p=document.querySelector(".pane.active");p.classList.add(c);const cs=getComputedStyle(p),af=getComputedStyle(p,"::after");const off=Math.abs(parseFloat(cs.outlineOffset)||0),w=parseFloat(af.borderTopWidth)||0;const ok=cs.outlineStyle==="none"||off>=w;p.classList.remove(c);return ok;})', '内側の outline が焦点枠を避けている'],
         // シェルの状態（記録中・シンクロ）は**自分の border** で言うので、
         // 焦点枠（padding box の内側）とは帯が別 ── 覆われない。太さが 0 に

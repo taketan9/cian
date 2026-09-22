@@ -379,7 +379,12 @@ html, body {
    色は `.pane.active.remote::after` でも直してあるので、これは二重の備え:
    どちらか片方が消えても、カーマインは残る。`.dropping` が最初から `-3px` な
    のと同じ理由。 */
-.pane.remote { outline: 2px solid var(--m-remote); outline-offset: -3px; }
+/* **どちらの状態でも 3px。** リモートかどうかは「いまどちらのペインにいるか」
+   とは無関係な事実なので、焦点で太さが変わるのは筋が通らない（本人、
+   2026-09-23）。アクティブのときは焦点の枠（3px）がカーマインに染まるので、
+   内側の線は引っ込める ── 重ねると 6px になり、他のペインより太くなる。 */
+.pane.remote { outline: 3px solid var(--m-remote); outline-offset: -3px; }
+#work[data-focus="files"] .pane.active.remote { outline: none; }
 /* Where you are. The most-read line in a file manager, and it was set two
    points smaller than the date column and in the dim colour — the priorities
    the wrong way round. Full size now, with the parents dim and the folder you
