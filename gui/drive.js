@@ -269,6 +269,23 @@ class Cdp {
             for (const ch of spec.slice(5)) await this.press(ch);
             return;
         }
+        // `raw:{"key":"(","code":"Key(","vk":40,"text":"("}` ── 送るものを
+        // そのまま指定する。**ほかの道具が cian に何を送っているか**を再現する
+        // ための段。crmaine の録画の道具は `(` を番号 40（＝↓）で送っていて、
+        // `ci(` が「c i ↓」になっていた（2026-09-22）。人の手では起きない形を、
+        // 手元で起こして確かめるのに使う。
+        if (spec.startsWith('raw:')) {
+            const k = JSON.parse(spec.slice(4));
+            for (const type of ['keyDown', 'keyUp']) {
+                await this.send('Input.dispatchKeyEvent', {
+                    type, key: k.key, code: k.code, modifiers: k.mods || 0,
+                    windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk,
+                    text: type === 'keyDown' ? k.text : undefined,
+                });
+            }
+            await sleep(120);
+            return;
+        }
         // `jis:(` ── JIS の鍵盤が実際に送るものを打つ。
         //
         // **この Mac の鍵盤は JIS だ**（CountryCode 15）。上の `press` は US の
@@ -609,6 +626,16 @@ async function main() {
         // second, which turned input-sync on and left it on for the rest of
         // the round — a label that had drifted from what the key does.
         ['T', 'トグルを開く'], ['Enter', '隠しファイルを切り替える'], ['Esc', '閉じる'],
+        // **止まっているマウスの下でメニューを開く。** 開いた瞬間、マウスの下に
+        // 現れた行が `mouseenter` でカーソルを奪い、`T` → Enter がマウスの
+        // 乗っている行を切り替えていた ── 一周の上の段がそれで「言語」を押し、
+        // 画面が英語になった（2026-09-22、renderer.js `openMenu` の註）。
+        // 8番目の行の上にマウスを止めてから開き直し、カーソルが1番目にいる
+        // ことを見る。
+        ['T', ''], ['wait:300', ''], ['hover:#find-hits > :nth-child(8)', 'マウスを8番目の行へ'],
+        ['Esc', ''], ['wait:300', ''], ['T', 'マウスの下で開き直す'], ['wait:300', ''],
+        ['want:menu.at === 0', '開いたときのカーソルはマウスの下ではなく1番目'],
+        ['Esc', ''], ['wait:300', ''],
         // 配色を暗くしたら、**窓の縁も**暗くなること。タイトルバーは OS が
         // 描くので CSS では届かない ── 暗い配色に白い枠が乗っていた。
         ['read:\'frame の口: \' + (window.cian && typeof window.cian.frame === \'function\')', ''],
@@ -950,6 +977,26 @@ async function main() {
         ["want:viewer.ed.getValue() === '<a><b>x</b><c>QQ</c></a>'", 'cit がカーソルを含む要素の中身を替えた'],
         ['type:u', ''], ['type:u', ''], ['type:u', ''], ['wait:600', ''],
         ['want:viewer.ed.getValue() === window.__t', 'u で元の中身に戻った'],
+
+        // ── 行をまたぐ括弧の内側 ── 括弧を元の行に残す ────────────────────
+        //
+        // monaco-vim は `ci{` で `{` と `}` を1行につないでいた（renderer.js
+        // `innerBlock` の註）。答えは**本物の vim 9.1（autoindent あり）で取った
+        // もの**で、記憶ではない。`di{` は間の行を消して括弧だけを残し、`(` も
+        // `{` と同じ規則に従う。
+        ["read:(()=>{const m=viewer.ed.getModel();viewer.ed.executeEdits('t',[{range:m.getFullModelRange(),text:'String joined() {\\n    return joinedCache;\\n}'}]);viewer.ed.pushUndoStop();window.__b=viewer.ed.getValue();viewer.ed.setPosition({lineNumber:2,column:8});return '括弧を仕込んだ';})()", ''],
+        ['Esc', ''], ['type:ci{', 'ci{'], ['type:X', ''], ['Esc', ''], ['wait:400', ''],
+        ["want:viewer.ed.getValue() === 'String joined() {\\n    X\\n}'", '複数行の ci{ は括弧を元の行に残す'],
+        ['type:u', ''], ['wait:400', ''],
+        ['want:viewer.ed.getValue() === window.__b', 'ci{ も u 1回で戻る'],
+        ["read:(()=>{viewer.ed.setPosition({lineNumber:2,column:8});return '中へ';})()", ''],
+        ['type:di{', 'di{'], ['wait:400', ''],
+        ["want:viewer.ed.getValue() === 'String joined() {\\n}'", '複数行の di{ は間の行だけを消す'],
+        ['type:u', ''], ['wait:400', ''],
+        ["read:(()=>{const m=viewer.ed.getModel();viewer.ed.executeEdits('t',[{range:m.getFullModelRange(),text:'foo(\\n    a,\\n    b\\n);'}]);viewer.ed.pushUndoStop();viewer.ed.setPosition({lineNumber:2,column:6});return '丸括弧を仕込んだ';})()", ''],
+        ['Esc', ''], ['type:ci(', 'ci('], ['type:X', ''], ['Esc', ''], ['wait:400', ''],
+        ["want:viewer.ed.getValue() === 'foo(\\n    X\\n);'", '複数行の ci( も同じ規則'],
+        ['type:u', ''], ['type:u', ''], ['type:u', ''], ['wait:500', ''],
 
         // ── 取り消しの単位 ── 挿入1回ぶんが1手 ─────────────────────────
         //
@@ -1417,6 +1464,29 @@ async function main() {
                 const moved = JSON.stringify(before) !== JSON.stringify(after);
                 console.log(`${moved ? '  ' : '× '}${key.padEnd(8)}${(what || '').padEnd(16)} ${after.status}${marks(after)}`);
                 if (!moved) bad++;
+                continue;
+            }
+            // `hover:<css>` ── マウスを要素の真ん中へ動かすだけで、押さない。
+            // **止まっているマウスの下に何かが現れる**形を作るための段。
+            // メニューを開いた瞬間、マウスの下に現れた行がカーソルを奪い、
+            // `T` → Enter が「マウスの乗っている行」を切り替えていた
+            // （2026-09-22）。押す段しか無いと、この形は作れない。
+            if (key.startsWith('hover:')) {
+                const sel = key.slice(6);
+                const box = await cdp.read(`(() => {
+                    const n = document.querySelector(${JSON.stringify(sel)});
+                    if (!n) return null;
+                    const b = n.getBoundingClientRect();
+                    return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) };
+                })()`);
+                if (!box) {
+                    console.log(`× ${key.padEnd(8)}${(what || '').padEnd(16)} 見つかりません`);
+                    bad++;
+                    continue;
+                }
+                await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y });
+                await sleep(200);
+                console.log(`  ${key.padEnd(8)}${(what || '').padEnd(16)} (${box.x}, ${box.y})`);
                 continue;
             }
             // `ime:j` — the keydown a browser reports while an input method

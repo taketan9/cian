@@ -2875,6 +2875,14 @@ function openMenu(spec) {
     if (!spec.child) menuStack.length = 0;
     menu.spec = spec;
     menu.at = Math.max(0, spec.at ? spec.at() : 0);
+    // **開いた瞬間も、カーソルはキーボードのもの。** 行はいま作られて、止まって
+    // いるマウスの下に現れる ── それで `mouseenter` が走り、カーソルがマウスの
+    // 乗っている行へ飛んでいた。`T` を押して Enter を叩くと、マウスがたまたま
+    // 乗っている行が切り替わる。一周の最初の段がそれで「言語」を押し、画面が
+    // 英語になった（2026-09-22）。作り直しと巻き上げの2つは塞いであり
+    // （`paintMenuCursor` の註）、開くときが3つ目だった。マウスが本当に動けば
+    // `mousemove` が返してくれる。
+    menu.byKey = true;
     el.find.hidden = false;
     // A function when the text depends on the language: a menu built as a
     // `const` had its foot translated once, at startup, and then said the
@@ -6201,6 +6209,21 @@ function setStyle(i, remember = true) {
         MonacoVim.VimMode.findEnclosingTag = tagObject;
         // eslint-disable-next-line no-undef
         MonacoVim.VimMode.findMatchingTag = () => undefined;
+        // `i{` `i(` `i[` `i<` とその別名 ── 行をまたぐ内側を vim と同じ形に
+        // （`innerBlock` の註）。**文脈は normal だけ** ── 演算子の後はここに
+        // 当たり、ビジュアルの `vi{` は今までどおり monaco-vim に任せる。
+        // ふつうの `i`（挿入）は完全一致が先に決まるので、次の字を待たない。
+        // 割り当ては表の先頭に積まれるので、立て直すたびに足さない。
+        if (!innerBlockMapped) {
+            innerBlockMapped = true;
+            vim.defineMotion('cianInnerBlock', innerBlock);
+            for (const [keys, o, c] of [['(', '(', ')'], [')', '(', ')'], ['b', '(', ')'],
+                ['[', '[', ']'], [']', '[', ']'], ['{', '{', '}'], ['}', '{', '}'], ['B', '{', '}'],
+                ['<', '<', '>'], ['>', '<', '>']]) {
+                vim.mapCommand('i' + keys, 'motion', 'cianInnerBlock',
+                    { textObjectInner: true, cianOpen: o, cianClose: c }, { context: 'normal' });
+            }
+        }
         armJJ();
     }
     // Sections, in both grammars: `]]` and `[[` walk the outline the way they
@@ -8093,6 +8116,7 @@ async function cmdOutline() {
 /// 帳面はモデルごと。**ふつうの編集が入ったら「やり直し」の側は捨てる** ──
 /// Monaco の redo の山が消えるのと同じ規則で、捨てないと、戻った先で
 /// Ctrl+R が関係の無い手を何手も進める。
+let innerBlockMapped = false;
 const vimUndo = new WeakMap();
 let vimPre = null;       // 挿入に入る打鍵の直前の版
 let vimFrom = null;      // いま続いている挿入が始まった版
@@ -8145,6 +8169,83 @@ function vimStepTo(to, how) {
         if (v() === before) break;
     }
     if (back ? v() < to : v() > to) viewer.ed.trigger('vim', back ? 'redo' : 'undo', null);
+}
+
+/// `ci{` `di(` ── 行をまたぐ括弧の内側を、本物の vim と同じ形に切る。
+///
+/// **monaco-vim は括弧を1行につないでいた。** `joined() {` / `return …;` / `}`
+/// の中で `ci{` を打つと `joined() {X}` になる。本物の vim（9.1 で確かめた）は
+/// `{` と `}` を元の行に残し、間の1行に打つ（crmaine の紹介動画、2026-09-22）。
+/// monaco-vim の内側は「開きの直後から閉じの手前まで」で、開きが行末にあると
+/// 行末の改行から始まる ── それが括弧をつなげていた。
+///
+/// 手順は vim の `current_block`（textobject.c）そのまま:
+///
+///   1. 始まりは開きの直後。開きが行末なら**次の行の頭**
+///   2. 終わりは閉じから1字戻り、字下げの中にいる間は戻り続ける。閉じが行頭か、
+///      前が字下げだけなら「行頭の閉じ」（`sol`）で、終わりは次の字（＝行頭）
+///   3. `sol` のときは排他の規則（`:help exclusive`）── 始まりが行の最初の
+///      非空白以前なら**行単位**、そうでなければ前の行の終わりまで
+///
+/// `{ a;` のように開きの後ろに字がある形、`b; }` のように閉じの前に字がある
+/// 形も、この手順で本物の vim の答えと一致する。括弧の種類は問わない（vim でも
+/// 同じ関数だ）。端末版は最初からこの答えを出している。
+function innerBlock(cm, head, motionArgs, vim) {
+    const open = motionArgs.cianOpen, close = motionArgs.cianClose;
+    const re = new RegExp('[\\' + open + '\\' + close + ']');
+    const P = (line, ch) => ({ line, ch });
+    const text = (l) => cm.getLine(l);
+    const off = text(head.line).charAt(head.ch) === open ? 1 : 0;
+    const a = cm.scanForBracket(P(head.line, head.ch + off), -1, undefined, { bracketRegex: re });
+    const b = cm.scanForBracket(P(head.line, head.ch + off), 1, undefined, { bracketRegex: re });
+    if (!a || !b) return null;
+    let o = a.pos, c = b.pos;
+    if (o.line > c.line || (o.line === c.line && o.ch > c.ch)) [o, c] = [c, o];
+
+    // 1. 始まり
+    let s = P(o.line, o.ch + 1);
+    if (s.ch >= text(o.line).length && o.line < c.line) s = P(o.line + 1, 0);
+
+    // 2. 終わり（vim の decl と inindent(1)）
+    const decl = (p) => p.ch > 0 ? [P(p.line, p.ch - 1), false]
+        : p.line === 0 ? [p, true]
+        : [P(p.line - 1, Math.max(0, text(p.line - 1).length - 1)), true];
+    const inIndent = (p) => {
+        const t = text(p.line);
+        let n = 0;
+        while (n < t.length && (t[n] === ' ' || t[n] === '\t')) n++;
+        return n >= p.ch + 1;
+    };
+    let sol = c.ch === 0;
+    let [cur] = decl(c);
+    while (inIndent(cur)) {
+        sol = true;
+        const [q, crossed] = decl(cur);
+        cur = q;
+        if (crossed) break;
+    }
+    const before = (x, y) => x.line < y.line || (x.line === y.line && x.ch < y.ch);
+    let e;
+    if (sol) {
+        e = cur.ch + 1 < text(cur.line).length ? P(cur.line, cur.ch + 1)
+            : cur.line < cm.lastLine() ? P(cur.line + 1, 0) : P(cur.line, text(cur.line).length);
+    } else if (!before(cur, s)) {
+        e = P(cur.line, cur.ch + 1);
+    } else {
+        e = s;
+    }
+
+    // 3. 排他の規則
+    if (sol && e.ch === 0 && e.line > s.line) {
+        const first = text(s.line).search(/\S/);
+        if (s.ch <= (first < 0 ? text(s.line).length : first)) {
+            motionArgs.linewise = true;
+            if (vim.inputState.operatorArgs) vim.inputState.operatorArgs.linewise = true;
+            return [P(s.line, 0), P(e.line - 1, 0)];
+        }
+        e = P(e.line - 1, text(e.line - 1).length);
+    }
+    return [s, e];
 }
 
 /// `cit` / `dat` の「タグ」を見つける。monaco-vim の `t` の対象の中身。

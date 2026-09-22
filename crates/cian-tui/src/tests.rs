@@ -13947,6 +13947,28 @@ use crate::ai::StoredChatExt;
         assert_eq!(viewer_lines(&app), ["aa bb"], "u 2回で元に戻る（行き過ぎない）");
     }
 
+    /// **複数行の `ci{` は、括弧を元の行に残して間の1行に打つ。** 本物の vim
+    /// （9.1）で確かめた答え ── `{` が行末、`}` が行頭のとき、内側は行単位に
+    /// なる。窓版の monaco-vim はここで括弧を1行につないでいた（crmaine の
+    /// 紹介動画、2026-09-22）。`di{` は間の行を消して括弧だけを残す。
+    #[test]
+    fn a_multiline_inner_block_keeps_its_braces_on_their_own_lines() {
+        let (_d, mut app) = viewer_on("String joined() {\n    return joinedCache;\n}\n");
+        app.handle_key(key('j')).unwrap();
+        for k in ['w', 'c', 'i', '{', 'X'] {
+            app.handle_key(key(k)).unwrap();
+        }
+        app.handle_key(code(KeyCode::Esc)).unwrap();
+        assert_eq!(viewer_lines(&app), ["String joined() {", "X", "}"], "ci{{");
+
+        let (_d, mut app) = viewer_on("String joined() {\n    return joinedCache;\n}\n");
+        app.handle_key(key('j')).unwrap();
+        for k in ['w', 'd', 'i', '{'] {
+            app.handle_key(key(k)).unwrap();
+        }
+        assert_eq!(viewer_lines(&app), ["String joined() {", "}"], "di{{");
+    }
+
     /// V + d deletes the selected lines; v + d splices within lines.
     #[test]
     fn viewer_visual_delete() {
