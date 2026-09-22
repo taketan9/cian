@@ -13924,6 +13924,29 @@ use crate::ai::StoredChatExt;
         assert!(msg.contains("oldest") || msg.contains("戻れません"), "says so: {msg}");
     }
 
+    /// **`c` の「消す」と「打つ」は1つの変更。** vim では `ciwX<Esc>` の後の
+    /// `u` は1回で元の単語に戻る。窓版の monaco-vim はここを2手に割っていて、
+    /// 2026-09-22 に揃えた（renderer.js `vimUndo`）。端末版が正なので、こちらも
+    /// 同じ形で縛る ── 2つ重ねてから戻し、行き過ぎないことまで見る。
+    #[test]
+    fn a_change_and_what_is_typed_after_it_undo_as_one() {
+        let (_d, mut app) = viewer_on("aa bb\n");
+        for k in ['c', 'i', 'w', 'X'] {
+            app.handle_key(key(k)).unwrap();
+        }
+        app.handle_key(code(KeyCode::Esc)).unwrap();
+        for k in ['w', 'c', 'i', 'w', 'Y'] {
+            app.handle_key(key(k)).unwrap();
+        }
+        app.handle_key(code(KeyCode::Esc)).unwrap();
+        assert_eq!(viewer_lines(&app), ["X Y"], "2つ重ねた");
+
+        app.handle_key(key('u')).unwrap();
+        assert_eq!(viewer_lines(&app), ["X bb"], "u 1回で2つ目の変更だけが戻る");
+        app.handle_key(key('u')).unwrap();
+        assert_eq!(viewer_lines(&app), ["aa bb"], "u 2回で元に戻る（行き過ぎない）");
+    }
+
     /// V + d deletes the selected lines; v + d splices within lines.
     #[test]
     fn viewer_visual_delete() {

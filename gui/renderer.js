@@ -6117,6 +6117,9 @@ function setStyle(i, remember = true) {
         // the mode back out of the footer — one rule for the whole window
         // rather than one for the editor and none for anywhere else.
         viewer.vim.on('vim-mode-change', () => queueMicrotask(syncIme));
+        // 取り消しの単位（`vimUndo` の註）。立て直したら数え直す。
+        vimFrom = null; vimInsert = false;
+        viewer.vim.on('vim-mode-change', noteVimMode);
         // `:w` and `:q` where the fingers put them. Without these, vim style
         // would still need Ctrl+S and Esc — which is exactly the seam that
         // makes a vim mode feel like a costume.
@@ -8074,6 +8077,76 @@ async function cmdOutline() {
 /// the answer back **through the editor's own edit stack rather than
 /// setValue** is the part that matters: it has to be undoable with the key
 /// that undoes everything else in here.
+/// vim の取り消しの単位 ── **挿入に入る打鍵から、抜ける Esc までが1手**。
+///
+/// vim では `ciwfoo<Esc>` の後の `u` は1回で元の単語に戻る。`.` で繰り返せる
+/// 単位と同じで、「消す」と「打つ」は1つの変更だ。monaco-vim はここを2つに
+/// 割っていた（2026-09-22、`cit` を直したときに一周で気づいた）。
+///
+/// **区切りを消すのではなく、取り消し方を合わせる。** 割れている理由は2つ
+/// あって、monaco-vim の adapter が `replaceRange` のたびに区切りを打つことと、
+/// **Monaco 自身が「ふつうの編集」の後に打鍵が来ると区切る**ことだ。前者を
+/// 外しても後者が残る。だから Monaco の手はそのままにして、挿入の前後の版
+/// （`getAlternativeVersionId`、取り消すと前の値に戻る番号）を帳面に付け、
+/// その直後の `u` は前の版まで一度に戻す。`Ctrl+R` はその逆。
+///
+/// 帳面はモデルごと。**ふつうの編集が入ったら「やり直し」の側は捨てる** ──
+/// Monaco の redo の山が消えるのと同じ規則で、捨てないと、戻った先で
+/// Ctrl+R が関係の無い手を何手も進める。
+const vimUndo = new WeakMap();
+let vimPre = null;       // 挿入に入る打鍵の直前の版
+let vimFrom = null;      // いま続いている挿入が始まった版
+let vimInsert = false;
+
+function vimUndoBook(model) {
+    let b = vimUndo.get(model);
+    if (!b) {
+        b = { undo: new Map(), redo: new Map() };
+        vimUndo.set(model, b);
+        model.onDidChangeContent((e) => { if (!e.isUndoing && !e.isRedoing) b.redo.clear(); });
+    }
+    return b;
+}
+
+function noteVimMode(e) {
+    const model = viewer.ed && viewer.ed.getModel();
+    if (!model || !e) return;
+    const now = model.getAlternativeVersionId();
+    const inserting = e.mode === 'insert' || e.mode === 'replace';
+    if (inserting && !vimInsert) {
+        vimFrom = vimPre ?? now;
+    } else if (!inserting && vimInsert && vimFrom !== null) {
+        if (now !== vimFrom) vimUndoBook(model).undo.set(now, vimFrom);
+        vimFrom = null;
+    }
+    // **挿入を抜けたら手を区切る。** vim ではそこで1つの変更が終わる。区切らない
+    // と、次の変更の「消す」がこの挿入の「打つ」と同じ手に混ざり、`u` を重ねても
+    // 「この挿入の後」の版を一度も通らない ── 止まる場所を見失って、仕込みより
+    // 前まで戻った（一周の⑦、2026-09-22）。
+    if (!inserting && vimInsert) viewer.ed.pushUndoStop();
+    vimInsert = inserting;
+}
+
+/// 帳面に載っている手なら、`to` の版になるまで Monaco の手を重ねて戻す／進める。
+/// 版が動かなくなったら止まる ── 山が尽きたのに回り続けないように。
+///
+/// **行き過ぎない。** 版の番号は新しい状態ほど大きく、取り消すと小さくなる。
+/// だから取り消しは「目標以下になったら止まる」で、下回っていたら1手だけ
+/// やり直す（やり直しはその逆）。手が混ざって目標ちょうどに止まれないとき、
+/// **戻り足りないほうが、戻りすぎるより安全だ** ── 戻りすぎは人の書いたものを
+/// 黙って消す。
+function vimStepTo(to, how) {
+    const model = viewer.ed.getModel();
+    const back = how === 'undo';
+    const v = () => model.getAlternativeVersionId();
+    for (let n = 0; n < 500 && (back ? v() > to : v() < to); n++) {
+        const before = v();
+        viewer.ed.trigger('vim', how, null);
+        if (v() === before) break;
+    }
+    if (back ? v() < to : v() > to) viewer.ed.trigger('vim', back ? 'redo' : 'undo', null);
+}
+
 /// `cit` / `dat` の「タグ」を見つける。monaco-vim の `t` の対象の中身。
 ///
 /// **monaco-vim は `t` を持っているのに、効かなかった。** 探すのを CodeMirror の
@@ -10094,6 +10167,44 @@ document.addEventListener('keydown', (e) => {
     if (!mod(e) || e.altKey || e.shiftKey) return;
     if (!/^[cxvCXV]$/.test(e.key)) return;
     e.stopPropagation();
+}, true);
+
+/// `u` と `Ctrl+R` ── 挿入1回ぶんを1手として取り消す（`vimUndo` の註）。
+///
+/// **横取りするのは、何も打ちかけていないときだけ。** `ru` は「u に置き換え」、
+/// `fu` は「u を探す」、`2u` は「2手戻す」で、どれも monaco-vim に任せる。
+/// ビジュアルの `u` は小文字にする命令なので、これも触らない。帳面に無い手
+/// （`x` や `dd`）も触らない ── もともと1手だ。
+///
+/// document の capture で受けるのは、Monaco の textarea より先に見るため
+/// （その前に版を控えないと、挿入に入った手の「前」が分からない）。
+document.addEventListener('keydown', (e) => {
+    if (!viewer.on || !viewer.vim || !viewer.ed) return;
+    const model = viewer.ed.getModel();
+    const st = viewer.vim.state && viewer.vim.state.vim;
+    if (!model || !st) return;
+    if (!st.insertMode) vimPre = model.getAlternativeVersionId();
+    const is = st.inputState;
+    const idle = !st.insertMode && !st.visualMode && is && !is.operator
+        && !is.keyBuffer.length && !is.prefixRepeat.length && !is.motionRepeat.length;
+    if (!idle || e.altKey || e.metaKey) return;
+    const book = vimUndoBook(model);
+    const now = model.getAlternativeVersionId();
+    if (!e.ctrlKey && e.key === 'u' && book.undo.has(now)) {
+        const from = book.undo.get(now);
+        vimStepTo(from, 'undo');
+        if (model.getAlternativeVersionId() === from) book.redo.set(from, now);
+        // monaco-vim 自身の `u` と同じく、選択を起点へ畳む。Monaco の取り消しは
+        // 戻した字を選択した形で返すので、畳まないとカーソルが選択の終わり ──
+        // 行末の外に残り、そこで `x` を押すと行ごと消えた（2026-09-22）。
+        viewer.vim.setCursor(viewer.vim.getCursor('anchor'));
+    } else if (e.ctrlKey && !e.shiftKey && e.key === 'r' && book.redo.has(now)) {
+        vimStepTo(book.redo.get(now), 'redo');
+    } else {
+        return;
+    }
+    e.preventDefault();
+    e.stopImmediatePropagation();
 }, true);
 
 async function togglePreview2() {

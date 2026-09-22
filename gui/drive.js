@@ -940,10 +940,9 @@ async function main() {
         // 兄弟の2つ目の中で打つ ── 最初に見つかった要素ではなく、**カーソルを
         // 含む**要素を選べているかがここで分かる。
         //
-        // `u` は3回押す。monaco-vim は `c` の「消す」と「打つ」を別の手として
-        // 積むので2手要り、もう1手は仕込みの分。**回数では当てず、最後に
-        // 元の中身に戻ったことを見る** ── 癖が直って2手で済むようになっても、
-        // 余った `u` は何もしないので黙らない。
+        // `u` は3回押す。1手目で `cit` が、2手目で仕込みが戻る（3手目は余り）。
+        // **回数では当てず、最後に元の中身に戻ったことを見る。** 取り消しの
+        // 単位そのものは下の塊が見ている。
         ['land:d1.txt', 'd1.txt の行へ'], ['Enter', '開く'], ['wait:3000', ''],
         ["read:(()=>{window.__t=viewer.ed.getValue();const m=viewer.ed.getModel();viewer.ed.executeEdits('t',[{range:m.getFullModelRange(),text:'<a><b>x</b><c>yy</c></a>'}]);viewer.ed.pushUndoStop();viewer.ed.setPosition({lineNumber:1,column:16});return 'タグを仕込んだ';})()", ''],
         ['Esc', 'ノーマルへ'],
@@ -951,6 +950,29 @@ async function main() {
         ["want:viewer.ed.getValue() === '<a><b>x</b><c>QQ</c></a>'", 'cit がカーソルを含む要素の中身を替えた'],
         ['type:u', ''], ['type:u', ''], ['type:u', ''], ['wait:600', ''],
         ['want:viewer.ed.getValue() === window.__t', 'u で元の中身に戻った'],
+
+        // ── 取り消しの単位 ── 挿入1回ぶんが1手 ─────────────────────────
+        //
+        // vim では `ciwX<Esc>` の後の `u` は1回で元に戻る。monaco-vim は「消す」
+        // と「打つ」を2手に割っていた（renderer.js `vimUndo` の註）。
+        //
+        // **2つ重ねてから戻す。** 1つだけだと、手が混ざって行き過ぎる壊れ方
+        // （仕込みより前まで戻った）が出ない ── 実際に最初の版はそれを
+        // 通していて、2つ重ねた形で初めて見えた。戻した後に `x` を押すのは、
+        // カーソルが行末の外に残って行ごと消えた形を見るため。
+        ["read:(()=>{const m=viewer.ed.getModel();viewer.ed.executeEdits('t',[{range:m.getFullModelRange(),text:'aa bb'}]);viewer.ed.pushUndoStop();window.__u=viewer.ed.getValue();viewer.ed.setPosition({lineNumber:1,column:1});return '仕込んだ';})()", ''],
+        ['Esc', ''], ['type:ciw', ''], ['type:X', ''], ['Esc', ''], ['wait:300', ''],
+        ['type:w', ''], ['type:ciw', ''], ['type:Y', ''], ['Esc', ''], ['wait:300', ''],
+        ["want:viewer.ed.getValue() === 'X Y'", '2つ重ねた'],
+        ['type:u', 'u 1回'], ['wait:400', ''],
+        ["want:viewer.ed.getValue() === 'X bb'", 'u 1回で2つ目の変更だけが戻った'],
+        ['type:u', 'u 2回'], ['wait:400', ''],
+        ['want:viewer.ed.getValue() === window.__u', 'u 2回で元に戻った（行き過ぎない）'],
+        ['Ctrl+r', 'やり直し'], ['wait:400', ''],
+        ["want:viewer.ed.getValue() === 'X bb'", 'Ctrl+R 1回で1つ目の変更が戻ってきた'],
+        ['type:u', ''], ['wait:400', ''], ['type:x', 'u の後に x'], ['wait:300', ''],
+        ["want:viewer.ed.getValue() === 'a bb'", 'u の後のカーソルは行の中にいる'],
+        ['type:u', ''], ['type:u', ''], ['wait:500', ''],
 
         // ヘルプに書いた3つ（Ctrl+Q・Ctrl+A・Ctrl+X）を、**書いたとおりか**で
         // 縛る。Ctrl+X が「引かない」ことも見る ── いつか引くようになったら、
