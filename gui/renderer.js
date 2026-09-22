@@ -3284,6 +3284,13 @@ function helpRows() {
         ['  :g/re/d  :v/re/d', tr("delete the matching lines / keep only them", '一致した行を削除 / 一致した行だけ残す')],
         ['  :combine [n][!]', tr("join the next line (! without a space)", '次の行を連結（! は空白なし）')],
         [tr("rectangle", '矩形'), tr("Alt+Shift+arrows selects; Alt+Shift+I/A/C/D for left edge / right edge / replace / delete", 'Alt+Shift+矢印 で選び、Alt+Shift+I/A/C/D で 左端/右端/置換/削除')],
+        // **vim の人は Ctrl+V を先に押す。** ここでは貼り付けなので何も起きず、
+        // 案内も出ないので止まる ── crmaine の紹介動画を撮っていて分かった
+        // （2026-09-22）。monaco-vim は vim と同じく <C-q> でも矩形に入るので、
+        // それを書く。Ctrl+C/X/V を貼り付けに回した結果、Ctrl+X の「引く」が
+        // 消えていることも併せて書く（`cxvCXV` の註）。
+        ['  Ctrl+Q', tr("vim's block selection (Ctrl+V stays paste)", 'vim の矩形選択（Ctrl+V は貼り付けのまま）')],
+        ['  Ctrl+A', tr("add 1 to the number under the cursor (Ctrl+X is cut, so there is no key to subtract)", 'カーソルの数に1を足す（Ctrl+X は切り取りなので、引くキーはありません）')],
         ['Ctrl+] / Ctrl+[', tr("move by heading (works in notepad style too)", '見出し移動（notepad のキー操作でも使えます）')],
         [tr("  in notepad style", '  notepad のとき'), tr("Ctrl+C/V/Z/F and the rest of the Windows hand", 'Ctrl+C/V/Z/F など Windows の手が効く')],
         ['jj  /  ｊｊ  /  っｊ', tr("leave insert mode — the last two are what a Japanese IME makes of pressing j twice", '挿入モードを抜ける ── 後ろ2つは、IME オンで j を2回押したときに出るもの')],
@@ -6184,6 +6191,13 @@ function setStyle(i, remember = true) {
         vim.defineAction('cianFold', () => viewer.ed.trigger('cian', 'editor.toggleFold'));
         vim.mapCommand('za', 'action', 'cianFold');
         vim.mapCommand('zA', 'action', 'cianFold');
+        // `it` / `at` ── タグの中身と、タグごと。monaco-vim は `t` の対象を
+        // 持っているが、探すのを CodeMirror の xml-fold に任せていて、Monaco
+        // の上にはそれが無い（`tagObject` の註）。
+        // eslint-disable-next-line no-undef
+        MonacoVim.VimMode.findEnclosingTag = tagObject;
+        // eslint-disable-next-line no-undef
+        MonacoVim.VimMode.findMatchingTag = () => undefined;
         armJJ();
     }
     // Sections, in both grammars: `]]` and `[[` walk the outline the way they
@@ -8060,6 +8074,51 @@ async function cmdOutline() {
 /// the answer back **through the editor's own edit stack rather than
 /// setValue** is the part that matters: it has to be undoable with the key
 /// that undoes everything else in here.
+/// `cit` / `dat` の「タグ」を見つける。monaco-vim の `t` の対象の中身。
+///
+/// **monaco-vim は `t` を持っているのに、効かなかった。** 探すのを CodeMirror の
+/// xml-fold（`findMatchingTag` / `findEnclosingTag`）に任せていて、Monaco の上
+/// にはそれが無い。無いと長さ0の範囲が返り、`cit` は「カーソルの位置で挿入に
+/// 入る」だけになる ── **中身が消えず、打った字がそこに入る**。crmaine の紹介
+/// 動画を撮っていて見つかった（2026-09-22）。`ci{` や `ci"` は別の道で
+/// 探しているので効いていて、仕組みが無いのではなく、ここだけ空だった。
+///
+/// 探し方は vim と同じ ── **カーソルを含む、いちばん内側の要素**。開きタグの
+/// 上でも閉じタグの上でも、その要素になる。閉じない要素（`<br>` `<img>`）は、
+/// 閉じタグが来たときに対の開きまで降りて読み捨てる。`<br/>`・註・宣言は
+/// 中身を持たないので数えない。
+///
+/// 返すのは CodeMirror の位置（0 始まりの `{line, ch}`）── monaco-vim がそのまま
+/// 使う形。`cm` は monaco-vim の adapter で、位置の換算はそちらに任せる。
+function tagObject(cm, head) {
+    const model = cm.editor.getModel();
+    const text = model.getValue();
+    const at = cm.indexFromPos(head);
+    const re = /<!--[\s\S]*?-->|<[!?][^>]*>|<(\/?)([A-Za-z][\w:.-]*)((?:\s+[^\s=>\/]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*(\/?)>/g;
+    const open = [];
+    let best = null;
+    for (let m; (m = re.exec(text));) {
+        if (!m[2] || m[4]) continue;
+        const from = m.index, to = m.index + m[0].length;
+        const name = m[2].toLowerCase();
+        if (!m[1]) { open.push({ name, from, to }); continue; }
+        let i = open.length - 1;
+        while (i >= 0 && open[i].name !== name) i--;
+        if (i < 0) continue;
+        const o = open[i];
+        open.length = i;
+        if (o.from <= at && at < to && (!best || to - o.from < best.close.to - best.open.from)) {
+            best = { open: { from: o.from, to: o.to }, close: { from, to } };
+        }
+    }
+    if (!best) return undefined;
+    const pos = (i) => cm.posFromIndex(i);
+    return {
+        open: { from: pos(best.open.from), to: pos(best.open.to) },
+        close: { from: pos(best.close.from), to: pos(best.close.to) },
+    };
+}
+
 async function rewriteBuffer(method, params, said) {
     if (!needViewer()) return null;
     const lines = viewer.ed.getValue().split(/\r?\n/);

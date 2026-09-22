@@ -269,6 +269,34 @@ class Cdp {
             for (const ch of spec.slice(5)) await this.press(ch);
             return;
         }
+        // `jis:(` ── JIS の鍵盤が実際に送るものを打つ。
+        //
+        // **この Mac の鍵盤は JIS だ**（CountryCode 15）。上の `press` は US の
+        // 位置で打つので、`(` は Shift+Digit9 として届く。JIS では Shift+Digit8
+        // で、**`e.code` で当てている受け口はそこで食い違う**（2026-09-01 に
+        // 半角/全角で踏んだ）。記号の位置が違うものだけを表に持つ。
+        if (spec.startsWith('jis:')) {
+            const JIS = {
+                '"': ['Digit2', 50], '&': ['Digit6', 54], "'": ['Digit7', 55],
+                '(': ['Digit8', 56], ')': ['Digit9', 57], '=': ['Minus', 189],
+                '~': ['Equal', 187], '|': ['IntlYen', 220], '`': ['BracketLeft', 219],
+                '{': ['BracketRight', 221], '}': ['Backslash', 220], '+': ['Semicolon', 187],
+                '*': ['Quote', 186], '_': ['IntlRo', 226],
+            };
+            for (const ch of spec.slice(4)) {
+                const j = JIS[ch];
+                if (!j) { await this.press(ch); continue; }
+                for (const type of ['keyDown', 'keyUp']) {
+                    await this.send('Input.dispatchKeyEvent', {
+                        type, key: ch, code: j[0], windowsVirtualKeyCode: j[1],
+                        nativeVirtualKeyCode: j[1], text: type === 'keyDown' ? ch : undefined,
+                        modifiers: 8,
+                    });
+                }
+                await sleep(120);
+            }
+            return;
+        }
         const k = parseKey(spec);
         for (const type of ['keyDown', 'keyUp']) {
             await this.send('Input.dispatchKeyEvent', {
@@ -899,6 +927,44 @@ async function main() {
         ['type::!date', '範囲なしの :!'], ['Enter', ''], ['wait:1500', ''],
         ['want:viewer.ed.getValue() === window.__f', '範囲なしは何も変えない'],
         ['want:(document.getElementById("status")||{textContent:""}).textContent.includes("%!")', '綴りを教えている'],
+        ['Esc', ''], ['Esc', ''], ['Esc', '閉じる'], ['wait:600', ''],
+
+        // ── `cit` / `cat` ── タグの中身 ──────────────────────────────────
+        //
+        // **monaco-vim は `t` を持っているのに効かなかった**（renderer.js
+        // `tagObject` の註）。探すのを CodeMirror の xml-fold に任せていて、
+        // Monaco の上にはそれが無い ── 長さ0の範囲が返り、`cit` は打った字を
+        // カーソルの位置に入れるだけだった。crmaine の紹介動画を撮っていて
+        // 見つかった（2026-09-22）。
+        //
+        // 兄弟の2つ目の中で打つ ── 最初に見つかった要素ではなく、**カーソルを
+        // 含む**要素を選べているかがここで分かる。
+        //
+        // `u` は3回押す。monaco-vim は `c` の「消す」と「打つ」を別の手として
+        // 積むので2手要り、もう1手は仕込みの分。**回数では当てず、最後に
+        // 元の中身に戻ったことを見る** ── 癖が直って2手で済むようになっても、
+        // 余った `u` は何もしないので黙らない。
+        ['land:d1.txt', 'd1.txt の行へ'], ['Enter', '開く'], ['wait:3000', ''],
+        ["read:(()=>{window.__t=viewer.ed.getValue();const m=viewer.ed.getModel();viewer.ed.executeEdits('t',[{range:m.getFullModelRange(),text:'<a><b>x</b><c>yy</c></a>'}]);viewer.ed.pushUndoStop();viewer.ed.setPosition({lineNumber:1,column:16});return 'タグを仕込んだ';})()", ''],
+        ['Esc', 'ノーマルへ'],
+        ['type:cit', 'cit'], ['type:QQ', '打つ'], ['Esc', ''], ['wait:400', ''],
+        ["want:viewer.ed.getValue() === '<a><b>x</b><c>QQ</c></a>'", 'cit がカーソルを含む要素の中身を替えた'],
+        ['type:u', ''], ['type:u', ''], ['type:u', ''], ['wait:600', ''],
+        ['want:viewer.ed.getValue() === window.__t', 'u で元の中身に戻った'],
+
+        // ヘルプに書いた3つ（Ctrl+Q・Ctrl+A・Ctrl+X）を、**書いたとおりか**で
+        // 縛る。Ctrl+X が「引かない」ことも見る ── いつか引くようになったら、
+        // ヘルプの「引くキーはありません」が嘘になるので、そのとき鳴ってほしい。
+        ["read:(()=>{const m=viewer.ed.getModel();viewer.ed.executeEdits('t',[{range:m.getFullModelRange(),text:'n = 10'}]);viewer.ed.pushUndoStop();viewer.ed.setPosition({lineNumber:1,column:1});return '数を仕込んだ';})()", ''],
+        ['Esc', ''], ['Ctrl+a', 'vim の足す'], ['wait:400', ''],
+        ["want:viewer.ed.getValue() === 'n = 11'", 'Ctrl+A が数に1を足した'],
+        ['Ctrl+x', '切り取り（引かない）'], ['wait:400', ''],
+        ["want:viewer.ed.getValue() === 'n = 11'", 'Ctrl+X は引かない（ヘルプのとおり）'],
+        ["read:(()=>{viewer.ed.setPosition({lineNumber:1,column:1});return '行頭へ';})()", ''],
+        ['Ctrl+q', 'vim の矩形'], ['type:l', ''], ['wait:400', ''],
+        ['want:viewer.ed.getSelections().some((s)=>!s.isEmpty())', 'Ctrl+Q で矩形選択に入った'],
+        ['Esc', ''], ['type:u', ''], ['type:u', ''], ['wait:600', ''],
+        ['want:viewer.ed.getValue() === window.__t', 'u で元の中身に戻った（2回目）'],
         ['Esc', ''], ['Esc', ''], ['Esc', '閉じる'], ['wait:600', ''],
 
         // ── 残りの四つ。**どれも「状態を作らないと届かない」キー** ────────
