@@ -466,6 +466,23 @@ def main():
         # `:aijunk` was cut with the rest of the file-operating AI (request
         # 180); the check that it refused a remote pane outlived it here and
         # kept this run red for a command that no longer exists.
+
+        print("比べるものは、どちらも手元のもの")
+        # **サーバのファイルは、手元のファイルとして読めない。** `compare` も
+        # `twofiles` も道をそのまま `read_text` に渡すので、サーバの中の道は
+        # 手元に無く、`stat /opt/…` が赤く出るだけだった（crmaine、2026-09-23）。
+        # 落としてから比べる道はまだ無いので、何をすればいいかを言って断る。
+        #
+        # **手元のサーバでは道が両方に在るので、素通りしてしまう** ── だから
+        # 中身ではなく、ペインがサーバに繋がっているかで断っているかを見る。
+        e.call("remotelist", pane="right", path=root)
+        for op in ("compare", "twofiles"):
+            try:
+                e.call(op)
+                check(f"{op} がサーバのペインを断る", "通ってしまった", "断る")
+            except Exception as err:  # noqa: BLE001 — 断り文句そのものを見る
+                check(f"{op} がサーバのペインを断る",
+                      "手元へ落として" in str(err), True)
     finally:
         e.close()
         if keep:

@@ -1155,6 +1155,9 @@ html, body {
    a wide window — a command line in a place no vim has ever put one. */
 .vfoot { justify-content: flex-start; align-items: baseline; }
 .vfoot > * { flex: 0 0 auto; }
+/* 並べた画面の vim の状態行は左右に1つずつ。左が original、右が modified で、
+   画面の並びと同じ順。間を空けないと2つのモード表示が1語に見える。 */
+.vfoot > .pair-vim + .pair-vim { margin-left: 3em; }
 .vhead { border-bottom: 1px solid var(--line); }
 .vfoot { border-top: 1px solid var(--line); }
 /* Monaco measures this box and lays itself out inside it, so it must have a

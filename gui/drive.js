@@ -998,6 +998,26 @@ async function main() {
         ["want:viewer.ed.getValue() === 'foo(\\n    X\\n);'", '複数行の ci( も同じ規則'],
         ['type:u', ''], ['type:u', ''], ['type:u', ''], ['wait:500', ''],
 
+        // ── 矩形のあとのマクロ ────────────────────────────────────────
+        //
+        // monaco-vim は「複数カーソルの編集は、カーソルの数だけ変更が届く」と
+        // 思っていて、最初の1つを記録したら残りを読み飛ばす。**Monaco は1つ
+        // しか届けない**ので数が減らず、残った数だけ**その後の打鍵が記録から
+        // 消える** ── 矩形で6行に足した後にマクロを録ると ` // NOT NULL` が
+        // `OT NULL` になった（crmaine の紹介動画、2026-09-23）。
+        // renderer.js `neutraliseIgnoreCount` の註。
+        ["read:(()=>{const m=viewer.ed.getModel();viewer.ed.executeEdits('t',[{range:m.getFullModelRange(),text:'aa\\nbb\\ncc\\ndd\\nee\\nff'}]);viewer.ed.pushUndoStop();window.__m=viewer.ed.getValue();viewer.ed.setPosition({lineNumber:1,column:1});return '6行を仕込んだ';})()", ''],
+        ['Esc', ''], ['Ctrl+q', '矩形'], ['type:jjjjj', ''], ['type:$', ''],
+        ['type:A', '右端に足す'], ['type:,', ''], ['Esc', ''], ['wait:600', ''],
+        ["want:viewer.ed.getValue() === 'aa,\\nbb,\\ncc,\\ndd,\\nee,\\nff,'", '矩形が6行の右端に足した'],
+        ["read:(()=>{viewer.ed.setPosition({lineNumber:1,column:1});return '1行目へ';})()", ''],
+        ['type:qq', 'マクロを録る'], ['type:A', ''], ['type: // NOT NULL', ''], ['Esc', ''],
+        ['type:j', ''], ['type:q', '録り終える'], ['wait:500', ''],
+        ['type:5@q', '5回流す'], ['wait:1500', ''],
+        ["want:viewer.ed.getValue().split('\\n').every((l)=>l.endsWith(', // NOT NULL'))", '流した5行も、録った1行目と同じ'],
+        ['type:u', ''], ['type:u', ''], ['type:u', ''], ['type:u', ''], ['type:u', ''],
+        ['type:u', ''], ['type:u', ''], ['wait:800', ''],
+
         // ── 取り消しの単位 ── 挿入1回ぶんが1手 ─────────────────────────
         //
         // vim では `ciwX<Esc>` の後の `u` は1回で元に戻る。monaco-vim は「消す」
@@ -1080,6 +1100,45 @@ async function main() {
         ['Shift+F7', '前の差分'], ['wait:700', ''],
         ['read:\'Shift+F7 → \' + (pair.ed.getModifiedEditor().getPosition()||{}).lineNumber + \' 行目\'', ''],
         ['Esc', '比較を閉じる'], ['wait:800', ''],
+
+        // ── 並べた画面で、書いて保存する ──────────────────────────────
+        //
+        // **並べた画面は `viewer.ed` を捨てて作る**（同じ節に Monaco は2つ
+        // 立たない）。`saveFile` がそれを先に見て戻っていたので、Ctrl+S も
+        // `:w` も、保存も言い訳もせずに終わっていた。左右のエディタには vim も
+        // 焦点も無く、開いた直後の打鍵はどこにも入らなかった
+        // （crmaine の紹介動画、2026-09-23）。
+        //
+        // **Esc は1回で閉じる**（本人の確認項目、2026-09-01）。ただし vim が
+        // 何かの途中なら vim のもの ── そこを分けないと、挿入を抜ける Esc で
+        // 比較ごと閉じる。
+        ['=', '比較をもう一度'], ['wait:3500', ''],
+        ['want:pair.on && pair.ed.getModifiedEditor().hasTextFocus()', '開いた直後の焦点は右のエディタ'],
+        ["read:(()=>{const e=pair.ed.getModifiedEditor();window.__p=e.getValue();e.setPosition({lineNumber:1,column:1});return '控えた';})()", ''],
+        ['type:A', ''], ['type:ZZ', ''], ['Esc', '挿入を抜ける'], ['wait:400', ''],
+        ['want:pair.on', '挿入を抜ける Esc では閉じない'],
+        ['want:pair.ed.getModifiedEditor().getModel().getLineContent(1).endsWith("ZZ")', '右のエディタで vim が効く'],
+        ['Esc', '未保存のまま閉じようとする'], ['wait:700', ''],
+        ['want:!el.ask.hidden && pair.on', '未保存なら訊く'],
+        ['Esc', 'いいえ'], ['wait:500', ''],
+        ['want:pair.on && pair.ed.getModifiedEditor().hasTextFocus()', '断ったら開いたまま、焦点も戻る'],
+        // **足元が隠れていると `:` の欄に焦点が渡らない**（renderer.js
+        // `setStyle` の註）。vim のエディタを閉じた後はずっと隠れたままで、
+        // 一周の前半がそれをやっている ── 手元で単体で試すと通るのに、
+        // 一周でだけ `:w` が効かなかった。
+        ['want:getComputedStyle(el.vFoot).display !== "none"', '並べた画面の足元が見えている'],
+        ['type::w', ':w で保存'],
+        ['Enter', ''], ['wait:1800', ''],
+        ['want:!pairDirty()', ':w が両方を保存した'],
+        ['Esc', '閉じる'], ['wait:800', ''],
+        ['want:!pair.on', '保存した後は Esc 1回で閉じる'],
+        // 書き戻したものを読み直す ── 保存が本当に届いたか。**書いた先は右
+        // （modified）＝ `to/d2.txt`** で、閉じた直後にいるのは左のペインだ。
+        ['Tab', '右のペインへ'], ['wait:400', ''],
+        ['land:d2.txt', 'd2.txt へ'], ['Enter', '開く'], ['wait:2500', ''],
+        ['want:viewer.ed.getModel().getLineContent(1).endsWith("ZZ")', '書いたものがファイルに残っている'],
+        ['Esc', ''], ['Esc', ''], ['Esc', ''], ['wait:600', ''],
+        ['Tab', '左へ戻す'], ['wait:400', ''],
 
         // アーカイブの中で `l`（素の `l` が「入る」になる唯一の場所）
         ['Bksp', '砂場の根へ'], ['wait:800', ''],

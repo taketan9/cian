@@ -880,6 +880,14 @@ function truncateMiddle(text, max = 68) {
     return `${head}…${[...tail].reverse().join('')}`;
 }
 
+/// 進捗の窓を畳む。**`prog` は状態、`el.prog` が窓**で、状態だけ畳んでも窓は
+/// 残る ── 転送の終わりがそれで、「100%」のまま画面に居座っていた。畳む道を
+/// 1つにして、`drawProg()` の呼び忘れが起きないようにする。
+function hideProg() {
+    prog.hidden = true;
+    drawProg();
+}
+
 function drawProg() {
     if (!running || prog.hidden) { el.prog.hidden = true; return; }
     el.prog.hidden = false;
@@ -3584,8 +3592,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'b' || e.key === 'Enter') {
         e.stopPropagation();
         e.preventDefault();
-        prog.hidden = true;
-        drawProg();
+        hideProg();
         say(tr('running in the background — :queue manages it', 'バックグラウンドで実行中 — :queue で管理'));
         return;
     }
@@ -3783,6 +3790,13 @@ function applyKeymaps(list) {
 let keymapErrors = [];
 
 document.addEventListener('keydown', (e) => {
+    // **訊いている間、キーボードはその欄のもの。** `askFor` と `confirm` は
+    // 呼ばれたときに受け口を付けるので**いちばん後ろ**に並び、`stopPropagation`
+    // でも `stopImmediatePropagation` でも、先に並んだここを止められない。
+    // grep の結果で `r` を押し、式を打って Enter を1回 ── その打鍵が欄と
+    // ここの両方に届き、後ろの結果の1件目が開いていた（crmaine の紹介動画、
+    // 2026-09-23）。止める側ではなく、出ない側で決める。
+    if (!el.ask.hidden) return;
     // The chat first, because it opens *over* the viewer (summarise the file
     // you are reading) as well as over the listing.
     //
@@ -5288,6 +5302,7 @@ function drawReport() {
 }
 
 document.addEventListener('keydown', (e) => {
+    if (!el.ask.hidden) return;
     if (!report.on) return;
     e.stopPropagation();
     const last = report.rows.length - 1;
@@ -6117,6 +6132,11 @@ function setStyle(i, remember = true) {
     // was last written into it and vim's mode line appends to it — two status
     // lines in one, which is how it looked the first time.
     el.vFoot.textContent = '';
+    // **monaco-vim は vim を外すとき、渡された要素を `display:none` にする。**
+    // ふつうのエディタはこの足元そのものを渡しているので、vim のエディタを
+    // 一度閉じると足元が隠れ、次に vim を付けるまで戻らない ── notepad の
+    // 流儀で開いても案内が出ないのはそれだった。CSS の既定（flex）へ戻す。
+    el.vFoot.style.display = '';
     if (STYLES[style][0] === 'vim') {
         // eslint-disable-next-line no-undef
         viewer.vim = MonacoVim.initVimMode(viewer.ed, el.vFoot);
@@ -6127,103 +6147,11 @@ function setStyle(i, remember = true) {
         viewer.vim.on('vim-mode-change', () => queueMicrotask(syncIme));
         // 取り消しの単位（`vimUndo` の註）。立て直したら数え直す。
         vimFrom = null; vimInsert = false;
-        viewer.vim.on('vim-mode-change', noteVimMode);
+        viewer.vim.on('vim-mode-change', (e) => noteVimMode(e, viewer.ed));
         // `:w` and `:q` where the fingers put them. Without these, vim style
         // would still need Ctrl+S and Esc — which is exactly the seam that
         // makes a vim mode feel like a costume.
-        // eslint-disable-next-line no-undef
-        const ex = MonacoVim.VimMode.Vim;
-        ex.defineEx('write', 'w', saveFile);
-        ex.defineEx('quit', 'q', () => closeView(false));
-        ex.defineEx('wq', 'wq', async () => { if (await saveFile()) closeView(false); });
-        ex.defineEx('outline', 'outline', () => cmdOutline());
-        ex.defineEx('blame', 'blame', () => cmdBlame());
-        ex.defineEx('enc', 'enc', (_cm, params) => cmdEncoding((params.args || [])[0]));
-        ex.defineEx('ws', 'ws', () => toggleWs());
-        ex.defineEx('ruler', 'ruler', () => toggleRuler());
-        ex.defineEx('preview', 'preview', () => togglePreview2());
-        // cian-tui's viewer verbs, reachable from vim's command line the way
-        // they are there. Without these, `:mermaid` and `:summary` answered
-        // "Not an editor command" — they existed in the dictionary the listing
-        // reads, and the viewer has a different one.
-        ex.defineEx('mermaid', 'mermaid', (_cm, p) => ((p.argString || '').trim() === '!' || p.commandName === 'mermaid!' ? cmdMermaidOut() : cmdMermaid()));
-        ex.defineEx('summary', 'summary', () => cmdSummary());
-        ex.defineEx('edit', 'edit', () => cmdEditExternal());
-        ex.defineEx('theme', 'theme', (_cm, p) => cmdTheme((p.args || [])[0]));
-        // `argString` だけ。`args` は同じものを分割したもので、足すと
-        // `:combine 3` が "33" になり、数として読めずに既定の2行に落ちる
-        // ── 2026-09-20 に `:%!` を入れたとき、同じ書き方で `sort` が
-        // `sortsort` になって見つかった。**この行はずっとそうだった。**
-        ex.defineEx('combine', 'combine', (_cm, p) => cmdCombine(((p.argString || (p.args || []).join(' ')) || '').trim()));
-        // The line operations, which until now could not be reached at all:
-        // each needs a file open, and cian's own `:` belongs to the listing,
-        // which declines every key while a file is open. They were in the
-        // command table, in the help, and unreachable — found by measuring
-        // the code for twins, not by anybody using it. Here is where a vim
-        // user would look for them anyway.
-        for (const op of ['sort', 'rsort', 'uniq', 'han', 'zen', 'expand', 'unexpand', 'reindent']) {
-            ex.defineEx(op, op, () => textOp(op));
-        }
-        // `:s/old/new/g`. monaco-vim has its own substitute, but it does not
-        // know cian's — the engine holds the same one the terminal build
-        // uses, so the two builds agree on what a pattern means.
-        // vi の filter。monaco-vim は範囲を解釈して `line1`/`line2` を渡す
-        // （`:%!` なら1行目から最終行、`:'<,'>!` なら選択範囲）。名前が `!`
-        // なので `defineEx` の綴りも `!` で、短縮形も同じ。
-        // **`argString` だけ。** monaco-vim は同じものを `args`（分割済み）と
-        // `argString`（生）の両方に入れるので、足すと `sort` が `sortsort` に
-        // なる。実機で一度そうなった。
-        //
-        // 範囲は `p.line` / `p.lineEnd`（0始まり）に入る ── `line1`/`line2`
-        // ではない。取り違えていたせいで `:.!tr a-z A-Z` がファイル全体を
-        // 大文字にした。実機で見るまで気づけない類のずれで、範囲の名前は
-        // `monaco-vim.js` の `parseInput_` にある。
-        ex.defineEx('!', '!', (_cm, p) => filterThroughShell(
-            ((p.argString || (p.args || []).join(' ')) || '').trim(),
-            p.line !== undefined ? p.line + 1 : undefined,
-            p.lineEnd !== undefined ? p.lineEnd + 1 : undefined,
-        ));
-        ex.defineEx('subst', 's', (_cm, p) => cmdSubstitute('s' + (p.argString || '')));
-        // `:g/re/d` and `:v/re/d`, spelled as vim spells them.
-        ex.defineEx('global', 'g', (_cm, p) => runGlobal(p, false));
-        ex.defineEx('vglobal', 'v', (_cm, p) => runGlobal(p, true));
-        // `]]` and `[[`, which monaco-vim does not have. `%` it does — it is
-        // `moveToMatchedSymbol` and it works; the first version of this
-        // replaced it with a worse one, which is what comes of adding a
-        // feature without checking whether it is already there.
-        // eslint-disable-next-line no-undef
-        const vim = MonacoVim.VimMode.Vim;
-        vim.defineAction('cianNextSection', () => hopSection(1));
-        vim.defineAction('cianPrevSection', () => hopSection(-1));
-        vim.mapCommand(']]', 'action', 'cianNextSection', {}, { isJump: true });
-        vim.mapCommand('[[', 'action', 'cianPrevSection', {}, { isJump: true });
-        // Folding, which monaco-vim also leaves out. Monaco does the folding;
-        // this is only the key.
-        vim.defineAction('cianFold', () => viewer.ed.trigger('cian', 'editor.toggleFold'));
-        vim.mapCommand('za', 'action', 'cianFold');
-        vim.mapCommand('zA', 'action', 'cianFold');
-        // `it` / `at` ── タグの中身と、タグごと。monaco-vim は `t` の対象を
-        // 持っているが、探すのを CodeMirror の xml-fold に任せていて、Monaco
-        // の上にはそれが無い（`tagObject` の註）。
-        // eslint-disable-next-line no-undef
-        MonacoVim.VimMode.findEnclosingTag = tagObject;
-        // eslint-disable-next-line no-undef
-        MonacoVim.VimMode.findMatchingTag = () => undefined;
-        // `i{` `i(` `i[` `i<` とその別名 ── 行をまたぐ内側を vim と同じ形に
-        // （`innerBlock` の註）。**文脈は normal だけ** ── 演算子の後はここに
-        // 当たり、ビジュアルの `vi{` は今までどおり monaco-vim に任せる。
-        // ふつうの `i`（挿入）は完全一致が先に決まるので、次の字を待たない。
-        // 割り当ては表の先頭に積まれるので、立て直すたびに足さない。
-        if (!innerBlockMapped) {
-            innerBlockMapped = true;
-            vim.defineMotion('cianInnerBlock', innerBlock);
-            for (const [keys, o, c] of [['(', '(', ')'], [')', '(', ')'], ['b', '(', ')'],
-                ['[', '[', ']'], [']', '[', ']'], ['{', '{', '}'], ['}', '{', '}'], ['B', '{', '}'],
-                ['<', '<', '>'], ['>', '<', '>']]) {
-                vim.mapCommand('i' + keys, 'motion', 'cianInnerBlock',
-                    { textObjectInner: true, cianOpen: o, cianClose: c }, { context: 'normal' });
-            }
-        }
+        armVimGrammar();
         armJJ();
     }
     // Sections, in both grammars: `]]` and `[[` walk the outline the way they
@@ -6236,6 +6164,113 @@ function setStyle(i, remember = true) {
             () => hopSection(-1));
     }
     drawViewFoot();
+}
+
+/// vim の文法への登録 ── `:w` などの ex、`]]`、`za`、`cit` のタグ探し、`ci{` の
+/// 内側。**どのエディタのものでもなく、monaco-vim 全体のもの**なので一度だけ。
+///
+/// ふつうのエディタで vim を立てたときにだけ登録していたので、起動して
+/// いきなり `=` で並べると、並べた側の vim には `:w` も `cit` も無かった
+/// （2026-09-23、並べた画面に vim を付けたときに気づいた）。どちらの道から
+/// 先に来ても、ここを通る。
+let vimGrammarArmed = false;
+function armVimGrammar() {
+    if (vimGrammarArmed) return;
+    vimGrammarArmed = true;
+    neutraliseIgnoreCount();
+    // eslint-disable-next-line no-undef
+    const ex = MonacoVim.VimMode.Vim;
+    ex.defineEx('write', 'w', saveFile);
+    ex.defineEx('quit', 'q', () => closeView(false));
+    ex.defineEx('wq', 'wq', async () => { if (await saveFile()) closeView(false); });
+    ex.defineEx('outline', 'outline', () => cmdOutline());
+    ex.defineEx('blame', 'blame', () => cmdBlame());
+    ex.defineEx('enc', 'enc', (_cm, params) => cmdEncoding((params.args || [])[0]));
+    ex.defineEx('ws', 'ws', () => toggleWs());
+    ex.defineEx('ruler', 'ruler', () => toggleRuler());
+    ex.defineEx('preview', 'preview', () => togglePreview2());
+    // cian-tui's viewer verbs, reachable from vim's command line the way
+    // they are there. Without these, `:mermaid` and `:summary` answered
+    // "Not an editor command" — they existed in the dictionary the listing
+    // reads, and the viewer has a different one.
+    ex.defineEx('mermaid', 'mermaid', (_cm, p) => ((p.argString || '').trim() === '!' || p.commandName === 'mermaid!' ? cmdMermaidOut() : cmdMermaid()));
+    ex.defineEx('summary', 'summary', () => cmdSummary());
+    ex.defineEx('edit', 'edit', () => cmdEditExternal());
+    ex.defineEx('theme', 'theme', (_cm, p) => cmdTheme((p.args || [])[0]));
+    // `argString` だけ。`args` は同じものを分割したもので、足すと
+    // `:combine 3` が "33" になり、数として読めずに既定の2行に落ちる
+    // ── 2026-09-20 に `:%!` を入れたとき、同じ書き方で `sort` が
+    // `sortsort` になって見つかった。**この行はずっとそうだった。**
+    ex.defineEx('combine', 'combine', (_cm, p) => cmdCombine(((p.argString || (p.args || []).join(' ')) || '').trim()));
+    // The line operations, which until now could not be reached at all:
+    // each needs a file open, and cian's own `:` belongs to the listing,
+    // which declines every key while a file is open. They were in the
+    // command table, in the help, and unreachable — found by measuring
+    // the code for twins, not by anybody using it. Here is where a vim
+    // user would look for them anyway.
+    for (const op of ['sort', 'rsort', 'uniq', 'han', 'zen', 'expand', 'unexpand', 'reindent']) {
+        ex.defineEx(op, op, () => textOp(op));
+    }
+    // `:s/old/new/g`. monaco-vim has its own substitute, but it does not
+    // know cian's — the engine holds the same one the terminal build
+    // uses, so the two builds agree on what a pattern means.
+    // vi の filter。monaco-vim は範囲を解釈して `line1`/`line2` を渡す
+    // （`:%!` なら1行目から最終行、`:'<,'>!` なら選択範囲）。名前が `!`
+    // なので `defineEx` の綴りも `!` で、短縮形も同じ。
+    // **`argString` だけ。** monaco-vim は同じものを `args`（分割済み）と
+    // `argString`（生）の両方に入れるので、足すと `sort` が `sortsort` に
+    // なる。実機で一度そうなった。
+    //
+    // 範囲は `p.line` / `p.lineEnd`（0始まり）に入る ── `line1`/`line2`
+    // ではない。取り違えていたせいで `:.!tr a-z A-Z` がファイル全体を
+    // 大文字にした。実機で見るまで気づけない類のずれで、範囲の名前は
+    // `monaco-vim.js` の `parseInput_` にある。
+    ex.defineEx('!', '!', (_cm, p) => filterThroughShell(
+        ((p.argString || (p.args || []).join(' ')) || '').trim(),
+        p.line !== undefined ? p.line + 1 : undefined,
+        p.lineEnd !== undefined ? p.lineEnd + 1 : undefined,
+    ));
+    ex.defineEx('subst', 's', (_cm, p) => cmdSubstitute('s' + (p.argString || '')));
+    // `:g/re/d` and `:v/re/d`, spelled as vim spells them.
+    ex.defineEx('global', 'g', (_cm, p) => runGlobal(p, false));
+    ex.defineEx('vglobal', 'v', (_cm, p) => runGlobal(p, true));
+    // `]]` and `[[`, which monaco-vim does not have. `%` it does — it is
+    // `moveToMatchedSymbol` and it works; the first version of this
+    // replaced it with a worse one, which is what comes of adding a
+    // feature without checking whether it is already there.
+    // eslint-disable-next-line no-undef
+    const vim = MonacoVim.VimMode.Vim;
+    vim.defineAction('cianNextSection', () => hopSection(1));
+    vim.defineAction('cianPrevSection', () => hopSection(-1));
+    vim.mapCommand(']]', 'action', 'cianNextSection', {}, { isJump: true });
+    vim.mapCommand('[[', 'action', 'cianPrevSection', {}, { isJump: true });
+    // Folding, which monaco-vim also leaves out. Monaco does the folding;
+    // this is only the key.
+    vim.defineAction('cianFold', () => { const ed = vimEditor(); if (ed) ed.trigger('cian', 'editor.toggleFold'); });
+    vim.mapCommand('za', 'action', 'cianFold');
+    vim.mapCommand('zA', 'action', 'cianFold');
+    // `it` / `at` ── タグの中身と、タグごと。monaco-vim は `t` の対象を
+    // 持っているが、探すのを CodeMirror の xml-fold に任せていて、Monaco
+    // の上にはそれが無い（`tagObject` の註）。
+    // eslint-disable-next-line no-undef
+    MonacoVim.VimMode.findEnclosingTag = tagObject;
+    // eslint-disable-next-line no-undef
+    MonacoVim.VimMode.findMatchingTag = () => undefined;
+    // `i{` `i(` `i[` `i<` とその別名 ── 行をまたぐ内側を vim と同じ形に
+    // （`innerBlock` の註）。**文脈は normal だけ** ── 演算子の後はここに
+    // 当たり、ビジュアルの `vi{` は今までどおり monaco-vim に任せる。
+    // ふつうの `i`（挿入）は完全一致が先に決まるので、次の字を待たない。
+    // 割り当ては表の先頭に積まれるので、立て直すたびに足さない。
+    if (!innerBlockMapped) {
+        innerBlockMapped = true;
+        vim.defineMotion('cianInnerBlock', innerBlock);
+        for (const [keys, o, c] of [['(', '(', ')'], [')', '(', ')'], ['b', '(', ')'],
+            ['[', '[', ']'], [']', '[', ']'], ['{', '{', '}'], ['}', '{', '}'], ['B', '{', '}'],
+            ['<', '<', '>'], ['>', '<', '>']]) {
+            vim.mapCommand('i' + keys, 'motion', 'cianInnerBlock',
+                { textObjectInner: true, cianOpen: o, cianClose: c }, { context: 'normal' });
+        }
+    }
 }
 
 /// `]]` / `[[` — the next or previous section.
@@ -6300,8 +6335,12 @@ function drawViewFoot() {
 }
 
 async function saveFile() {
+    // **並べた画面を先に見る。** 並べた画面は `viewer.ed` を捨てて作る
+    // （同じ節に Monaco を2つ立てられない）ので、先に `viewer.ed` を見ると
+    // 必ず「開いていない」で戻り、**保存も言い訳もせずに**終わっていた
+    // （crmaine の紹介動画、2026-09-23）。
+    if (pair.on) return savePair();
     if (!viewer.ed) return false;
-    if (pair.on) { await savePair(); return true; }
     if (scratch.on) { return saveScratch(); }
     if (remoteMember.on) {
         say(tr('sending to the server…', 'サーバへ送っています…'));
@@ -6407,8 +6446,14 @@ async function saveAsPrompt() {
 /// Leaving. An unsaved file asks first — the only door out of an editor that
 /// can lose work.
 async function closeView(ask_first = true) {
-    if (ask_first && viewer.dirty) {
-        if (!await confirm(tr(`${viewer.name} has unsaved edits`, `${viewer.name} は未保存です`), tr('closing loses them', '閉じると編集は失われます'))) return;
+    if (ask_first && (viewer.dirty || pairDirty())) {
+        if (!await confirm(tr(`${viewer.name} has unsaved edits`, `${viewer.name} は未保存です`), tr('closing loses them', '閉じると編集は失われます'))) {
+            // **断ったら、編集に戻す。** 確認の窓が焦点を持っていったまま
+            // なので、いいえ と答えた人の次の打鍵がどこにも入らなかった。
+            const ed = vimEditor();
+            if (ed) ed.focus();
+            return;
+        }
     }
     setViewerOn(false);
     viewer.dirty = false;
@@ -6420,6 +6465,7 @@ async function closeView(ask_first = true) {
     member.on = false;
     remoteMember.on = false;
     scratch.on = false;
+    if (pair.vims) { for (const v of pair.vims) v.dispose(); pair.vims = null; }
     if (pair.ed) { pair.ed.dispose(); pair.ed = null; }
     pair.on = false;
     // Only when the door is being used, not when stepping between files.
@@ -6538,11 +6584,24 @@ const wayOut = { key: null, times: 0 };
 /// seen the key, the line still reads INSERT on the press that leaves insert
 /// mode. Which is what is wanted: that press is leaving insert, not asking to
 /// leave the file.
+/// 並べた画面の vim が、何かの途中か。挿入・ビジュアル・打ちかけ・`:` の入力。
+/// document の capture で見るので、monaco-vim がその Esc を受け取る**前**の状態だ。
+function pairVimBusy(e) {
+    if (e && e.target && e.target.closest && e.target.closest('.pair-vim')) return true;
+    const a = activeVim();
+    const st = a && a.vim.state && a.vim.state.vim;
+    if (!st) return false;
+    const is = st.inputState;
+    return Boolean(st.insertMode || st.visualMode || (is && (is.operator
+        || is.keyBuffer.length || is.prefixRepeat.length || is.motionRepeat.length)));
+}
+
 function vimTyping() {
     return !!viewer.vim && /INSERT|REPLACE/.test(el.vFoot.textContent || '');
 }
 
 document.addEventListener('keydown', (e) => {
+    if (!el.ask.hidden) return;
     if (!viewer.on) return;
     // The picture keys. A terminal draws images as half-blocks, where zooming
     // has nothing to show; this window has the pixels.
@@ -6722,7 +6781,13 @@ document.addEventListener('keydown', (e) => {
     // three presses to put it down is three presses. `closeView` still asks
     // if either side has unsaved edits, which is the thing the rule was
     // protecting.
-    if (e.key === 'Escape' && pair.on && !vimTyping()) {
+    //
+    // **vim が何かの途中なら、Esc はそちらのもの。** 並べた画面にも vim を
+    // 付けた（2026-09-23）ので、挿入を抜ける Esc・ビジュアルを抜ける Esc・
+    // `c` の打ちかけを取り消す Esc・`:` の入力を閉じる Esc で比較ごと閉じて
+    // しまう。何もしていないノーマルモードなら、今までどおり1回で閉じる
+    // （本人の確認項目「`=` の比較を Esc 一回で閉じられる」、2026-09-01）。
+    if (e.key === 'Escape' && pair.on && !pairVimBusy(e)) {
         e.stopPropagation();
         e.preventDefault();
         wayOut.key = null;
@@ -7137,8 +7202,7 @@ async function cmdQueue() {
                 // terminal build's word for it. Nothing is cancelled; the
                 // screen is. The bar goes with it, for the same reason.
                 b: () => {
-                    prog.hidden = true;
-                    drawProg();
+                    hideProg();
                     closeReport();
                     say(tr('it is still running (:queue comes back to it)', '操作は動いたままです（:queue で戻れます）'));
                 },
@@ -7972,7 +8036,12 @@ async function transfer() {
     drawProg();
     const r = await ask('transfer', { pane: which });
     running = null;
-    prog.hidden = true;
+    // **`prog` は状態、`el.prog` が窓。** ここは状態だけを畳んで `drawProg()` を
+    // 呼んでおらず、転送が終わっても窓が「100%」のまま残っていた ── そして
+    // 窓の受け口は `running` が空になると黙るので、Esc も b も後ろの一覧へ
+    // 抜けていた（Esc で接続が切れる）。ほかの2か所は呼んでいる
+    // （crmaine の紹介動画、2026-09-23）。
+    hideProg();
     if (!r) return;
     state.left = r.left;
     state.right = r.right;
@@ -8117,6 +8186,49 @@ async function cmdOutline() {
 /// Monaco の redo の山が消えるのと同じ規則で、捨てないと、戻った先で
 /// Ctrl+R が関係の無い手を何手も進める。
 let innerBlockMapped = false;
+
+/// vim のキーがいま向かっているエディタ。並べた画面では**焦点のある側**
+/// （無ければ右＝書き換える側）、それ以外はふつうのエディタ。
+/// monaco-vim の「複数カーソルの編集は、カーソルの数だけ変更が届く」という
+/// 前提を外す。
+///
+/// **Monaco は6カーソルの挿入を1つの変更として届ける。** monaco-vim は最初の
+/// 1つを記録したら残りを読み飛ばす仕掛け（`ignoreCount`）を持っていて、届く数が
+/// 足りないので**引かれないまま残る**。残った数だけ、その後の打鍵が記録から
+/// 消える ── 矩形で6行に足した後にマクロを録ると、` // NOT NULL` が
+/// `OT NULL` になった（crmaine の紹介動画、2026-09-23）。同じ挿入の中でも
+/// 起きて、矩形で `XY` と入れた後の `.` は `X` しか繰り返さなかった。
+///
+/// 前提が成り立たない以上、数える仕掛けごと止めるのが正しい ── 常に 0 を返し、
+/// 書き込みは捨てる。読み飛ばしはもともと Monaco では要らない（1つしか来ない）。
+function neutraliseIgnoreCount() {
+    // eslint-disable-next-line no-undef
+    const gs = MonacoVim.VimMode.Vim.getVimGlobalState_();
+    const log = gs && gs.macroModeState && gs.macroModeState.lastInsertModeChanges;
+    if (!log || log.cianCounted) return;
+    Object.defineProperty(log, 'cianCounted', { value: true });
+    Object.defineProperty(log, 'ignoreCount', { get: () => 0, set: () => {}, configurable: true });
+}
+
+function vimEditor() {
+    if (pair.on && pair.ed) {
+        const l = pair.ed.getOriginalEditor(), r = pair.ed.getModifiedEditor();
+        return l.hasTextFocus() ? l : r;
+    }
+    return viewer.ed;
+}
+
+/// そのエディタに付いている vim。並べた画面は左右に1つずつ持つ。
+function activeVim() {
+    const ed = vimEditor();
+    if (!ed) return null;
+    if (pair.on) {
+        const i = ed === pair.ed.getOriginalEditor() ? 0 : 1;
+        const vim = pair.vims && pair.vims[i];
+        return vim ? { ed, vim } : null;
+    }
+    return viewer.vim ? { ed, vim: viewer.vim } : null;
+}
 const vimUndo = new WeakMap();
 let vimPre = null;       // 挿入に入る打鍵の直前の版
 let vimFrom = null;      // いま続いている挿入が始まった版
@@ -8132,11 +8244,14 @@ function vimUndoBook(model) {
     return b;
 }
 
-function noteVimMode(e) {
-    const model = viewer.ed && viewer.ed.getModel();
+function noteVimMode(e, ed = viewer.ed) {
+    const model = ed && ed.getModel();
     if (!model || !e) return;
     const now = model.getAlternativeVersionId();
     const inserting = e.mode === 'insert' || e.mode === 'replace';
+    // 挿入に入るたびに見る ── `resetVimGlobalState_` で箱が作り直されたときも、
+    // 次の挿入で掛け直る（`neutraliseIgnoreCount` の註）。
+    if (inserting) neutraliseIgnoreCount();
     if (inserting && !vimInsert) {
         vimFrom = vimPre ?? now;
     } else if (!inserting && vimInsert && vimFrom !== null) {
@@ -8147,7 +8262,7 @@ function noteVimMode(e) {
     // と、次の変更の「消す」がこの挿入の「打つ」と同じ手に混ざり、`u` を重ねても
     // 「この挿入の後」の版を一度も通らない ── 止まる場所を見失って、仕込みより
     // 前まで戻った（一周の⑦、2026-09-22）。
-    if (!inserting && vimInsert) viewer.ed.pushUndoStop();
+    if (!inserting && vimInsert) ed.pushUndoStop();
     vimInsert = inserting;
 }
 
@@ -8159,16 +8274,16 @@ function noteVimMode(e) {
 /// やり直す（やり直しはその逆）。手が混ざって目標ちょうどに止まれないとき、
 /// **戻り足りないほうが、戻りすぎるより安全だ** ── 戻りすぎは人の書いたものを
 /// 黙って消す。
-function vimStepTo(to, how) {
-    const model = viewer.ed.getModel();
+function vimStepTo(to, how, ed = viewer.ed) {
+    const model = ed.getModel();
     const back = how === 'undo';
     const v = () => model.getAlternativeVersionId();
     for (let n = 0; n < 500 && (back ? v() > to : v() < to); n++) {
         const before = v();
-        viewer.ed.trigger('vim', how, null);
+        ed.trigger('vim', how, null);
         if (v() === before) break;
     }
-    if (back ? v() < to : v() > to) viewer.ed.trigger('vim', back ? 'redo' : 'undo', null);
+    if (back ? v() < to : v() > to) ed.trigger('vim', back ? 'redo' : 'undo', null);
 }
 
 /// `ci{` `di(` ── 行をまたぐ括弧の内側を、本物の vim と同じ形に切る。
@@ -8697,6 +8812,13 @@ async function cmdSearch(mode, needle) {
     hits.list = r.hits.map((h) => ({ path: h.path, line: h.line ? h.line.n : 0 }));
     hits.at = -1;
     hits.needle = needle;
+    // **「探しています…」を置き換える。** 終わっても状態行がそう言い続けていて、
+    // 「まだ探している」のか「終わって何も出なかった」のか読めなかった
+    // （crmaine の紹介動画、2026-09-23）。数はシートの見出しにも出るが、
+    // 状態行は前の言葉を抱えたままになる。
+    say(rows.length
+        ? tr(`${rows.length} found`, `${rows.length} 件見つかりました`)
+        : tr('nothing matched', '見つかりませんでした'));
     show(mode === 'content' ? `grep ${needle}` : `find ${needle}`,
         tr(`${r.root}   ${rows.length}${r.truncated ? ' (stopped at the cap)' : ''}`, `${r.root}   ${rows.length} 件${r.truncated ? '（打ち切り）' : ''}`),
         rows, {
@@ -9199,7 +9321,16 @@ async function saveReport(title) {
 /// The report screen answers "what differs"; this answers "let me fix it".
 /// Same two files, a different question — and fixing a difference by reading
 /// it in one window and typing in another is how the wrong half gets edited.
-const pair = { on: false, ed: null };
+const pair = { on: false, ed: null, vims: null, base: null };
+
+/// 並べた画面に、保存していない編集があるか。版の番号で見る ── 取り消して
+/// 元に戻したなら、編集は無かったことになる（ふつうのエディタと同じ規則）。
+function pairDirty() {
+    if (!pair.on || !pair.ed || !pair.base) return false;
+    const m = pair.ed.getModel();
+    return m.original.getAlternativeVersionId() !== pair.base[0]
+        || m.modified.getAlternativeVersionId() !== pair.base[1];
+}
 
 async function cmdDiffEdit() {
     const r = await ask('twofiles', {});
@@ -9219,7 +9350,9 @@ async function cmdDiffEdit() {
     el.vPic.hidden = true;
     el.vName.textContent = viewer.name;
     el.vAbout.textContent = tr('both sides are editable — Ctrl+S saves both', '左右とも編集できます — Ctrl+S でどちらも保存');
-    el.vFoot.textContent = tr('F7 / Shift+F7 next / previous difference   ·   L as a list   ·   Ctrl+S saves   ·   Esc ×3 closes', 'F7 / Shift+F7 次 / 前の相違   ·   L 一覧で見る   ·   Ctrl+S 保存   ·   Esc ×3 閉じる');
+    // **Esc は1回で閉じる**（下の keydown の註）。ここはずっと「×3」と
+    // 言っていて、crmaine の紹介動画で3回押されていた。
+    el.vFoot.textContent = tr('F7 / Shift+F7 next / previous difference   ·   L as a list   ·   Ctrl+S saves   ·   Esc closes', 'F7 / Shift+F7 次 / 前の相違   ·   L 一覧で見る   ·   Ctrl+S 保存   ·   Esc 閉じる');
 
     const lang = MONACO_LANG[r.lang] || 'plaintext';
     // A fresh diff editor each time: reusing one across different file pairs
@@ -9248,17 +9381,50 @@ async function cmdDiffEdit() {
         original: monaco.editor.createModel(r.left.lines.join('\n'), lang),
         modified: monaco.editor.createModel(r.right.lines.join('\n'), lang),
     });
+    const m = pair.ed.getModel();
+    pair.base = [m.original.getAlternativeVersionId(), m.modified.getAlternativeVersionId()];
+    // **左右とも、ふつうのエディタと同じ手で。** これまでは素の Monaco で、
+    // vim の流儀でも vim のキーが無く、焦点もどこにも無かった ── 開いた直後に
+    // 打った `$ b ciw` は後ろへ抜けていた（crmaine の紹介動画、2026-09-23）。
+    const sides = [pair.ed.getOriginalEditor(), pair.ed.getModifiedEditor()];
+    for (const ed of sides) ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveFile());
+    if (STYLES[style][0] === 'vim') {
+        // 状態行は左右に1つずつ ── monaco-vim は渡された要素に自分の欄を
+        // 足していくので、共有すると2つのモード表示と2つの `:` が混ざる。
+        // 差分送りの案内は上の行へ移す。
+        el.vAbout.textContent = tr('both sides are editable. Ctrl+S or :w saves both   ·   F7 / Shift+F7 differences   ·   Esc in normal mode closes',
+            '左右とも編集できます。Ctrl+S か :w でどちらも保存   ·   F7 / Shift+F7 相違   ·   ノーマルモードの Esc で閉じる');
+        el.vFoot.textContent = '';
+        // 隠されたままのことがある（`setStyle` の註）。並べた画面の状態行は
+        // この中に作るので、隠れていると `:` の欄に焦点が渡らず、`:w` が
+        // 打てなかった ── 一周でだけ落ちて、そこで見つかった。
+        el.vFoot.style.display = '';
+        armVimGrammar();
+        pair.vims = sides.map((ed) => {
+            const bar = document.createElement('span');
+            bar.className = 'pair-vim';
+            el.vFoot.append(bar);
+            // eslint-disable-next-line no-undef
+            const v = MonacoVim.initVimMode(ed, bar);
+            v.on('vim-mode-change', (e) => noteVimMode(e, ed));
+            return v;
+        });
+        vimFrom = null; vimInsert = false;
+    }
+    sides[1].focus();
     say(`${r.left.name} ↔ ${r.right.name}`);
 }
 
 async function savePair() {
-    if (!pair.ed) return;
+    if (!pair.ed) return false;
     const m = pair.ed.getModel();
     const l = await ask('save', { lines: m.original.getValue().split(/\r?\n/) });
     const r = await ask('savepair', { lines: m.modified.getValue().split(/\r?\n/) });
-    if (!l && !r) return;
+    if (!l && !r) return false;
+    if (l && r) pair.base = [m.original.getAlternativeVersionId(), m.modified.getAlternativeVersionId()];
     await reread();
     say(tr(`saved ${[l && l.saved, r && r.saved].filter(Boolean).join('  and  ')}`, `${[l && l.saved, r && r.saved].filter(Boolean).join('  と  ')} を保存しました`));
+    return Boolean(l && r);
 }
 
 /// The plan first, always — the hundred new names before any of them exists.
@@ -10239,6 +10405,7 @@ async function drawDiagramZones() {
 /// except step the cursor six columns right, which is a hard thing to read as
 /// "this key is taken".
 document.addEventListener('keydown', (e) => {
+    if (!el.ask.hidden) return;
     if (!viewer.on) return;
     if (e.key !== 'e' && e.key !== 'E') return;
     if (!mod(e) || e.altKey) return;
@@ -10280,9 +10447,11 @@ document.addEventListener('keydown', (e) => {
 /// document の capture で受けるのは、Monaco の textarea より先に見るため
 /// （その前に版を控えないと、挿入に入った手の「前」が分からない）。
 document.addEventListener('keydown', (e) => {
-    if (!viewer.on || !viewer.vim || !viewer.ed) return;
-    const model = viewer.ed.getModel();
-    const st = viewer.vim.state && viewer.vim.state.vim;
+    const act = viewer.on && activeVim();
+    if (!act) return;
+    const { ed, vim } = act;
+    const model = ed.getModel();
+    const st = vim.state && vim.state.vim;
     if (!model || !st) return;
     if (!st.insertMode) vimPre = model.getAlternativeVersionId();
     const is = st.inputState;
@@ -10293,14 +10462,14 @@ document.addEventListener('keydown', (e) => {
     const now = model.getAlternativeVersionId();
     if (!e.ctrlKey && e.key === 'u' && book.undo.has(now)) {
         const from = book.undo.get(now);
-        vimStepTo(from, 'undo');
+        vimStepTo(from, 'undo', ed);
         if (model.getAlternativeVersionId() === from) book.redo.set(from, now);
         // monaco-vim 自身の `u` と同じく、選択を起点へ畳む。Monaco の取り消しは
         // 戻した字を選択した形で返すので、畳まないとカーソルが選択の終わり ──
         // 行末の外に残り、そこで `x` を押すと行ごと消えた（2026-09-22）。
-        viewer.vim.setCursor(viewer.vim.getCursor('anchor'));
+        vim.setCursor(vim.getCursor('anchor'));
     } else if (e.ctrlKey && !e.shiftKey && e.key === 'r' && book.redo.has(now)) {
-        vimStepTo(book.redo.get(now), 'redo');
+        vimStepTo(book.redo.get(now), 'redo', ed);
     } else {
         return;
     }
@@ -11838,6 +12007,7 @@ async function shellPaste() {
 }
 
 document.addEventListener('keydown', (e) => {
+    if (!el.ask.hidden) return;
     if (!term.on || !term.focused) return;
     // **Ctrl+C / X / V are the clipboard here, not control characters.**
     //
@@ -12195,7 +12365,7 @@ window.cian.onEvent(async (msg) => {
             }
             const verb = running.verb;
             running = null;
-            el.prog.hidden = true;
+            hideProg();
             // Awaited, because the listings speak too — and whichever of the
             // two says its piece last is the one that stays on screen.
             await reread();

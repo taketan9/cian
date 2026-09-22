@@ -402,6 +402,22 @@ impl Session {
     /// point of it: without it `r` renames the directory you are standing in
     /// and `view` tries to read it. One place, so the guard cannot be the one
     /// thing a fifth handler forgets.
+    /// Both panes are on this machine — for the operations that read the two
+    /// files themselves.
+    ///
+    /// **比べる二つは、どちらも手元のものとして読んでいる。** サーバに繋いだ
+    /// ペインの道はサーバの中の道で、手元には無い ── 読もうとして
+    /// `stat /opt/…` が赤く出るだけだった（crmaine の紹介動画、2026-09-23）。
+    /// 落としてから比べる道はまだ無いので、**何をすればいいかを言って断る**。
+    fn both_sides_are_here(&mut self, verb: &str) -> anyhow::Result<()> {
+        for which in ["left", "right"] {
+            if self.pane_mut(which)?.remote_view().is_some() {
+                anyhow::bail!("サーバのファイルは{verb}。先に手元へ落としてください");
+            }
+        }
+        Ok(())
+    }
+
     fn selected(&mut self, which: &str) -> anyhow::Result<(std::path::PathBuf, String, bool)> {
         let pane = self.pane_mut(which)?;
         let Some(e) = pane.entries.get(pane.cursor).filter(|e| !e.is_parent) else {
@@ -1417,6 +1433,7 @@ impl Session {
             // directories recursively. Asking the window to work out which
             // would put the decision where the files are not.
             "compare" => {
+                self.both_sides_are_here("比べられません")?;
                 let (lp, ln, ld) = self.selected("left")?;
                 let (rp, rn, rd) = self.selected("right")?;
                 if ld != rd {
@@ -4565,6 +4582,7 @@ impl Session {
             // screen. This is the same two files asked for differently: there,
             // "what differs"; here, "let me fix it".
             "twofiles" => {
+                self.both_sides_are_here("並べられません")?;
                 let (lp, ln, ld) = self.selected("left")?;
                 let (rp, rn, rd) = self.selected("right")?;
                 if ld || rd {
