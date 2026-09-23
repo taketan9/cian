@@ -1359,10 +1359,44 @@ pub fn state_set(key: &str, value: &str) -> Result<PathBuf, String> {
         }
     }
     let old = std::fs::read_to_string(&path).unwrap_or_default();
-    match std::fs::write(&path, state_with(&old, key, value)) {
-        Ok(()) => Ok(path),
-        Err(e) => Err(format!("{} に書けません: {e}", path.display())),
+    let next = state_with(&old, key, value);
+    // **変わらないなら書かない。** 同じ値を書き直す場面はいくつもあり
+    // （起動で読み戻した見た目をそのまま覚え直す、など）、書かなければ
+    // 掴まれている隙に当たることもない。
+    if next == old {
+        return Ok(path);
     }
+    // **掴まれていたら、少し待ってやり直す。**
+    //
+    // Windows の実機で `os error 1224`（ERROR_USER_MAPPED_FILE）が出た
+    // ── 「そのファイルをメモリにマップして開いているものがある」という意味で、
+    // 掴んでいるのは cian ではない（cian はどこもマップしていない）。会社の
+    // 機械ではウイルス対策や索引がファイルを一瞬マップする。`fs::write` は
+    // **切り詰めてから書く**ので、その一瞬に当たると弾かれる。
+    //
+    // マップはすぐ放されるので、待てば通る。**それでも駄目なら黙らない** ──
+    // 書けなかったことは書けなかったと言う（2026-09-14 の約束）。
+    let mut last = String::new();
+    let mut held = false;
+    for attempt in 0..5 {
+        match std::fs::write(&path, &next) {
+            Ok(()) => return Ok(path),
+            Err(e) => {
+                // 1224 = ERROR_USER_MAPPED_FILE。**誰が掴んでいるのかが
+                // 読む人に分からない**ので、そこだけは言葉を足す ── cian の
+                // 不具合と読まれると、探す場所を間違える。
+                held = e.raw_os_error() == Some(1224);
+                last = e.to_string();
+                std::thread::sleep(std::time::Duration::from_millis(40 * (attempt + 1)));
+            }
+        }
+    }
+    let why = if held {
+        "（ほかのプログラムがこのファイルを掴んでいます。ウイルス対策や同期ソフトのことが多いです）"
+    } else {
+        ""
+    };
+    Err(format!("{} に書けません: {last}{why}", path.display()))
 }
 
 /// The state file's text with `key` set to `value` — replacing the line it
@@ -1398,6 +1432,30 @@ pub fn state_with(text: &str, key: &str, value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    /// **同じ値なら書かない。** 書かなければ、掴まれている隙に当たることもない
+    /// ── Windows の実機で `os error 1224`（誰かがファイルをメモリにマップして
+    /// いる）が出たのがきっかけ（2026-09-24）。書けない場所に置いて確かめる:
+    /// 変わらない値なら通り、変わる値なら「書けません」と言う。
+    #[test]
+    fn the_state_file_is_left_alone_when_nothing_changed() {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("CIAN_CONFIG_DIR", dir.path());
+        state_set("theme", "sumi").expect("一度目は書ける");
+        let at = dir.path().join("state.toml");
+        let mut perm = std::fs::metadata(&at).unwrap().permissions();
+        perm.set_readonly(true);
+        std::fs::set_permissions(&at, perm).unwrap();
+
+        assert!(state_set("theme", "sumi").is_ok(), "同じ値なら書きにいかない");
+        assert!(state_set("theme", "hakuji").is_err(), "違う値なら書けないと言う");
+
+        let mut perm = std::fs::metadata(&at).unwrap().permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        perm.set_readonly(false);
+        std::fs::set_permissions(&at, perm).unwrap();
+        std::env::remove_var("CIAN_CONFIG_DIR");
+    }
     use super::*;
 
     /// `cian.font{ face = … }` arrives, and does not disturb the size half.
