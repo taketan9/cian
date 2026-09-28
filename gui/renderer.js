@@ -5230,6 +5230,15 @@ function drawCheckCount() {
 
 function closeReport(abandoned = false) {
     if (abandoned && report.leave) report.leave();
+    // **比べるために落とした複製は、シートを閉じたときにも消す。**
+    // 消していたのは並べた画面を閉じたときだけで、`=` が「2つは同一です」で
+    // 終わったときや、一覧で見て閉じたときは誰も消していなかった ── 実機の
+    // 一時領域に、サーバから落とした CSV が残っていた（2026-09-28）。
+    // 並べた画面が開いているあいだは消さない（保存で上げ直す先だ）。
+    if (comparing && !pair.on) {
+        comparing = false;
+        ask('dropfetched', {}).catch(() => {});
+    }
     report.on = false;
     report.move = null;
     report.leave = null;
@@ -6469,7 +6478,8 @@ async function closeView(ask_first = true) {
     if (pair.ed) { pair.ed.dispose(); pair.ed = null; }
     // **落とした複製は、閉じたら消す**（本人、2026-09-23）── 大きさに関係なく。
     // 保存せずに閉じたなら複製ごと捨てる。単体で開いたリモートのファイルも同じ。
-    if (pair.base || remoteMember.on) ask('dropfetched', {}).catch(() => {});
+    if (pair.base || remoteMember.on || comparing) ask('dropfetched', {}).catch(() => {});
+    comparing = false;
     pair.base = null;
     pair.on = false;
     // Only when the door is being used, not when stepping between files.
@@ -9074,6 +9084,7 @@ async function okToFetch(r) {
 
 async function cmdCompare() {
     say(tr('comparing…', '比べています…'));
+    comparing = true;
     let agreed = false;
     let r = await ask('compare', { folded: diffFolded, enc: diffEnc || undefined });
     if (r && r.needs_ok) {
@@ -9357,7 +9368,11 @@ function pairDirty() {
         || m.modified.getAlternativeVersionId() !== pair.base[1];
 }
 
+/// いま比べている最中か ── 落とした複製を、いつ消してよいかの目印。
+let comparing = false;
+
 async function cmdDiffEdit(agreed = false) {
+    comparing = true;
     let r = await ask('twofiles', agreed ? { ok: true } : {});
     if (r && r.needs_ok) {
         if (!await okToFetch(r)) { say(tr('stopped', 'やめました')); return; }

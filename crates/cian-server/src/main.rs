@@ -446,6 +446,17 @@ impl Session {
             return Ok(Err(len));
         }
         let remote_path = path.display().to_string();
+        // もう落としてあるなら、それを使う（`=` は compare の直後に twofiles を
+        // 呼ぶ ── 二度落とす理由が無い）。落とし直さないので、大きさの確認も
+        // もう一度は訊かない。
+        if let Some(at) = self
+            .fetched
+            .iter()
+            .find(|(at, (_, rp))| rp == &remote_path && at.exists())
+            .map(|(at, _)| at.clone())
+        {
+            return Ok(Ok(at));
+        }
         let dir = Self::fetch_dir();
         std::fs::create_dir_all(&dir)?;
         let at = dir.join(format!("{which}-{name}"));
@@ -1529,6 +1540,12 @@ impl Session {
             // directories recursively. Asking the window to work out which
             // would put the decision where the files are not.
             "compare" => {
+                // **前の比較の複製は、次を始める前に捨てる。** 窓が閉じ損ねても
+                // 溜まり続けないように ── サーバから落としたものが一時領域に
+                // 残るのは、大きさの話ではなく中身の話だ。`=` はここから始まり、
+                // すぐ後ろの `twofiles` は**いま落としたものを使い回す**ので、
+                // 同じものを二度落とすことにはならない。
+                self.drop_fetched();
                 let ok = req.params["ok"].as_bool().unwrap_or(false);
                 let (lp0, ln, ld) = self.selected("left")?;
                 let (rp0, rn, rd) = self.selected("right")?;
@@ -6047,7 +6064,34 @@ fn big(name: &str, len: u64) -> serde_json::Value {
     })
 }
 
+/// 落ちた回の置き土産を掃く。
+///
+/// **サーバから落とした複製は、一時領域に残ると中身の話になる。** ふつうは
+/// 閉じたときに消すが、エンジンが殺されたときは誰も消さない ── 置き場は
+/// エンジンごと（`cian-compare-<pid>`）なので、**自分のものでなく、1時間以上
+/// 触られていないもの**だけを畳む。動いている別のエンジンの作業を取り上げない
+/// ための2条件だ。
+fn sweep_old_fetches() {
+    let mine = format!("cian-compare-{}", std::process::id());
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else { return };
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if !name.starts_with("cian-compare-") || name == mine {
+            continue;
+        }
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .map(|t| t.elapsed().map(|d| d.as_secs() > 3600).unwrap_or(false))
+            .unwrap_or(false);
+        if old {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+}
+
 fn main() -> anyhow::Result<()> {
+    sweep_old_fetches();
     // 開く場所。**引数が無いときは init.lua の `home`** ── 端末版の
     // `default_home` と同じ順で、書いてあるものが先。窓版は場所を渡さずに
     // 起こすことがあり（`main.js` がフォルダを与えられなかったとき）、

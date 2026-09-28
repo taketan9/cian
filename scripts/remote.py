@@ -482,7 +482,10 @@ def main():
         at = {"left": lrows.index("up.txt"), "right": rrows.index("one.txt")}
         r = e.call("twofiles", cursors=at)
         check("サーバ側の中身が読めた", r["right"]["lines"], ["changed"])
-        copies = glob.glob(os.path.join(tempfile.gettempdir(), "cian-compare-*", "*"))
+        # **自分が起こしたエンジンの置き場だけを見る。** 一時領域には別の
+        # エンジン（実機の cian や、前の走行）の置き場も並ぶ ── まとめて見ると、
+        # 直っていても他人の置き土産で赤くなる。
+        copies = glob.glob(os.path.join(tempfile.gettempdir(), f"cian-compare-{e.p.pid}", "*"))
         check("落とした複製が在る", len(copies) >= 1, True)
 
         # 大きいものは落とさずに断る ── エディタの天井（8MB）を超えるものは、
@@ -492,20 +495,38 @@ def main():
             f.write(b"x" * (9 * 1024 * 1024))
         v = e.call("remotelist", pane="right", path=root)
         rrows = [x["name"] for x in (v.get("pane") or v)["entries"]]
-        before = len(glob.glob(os.path.join(tempfile.gettempdir(), "cian-compare-*", "*")))
+        before = len(glob.glob(os.path.join(tempfile.gettempdir(), f"cian-compare-{e.p.pid}", "*")))
         try:
             e.call("twofiles", cursors={"left": lrows.index("up.txt"),
                                         "right": rrows.index("big.bin")})
             check("8MB を超えるものは断る", "通ってしまった", "断る")
         except Exception as err:  # noqa: BLE001 — 断り文句そのものを見る
             check("8MB を超えるものは断る", "8MB" in str(err), True)
-        after = len(glob.glob(os.path.join(tempfile.gettempdir(), "cian-compare-*", "*")))
+        after = len(glob.glob(os.path.join(tempfile.gettempdir(), f"cian-compare-{e.p.pid}", "*")))
         check("断ったなら落としていない", after, before)
+
+        # **次の比較を始めたら、前の複製は消えている。** 窓が閉じ損ねても
+        # 溜まり続けないための二重の備え ── 実機の一時領域に、サーバから
+        # 落とした CSV が残っていた（2026-09-28、「2つは同一です」で終わった
+        # ときに誰も消していなかった）。
+        # **別のファイルで比べ直す** ── 同じものだと同じ名前で落ち直すので、
+        # 道を見ても消えたかどうか分からない。
+        open(os.path.join(root, "two.txt"), "w").write("two\n")
+        v = e.call("remotelist", pane="right", path=root)
+        rrows = [x["name"] for x in (v.get("pane") or v)["entries"]]
+        e.call("twofiles", cursors={"left": lrows.index("up.txt"),
+                                    "right": rrows.index("one.txt")})
+        first = set(glob.glob(os.path.join(tempfile.gettempdir(), f"cian-compare-{e.p.pid}", "*")))
+        check("一つ目の複製が在る", any("one.txt" in p for p in first), True)
+        e.call("compare", cursors={"left": lrows.index("up.txt"),
+                                   "right": rrows.index("two.txt")})
+        after = set(glob.glob(os.path.join(tempfile.gettempdir(), f"cian-compare-{e.p.pid}", "*")))
+        check("次の比較で前の複製が消えている", any("one.txt" in p for p in after), False)
 
         # 閉じたら消す ── 大きさに関係なく、複製を残さない。
         e.call("dropfetched")
         check("閉じたら複製が消える",
-              glob.glob(os.path.join(tempfile.gettempdir(), "cian-compare-*", "*")), [])
+              glob.glob(os.path.join(tempfile.gettempdir(), f"cian-compare-{e.p.pid}", "*")), [])
 
     finally:
         e.close()
