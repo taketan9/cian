@@ -208,6 +208,12 @@ html, body {
    that key is Mission Control's. A hairline is not a target, so each handle
    is a few pixels of transparent hit area straddling the seam. */
 #grip-panes, #grip-main { position: fixed; z-index: 5; }
+/* パネルが嵌まっているあいだ、縦の境界はパネルの縁にある ── 掴み手（5）が
+   パネル（10）の下だと、9px のうち半分がパネルに食われて、一覧側からしか
+   掴めない。浮いているときは逆で、窓を覆うパネルの下に隠れているのが正しい
+   （動かす境界が画面に無い）。**だから嵌まっているときだけ上げる。** */
+#work[data-dock="left"] #grip-panes,
+#work[data-dock="right"] #grip-panes { z-index: 11; }
 #grip-panes { cursor: col-resize; width: 9px; }
 #grip-main  { cursor: row-resize; height: 9px; left: 0; right: 0; }
 #grip-panes:hover, #grip-main:hover, .dragging #grip-panes, .dragging #grip-main {
@@ -217,6 +223,12 @@ html, body {
    selects rows under a divider drag is a listing fighting the gesture. */
 .dragging, .dragging * { cursor: inherit !important; user-select: none !important; }
 .pane[data-pane="left"] { flex: 0 0 var(--panes-pct); }
+/* **並び順を数で書く。** 文書順のままでも同じ並びになるが、嵌まったパネル
+   （`order: 1`、下）が「左ペインと右ペインのあいだ」に入れるのは、両側に
+   数がついているときだけ ── 既定の 0 が並んでいると、パネルだけが後ろに
+   行き、左に嵌めたつもりが右に出て、一覧のほうが左へずれた。 */
+.pane[data-pane="left"]  { order: 0; }
+.pane[data-pane="right"] { order: 2; }
 .pane[data-pane="right"] { flex: 1 1 auto; }
 .pane {
   flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column;
@@ -1070,6 +1082,57 @@ html, body {
   background: var(--pane); color: var(--text);
 }
 #view[hidden], #report[hidden], #chat[hidden], #settings[hidden] { display: none; }
+
+/* 嵌まったパネル ── 面ではなく、ペインの中身になる。
+   **端末版はこれが正で**（`viewer_dock`、render.rs:542）、ファイルを Enter で
+   開いたら、その一覧のあった場所にパネルが嵌まる。左に一覧・右に本文・下に
+   シェルの三面がそのまま残り、キーは行ったり来たりできる。窓版はここだけ
+   ずっと違っていて、txt を開くと窓全部が本文になった ── 一覧もシェルも
+   覆われ、戻るには閉じるしかなかった（本人、2026-10-02）。
+   **最大化は F12 のほう。** こちらも端末版と同じ鍵で、`data-zoom` の既定の
+   規則がそのまま効く（下の `:not(.active)` ひとつを足すだけ）。
+   `position: fixed` をやめて `#panes` の子になるので、幅も高さも区切りの
+   パーセントが決める ── 測って置くと、境界を掴んで動かしたときに付いて
+   こない面がひとつ出る。測らないのがいちばん確かだ。 */
+#work[data-dock="left"] #panes > #view,
+#work[data-dock="right"] #panes > #view {
+  /* `relative` ── 下の焦点枠（`::after`）がこれにぶら下がる。 */
+  position: relative; inset: auto;
+  flex: 1 1 auto; min-width: 0; min-height: 0;
+  /* 左（0）と右（2）のあいだ。嵌まる側がどちらでも、残った一覧との前後が合う
+     ── 左に嵌まれば一覧は右、右に嵌まれば一覧は左。 */
+  order: 1;
+}
+/* 左に嵌まったら、左ペインの幅を引き継ぐ（右ペインは `flex: 1 1 auto`）。 */
+#work[data-dock="left"] #panes > #view { flex: 0 0 var(--panes-pct); }
+/* 嵌まった側の一覧は退く。**`hidden` ではなく display で**、2つの id で
+   書く ── `#panes.one .pane.active { display: flex }` と同じ重みだと、
+   先に書いたほうが負ける（型③）。 */
+#work[data-dock="left"]  #panes .pane[data-pane="left"],
+#work[data-dock="right"] #panes .pane[data-pane="right"] { display: none; }
+/* F12 で広げたとき、埋めるのはキーのある面だけ。一覧に焦点があるまま広げたら
+   パネルは引っ込む ── 既定の `.pane:not(.active)` と同じことを、ペインでは
+   ないこの面にも言う。 */
+#work[data-zoom="files"] #panes > #view:not(.active) { display: none; }
+/* そして、キーのあるパネルは**窓を埋める**。
+   `.pane.active` の `flex: 1 1 100%` と対になる1行で、これが無いと左に
+   嵌まったパネルは広げても `--panes-pct` の幅のまま ── 右半分が空のまま
+   「広げました」と言っていた（この行は `drive.js` の「パネルが埋める」が
+   見つけた。display だけ見ていた自分の目は通り抜けている）。 */
+#work[data-zoom="files"] #panes > #view.active { flex: 1 1 100%; }
+/* 一画面表示（詳細一覧）には並べる相手がいない ── 嵌まったパネルが窓を取る。
+   **左の幅を引き継ぐ行より重く書く**（`[data-dock="left"]` を添える）── 同じ
+   `#view` に幅を言う規則が2つあり、軽いほうは一度も効かない。書いた本人が
+   「効いているつもり」になる形なので、ここは重みを数えて書く（型③）。 */
+#work[data-dock="left"]  #panes.one > #view,
+#work[data-dock="right"] #panes.one > #view { flex: 1 1 100%; }
+/* キーがここにあることは、ペインとシェルとまったく同じ形で言う ── 3px の枠、
+   `::after`、`inset: 0`（上の `.pane.active::after` と `#shell::after` の値を
+   そのまま）。面ごとに言い方が違うと、同じ問いに3つの答えが並ぶ。 */
+#work[data-focus="files"] #panes > #view.active::after {
+  content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  border: 3px solid var(--mode-accent);
+}
 
 /* The transcript scrolls; the turn being typed does not move. */
 .cbody { flex: 1 1 auto; overflow-y: auto; padding: 10px 12px; }

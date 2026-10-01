@@ -760,6 +760,75 @@ async function main() {
         ['Mod+s', '保存'], ['wait:900', ''],
         ['Esc', ''], ['Esc', ''], ['Esc', '3回で閉じる'],
 
+        // ── 嵌まったパネル ── 開いた場所に収まり、キーは行き来する ────────
+        //
+        // **端末版はずっとこうだった**（`viewer_dock`）。窓版だけが txt を開くと
+        // 窓全部を本文にしていて、一覧にもシェルにも戻れなかった。
+        //
+        // ここで見るのは**打鍵では動かないこと**ばかりだ ── どちらの面が
+        // 画面にあるか、どちらがキーを持っているか、そして
+        // **一覧で押した `j` が本文に届いていないか**。状態を見るだけでは
+        // 足りない（型⑧）ので、計算後の display と、本文のカーソル位置を見る。
+        //
+        // 出発点を自分で決める: 左に焦点を置いてから開けば、嵌まる側も、
+        // 渡る先も決まる。周回のどこから来ても同じ結果になる。
+        // 表示モードも決める。**覚えさせない**（第2引数 false）── 検査が人の
+        // 設定を書き換えると、次に窓を開いた人が別の画面を見ることになる。
+        // 詳細一覧は一画面で、右の一覧がそもそも出ない ── ここを決めずに
+        // 書いた最初の版は、前の設定が残っているだけで3つ落ちた。
+        ['read:(() => { setView("classic", false); focusPane("left"); return "二画面・左から開く"; })()', ''],
+        ['land:c.rs', 'c.rs の行へ'], ['Enter', '読む'], ['wait:3000', ''],
+        ['want:el.view.parentElement.id === "panes"', 'ペインの中に嵌まっている'],
+        ['want:el.work.dataset.dock === "left"', '開いたペインに嵌まる'],
+        ['want:Math.round(el.view.getBoundingClientRect().left) === Math.round(el.panes.getBoundingClientRect().left)', '嵌まったのは左'],
+        ['want:el.right.getBoundingClientRect().left > el.view.getBoundingClientRect().left', '一覧は右に残る'],
+        ['want:getComputedStyle(el.shell).display !== "none"', 'シェルも残る'],
+        ['top:#view', 'パネルが最前面'],
+        ['want:viewerHasKeys() === true', 'キーはパネルにある'],
+        ['F12', '窓いっぱいに'], ['wait:700', ''],
+        ['want:getComputedStyle(el.right).display === "none"', '広げたら一覧は引っ込む'],
+        ['want:getComputedStyle(el.shell).display === "none"', 'シェルも引っ込む'],
+        ['want:el.view.getBoundingClientRect().width > el.panes.getBoundingClientRect().width - 8', 'パネルが埋める'],
+        ['F12', '戻す'], ['wait:700', ''],
+        ['want:getComputedStyle(el.shell).display !== "none"', '三面に戻る'],
+        ['Shift+l', '右の一覧へ'], ['wait:500', ''],
+        ['want:state.focus === "right" && viewerHasKeys() === false', 'キーは一覧のもの'],
+        ['want:!el.view.contains(document.activeElement)', 'エディタは焦点を手放す'],
+        ['want:getComputedStyle(el.view).display !== "none"', 'パネルは出たまま'],
+        // **「次は c.rs」とは書かない。** 右の一覧がどのディレクトリを見ているかは
+        // 周回の前半が決めるので、並びは回ごとに違う（最初の版は `to/` の中で
+        // `d1.txt` に当たって落ちた）。見たいのは「一覧が動いたか」だけだ。
+        ['land:b.md', '右の一覧で b.md へ'], ['j', '一覧を下へ'],
+        ['want:state.right.entries[state.right.cursor].name !== "b.md"', '一覧の j は一覧を動かす'],
+        ['Tab', 'パネルへ渡る'], ['wait:500', ''],
+        ['want:state.focus === "left" && viewerHasKeys() === true', 'キーはパネルへ'],
+        ['want:el.view.contains(document.activeElement)', 'エディタが焦点を取り戻す'],
+        ['Shift+j', 'シェルへ'], ['wait:700', ''],
+        ['want:term.focused === true && viewerHasKeys() === false', 'シェルへ渡る'],
+        ['Esc', 'ファイルへ'], ['wait:500', ''],
+        // **これがこの塊の本題。** 隣に出ているエディタに DOM の焦点が
+        // 残っていると、こちらが拾わなかった1文字がそのまま本文に入る。
+        //
+        // **挿入の途中でマウスで一覧へ移る** ── これが本当に起きる形だ。
+        // キーで渡る道は挿入中には開かない（`vimTyping()` を見ている）ので、
+        // 焦点を手放す仕掛けを外しても `j` では鳴らない ── 一覧が
+        // `stopPropagation` して、もともと届かないからだ。**鳴らない検査は
+        // 無いのと同じ。** 外して確かめたら `AA;;1 行目` になった。
+        // 挿入に入った直後に打たない ── 一度だけ、Monaco が隠し textarea を
+        // 握るのを待つ。待たずに打って、一周の中で1回だけ字が入らなかった。
+        ['i', '挿入へ'], ['wait:400', ''], ['type:AA', '打つ'], ['wait:300', ''],
+        ['click:[data-pane="right"] .rows .row', '一覧をクリック'], ['wait:500', ''],
+        ['want:state.focus === "right" && viewerHasKeys() === false', 'クリックでキーが移る'],
+        ['type:;;', '一覧で打つ'], ['wait:400', ''],
+        ['want:viewer.ed.getValue().indexOf(";;") === -1', '一覧で打った字は本文に入らない'],
+        ['click:#view .view-line', 'パネルをクリック'], ['wait:500', ''],
+        ['want:state.focus === "left" && viewerHasKeys() === true', 'クリックでキーが戻る'],
+        ['Esc', 'ノーマルへ'], ['u', '打った分を取り消す'], ['wait:500', ''],
+        ['want:viewer.ed.getValue().indexOf("AA") === -1', '打った分は残さない'],
+        ['Esc', ''], ['Esc', ''], ['Esc', '3回で閉じる'], ['wait:800', ''],
+        ['want:el.view.parentElement.id !== "panes"', '閉じたら元の場所へ戻る'],
+        ['want:getComputedStyle(el.left).display !== "none" && getComputedStyle(el.right).display !== "none"', '両方の一覧が戻る'],
+
         // ── ここから下は「押したことがある」を増やすための一周 ───────────
         //
         // keycover が 70 種中 13 種と言っていた。押していないキーは

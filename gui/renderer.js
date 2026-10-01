@@ -366,6 +366,20 @@ function size(row) {
 /// You were typing into a surface that was `display: none`.
 let zoomOn = false;
 
+/// どのペインに読むパネルが嵌まっているか（`'left'` / `'right'` / 嵌まって
+/// いなければ `null`）。
+///
+/// **端末版がこれで**（`viewer_dock`）、ファイルを開くと一覧のあった場所に
+/// パネルが嵌まる ── 左に一覧・右に本文・下にシェルの三面が残り、キーは
+/// そのあいだを行ったり来たりできる。窓版だけが窓全部を本文にしていて、
+/// 一覧にもシェルにも戻れなかった（本人、2026-10-02）。
+///
+/// **`viewer` の中ではなくここ。** `markFocus()` は起動のいちばん早い段階から
+/// 呼ばれるのに、`const viewer` は 5000 行あとで、それまで触ると
+/// ReferenceError になる（`let` の死角）。面の寸法と焦点の話は `zoomOn` と
+/// 同じ段に置く。
+let viewerDock = null;
+
 /// Where the keys are, on the element the CSS reads.
 ///
 /// The zoom target rides along because it is the same question: one surface
@@ -375,6 +389,35 @@ function markFocus() {
     const where = term.on && term.focused ? 'shell' : 'files';
     el.work.dataset.focus = where;
     el.work.dataset.zoom = zoomOn ? where : '';
+    // 嵌まったパネルも面の1つ ── 枠（3px）と、F12 で埋める側を、ペインと
+    // まったく同じ言葉（`.active`）で言う。別の言葉で言うと、同じ問いに
+    // 答える規則が2通りになる。
+    el.view.classList.toggle('active', !!viewerDock && where === 'files' && state.focus === viewerDock);
+    syncDockFocus();
+}
+
+/// 嵌まったパネルと一覧のあいだで、**DOM の焦点**も渡す。
+///
+/// cian のなかの「どこにキーがあるか」は `state.focus` が答えるが、ブラウザは
+/// それを知らない ── Monaco は自分の隠し textarea に焦点を握ったままで、
+/// 一覧に移ったあと、こちらが拾わなかった1文字（`;` や `u`）がそのまま
+/// ファイルに入る。渡すのではなく**手放させる**のが要点だ。
+///
+/// **変わった瞬間だけ動かす。** `draw()` は一覧を描き直すたびにここへ来るので、
+/// 毎回 `focus()` を呼ぶと、パネルの `:` 欄に打っている途中でエディタ本体に
+/// 焦点を奪われる（型⑨の「同じ節の先客」と同じ事故の、焦点版）。
+let dockHadKeys = null;
+function syncDockFocus() {
+    const has = !!viewerDock && viewerHasKeys();
+    const was = dockHadKeys;
+    dockHadKeys = viewerDock ? has : null;
+    if (!viewerDock || has === was) return;
+    if (has) {
+        const ed = pair.on ? pair.ed : viewer.ed;
+        if (ed) ed.focus();
+    } else if (document.activeElement && el.view.contains(document.activeElement)) {
+        document.activeElement.blur();
+    }
 }
 
 /// The one owner of "the keys are in the shell now".
@@ -2134,7 +2177,7 @@ function hintsNow() {
                 ['Ctrl+V', tr('paste', '貼り付け')], ['Ctrl+R', tr('history', '履歴')],
                 ['Esc', chat.pending ? tr('stop', '中断') : tr('close', '閉じる')]];
     }
-    if (viewer.on) {
+    if (viewerHasKeys()) {
         // `STYLES[0]` is notepad and `STYLES[1]` is vim; this asked for 1 and
         // returned the notepad row. It had never been on screen to disagree
         // with — `drawHints()` was not called when a file opened — so an
@@ -2153,6 +2196,17 @@ function hintsNow() {
         // screen, though `:enc` and the menu both had it all along.
         return [['Ctrl+S', tr('save', '保存')], ['Esc', tr('leave the editor', '編集終了')], ['/', tr('search', '検索')], ['i', tr('edit', '編集')],
             ['v', tr('select', '選択')], ['y', tr('copy', 'コピー')], ['d c y', tr('+ motion', '＋モーション')], [':q', tr('close', '閉じる')],
+            // **ペインに嵌まっているときだけ。** 窓を覆っているパネルから見ると
+            // 渡る先が無く、効かないキーを並べることになる ── シェルの行が
+            // 「2つめのペインがあるときだけ」を見ているのと同じ作り。
+            // 1つずつ挙げるのも同じ理由（`keycover.py` は家族にまとめた行を
+            // 1件と数え、残り半分が押されていないことを隠す）。
+            ...(viewerDock ? [
+                ['Shift+H', tr('left listing', '左の一覧へ')],
+                ['Shift+L', tr('right listing', '右の一覧へ')],
+                ['Shift+J', tr('shell', 'シェルへ')],
+                ['F12', tr('zoom', 'ズーム')],
+            ] : []),
             ['Shift+Enter', tr('menu — encoding, blame, preview', 'メニュー — 文字コード・blame・プレビュー')],
             ['?', tr('keys', 'キー一覧')]];
     }
@@ -2829,7 +2883,7 @@ function isArchive(row) {
 /// 畳み方の案 for rows the terminal build calls チャット・ゴミファイル検出・
 /// ディレクトリ構成を提案, which is one program with two vocabularies.
 function aiRows() {
-    if (viewer.on) {
+    if (viewerHasKeys()) {
         return [
             { label: tr("Chat", 'チャット'), value: ':ai', run: () => cmdAiAsk('') },
             { label: tr("Improve this writing", 'この文章を推敲'), value: '', run: () => cmdAiOverText('writing') },
@@ -3066,6 +3120,18 @@ function dismissFind() {
 // this line, close it without saving.
 // Captured, because Monaco handles `contextmenu` on its own container and
 // stops it there — a listener waiting for the bubble never hears the click.
+/// 嵌まったパネルを**クリックしたら、キーもそこへ**。
+///
+/// Monaco は押された時点で自分の textarea に焦点を取る ── こちらの
+/// `state.focus` がまだ隣の一覧を指していると、打った字が二重に効く
+/// （一覧が拾い、拾い残しが Monaco に入る）。端末版も同じことを
+/// `inside_panel` で見ている（mouse.rs:145）。
+el.view.addEventListener('mousedown', () => {
+    if (!viewerDock) return;
+    if (term.on && term.focused) setShellFocus(false);
+    if (state.focus !== viewerDock) focusPane(viewerDock);
+}, true);
+
 el.view.addEventListener('contextmenu', (e) => {
     if (!viewer.on) return;
     e.preventDefault();
@@ -3267,6 +3333,11 @@ function helpRows() {
         ['@  /  :macro', tr("run a macro \u2014 it splits and opens the layout it describes", 'マクロを実行 ── レイアウトどおりに分割して開きます')],
     ]],
     [tr("Reading and writing (F3 / Enter)", '読み書き（F3・Enter）'), [
+        [tr("where it opens", '開く場所'), tr("in the pane you opened it from. the other listing and the shell stay where they are", '開いたペインの中に開きます。反対の一覧も下のシェルもそのまま残ります')],
+        ['F12', tr("fill the window with it, and back", '窓いっぱいに広げる／戻す')],
+        ['Shift+H / Shift+L', tr("to the left / right listing (vim style, while reading)", '左 / 右の一覧へ（vim のキー操作で、読んでいるとき）')],
+        ['Shift+J', tr("to the shell below", '下のシェルへ')],
+        ['Tab', tr("to the listing beside it", '隣の一覧へ')],
         [tr("images, PDFs", '画像・PDF'), tr("F3 or Enter shows it as it is (with its dimensions)", 'F3 か Enter でそのまま表示（寸法も出ます）')],
         [tr("a binary", 'バイナリ'), tr("shown in hex; i edits \u2014 0-9 a-f overwrite, Ctrl+S saves (keeping a .bak)", '16進で表示。i で編集 — 0-9 a-f で上書き、Ctrl+S 保存（.bak を残す）')],
         [tr("  overwrite only", '  上書きのみ'), tr("nothing shifts, so the file cannot change size", 'ずれないので、ファイルの大きさは変わりません')],
@@ -3750,7 +3821,7 @@ document.addEventListener('keydown', (e) => {
     // 「挿入モードでないか」の二つだけ。それを言わない限り、一往復ぶん
     // 当て推量が要る。**押されたキーの話だけでは足りない。**
     let where;
-    if (viewer.on) {
+    if (viewerHasKeys()) {
         // `tr()` をテンプレート literal の中に書かない。中身は訳されて
         // いても、外側の literal は日本語を含む一つの文字列に見えるので、
         // scripts/i18n.py が「まだ日本語だけ」と数える ── 検査のほうを
@@ -3814,10 +3885,14 @@ document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') { e.preventDefault(); closeSettings(); }
         return;
     }
-    // Not while a file is open. The editor no longer stops every key on its
-    // way past — it cannot, or its own bindings never fire — so the listing's
-    // keys have to decline for themselves.
-    if (viewer.on) return;
+    // Not while the panel has the keys. The editor no longer stops every key
+    // on its way past — it cannot, or its own bindings never fire — so the
+    // listing's keys have to decline for themselves.
+    //
+    // **「開いている」ではなく「キーがそこにある」。** 嵌まったパネルは隣の
+    // 一覧と並んで出ているので、焦点が一覧にあるあいだ `j` も `k` も一覧の
+    // ものだ ── 端末版の `docked_elsewhere`（keys.rs:348）と同じ線。
+    if (viewerHasKeys()) return;
     // **And not before there is a listing to steer.**
     //
     // Twenty-seven branches below read a field off a pane — `.remote`,
@@ -5486,14 +5561,82 @@ const viewer = {
 /// ペイン, マーク, 並替, F3 閲覧 — none of which do anything while the editor
 /// has the keyboard. cian-tui swaps its bar for the panel's; this is the one
 /// door that makes the window do the same, rather than eight remembered calls.
-function setViewerOn(on) {
+function setViewerOn(on, dock = null) {
     viewer.on = on;
+    // **嵌める先は開いた瞬間に決まる** ── 端末版の Enter と同じ（mouse.rs:950
+    // 「Enter reads it *here*: the same viewer, docked in the pane whose
+    // listing it replaces」）。あとから決め直す道は作らない: どこに嵌まって
+    // いるかを二度書くと、片方だけ古くなる。
+    viewerDock = on ? dock : null;
     // A diagram parked in the editor belongs to the file that was open. Left
     // behind, the next file inherits somebody else's picture at whatever line
     // number it happened to be on.
     if (!on) { clearDiagramZones(); zones.on = false; }
+    applyDock();
     drawHints();
 }
+
+/// 本文のパネルを**どこに置くか**、その一か所。
+///
+/// 嵌まっているなら `#panes` の子（区切りのパーセントが寸法を決める）、
+/// 浮いているなら元の場所に戻して `position: fixed` で窓を覆う。
+/// **寸法を測って置かない** ── 境界を掴んで動かしたとき、測った面だけが
+/// 付いてこない（型④）。親を替えるだけなら、幅も高さも CSS が決める。
+function applyDock() {
+    const parent = viewerDock ? el.panes : viewHome.parent;
+    if (el.view.parentElement !== parent) {
+        // 戻すときは**元の隣**へ。重ね順は `z-index` で決まっているとはいえ、
+        // 同じ数の面が並んだときに決めるのは文書順だ（型⑧で3ラウンド溶かした
+        // のはそれ）── 末尾に足して済ませない。
+        if (viewerDock) el.panes.appendChild(el.view);
+        else viewHome.parent.insertBefore(el.view, viewHome.next);
+    }
+    if (viewerDock) el.work.dataset.dock = viewerDock;
+    else delete el.work.dataset.dock;
+    markFocus();
+    // `automaticLayout` は自分の箱を見張っているが、親が替わった直後の1枚は
+    // 古い寸法で描かれる ── 一度だけ、こちらから言う。
+    if (viewer.ed) viewer.ed.layout();
+    if (pair.ed) pair.ed.layout();
+    placeGrips();
+    measureFoot();
+}
+
+/// パネルが**いまキーを持っているか**。
+///
+/// 「ファイルが開いているか」（`viewer.on`）とは別の問い。嵌まったパネルは、
+/// 自分のペインに焦点があるあいだだけキーの持ち主で、隣の一覧に移れば
+/// `j` や `k` は一覧のものに戻る ── 端末版の「A docked viewer owns the
+/// keyboard only while the pane it sits in has the focus」（keys.rs:348）を
+/// 窓版で言うと、この一行になる。
+function viewerHasKeys() {
+    if (!viewer.on) return false;
+    // 浮いているパネルは窓を覆っている ── 渡す先が画面に無い。
+    if (!viewerDock) return true;
+    if (term.on && term.focused) return false;
+    return state.focus === viewerDock;
+}
+
+/// 開こうとしているファイルを、どこに置くか。
+///
+/// **一覧から開いたら、その一覧の場所に。** 端末版の Enter がそうで
+/// （mouse.rs:950）、読んでいるあいだも隣の一覧とシェルが見えている。
+/// 窓いっぱいにするのは F12 のほう。
+function dockForOpen() {
+    // すでに開いているパネルの中で次のファイルを開いたとき（markdown の
+    // リンクを踏む、タブを切り替える）は、いまの置き場所のまま ── 読んで
+    // いる面が飛ぶのは、リンクを踏んだ人が頼んでいないことだ。
+    if (viewer.on) return viewerDock;
+    // シェルにキーがあるなら浮かせる。端末版も同じ条件で嵌めない
+    // （viewer.rs:4801 `if self.focused != FocusedPane::Shell`）── 一覧から
+    // 開いたのでなければ、嵌める先の「その場所」が無い。
+    if (term.on && term.focused) return null;
+    return state.focus;
+}
+
+/// 浮いているときの `#view` の居場所。**起動時の形を覚えておく** ──
+/// `#work` の外の兄弟で、`#chat` の手前（`z-index` は 10 と 12）。
+const viewHome = { parent: el.view.parentElement, next: el.view.nextElementSibling };
 
 /// Which grammar the editor speaks.
 ///
@@ -6107,7 +6250,7 @@ async function showFile(f) {
     viewer.path = f.binary ? null : (f.path || null);
     viewer.dirty = false;
     clearDiskDiff();
-    setViewerOn(true);
+    setViewerOn(true, dockForOpen());
     if (f.path) noteRecent(f.path, f.name);
     el.view.hidden = false;
 
@@ -6616,7 +6759,7 @@ function vimTyping() {
 
 document.addEventListener('keydown', (e) => {
     if (!el.ask.hidden) return;
-    if (!viewer.on) return;
+    if (!viewerHasKeys()) return;
     // The picture keys. A terminal draws images as half-blocks, where zooming
     // has nothing to show; this window has the pixels.
     if (pic.node && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -6632,6 +6775,52 @@ document.addEventListener('keydown', (e) => {
             e.stopPropagation(); e.preventDefault();
             pic.fit = true; pic.ox = 0; pic.oy = 0; paintPicture(); return;
         }
+    }
+    // **嵌まっているパネルから出る鍵。**
+    //
+    // `Shift+H` 左の一覧へ、`Shift+L` 右の一覧へ、`Shift+J` 下のシェルへ ──
+    // 端末版とまったく同じ3つ（viewer.rs:800）。一覧の側はもともと `Shift+J`
+    // でシェルへ行くので、覚えることは増えない。`Tab` も端末版と同じく
+    // 反対側へ渡る（keys.rs:307「A floating panel covers the window; there is
+    // no other side of it to cross to」── 嵌まっていれば、向こう側がある）。
+    //
+    // vim の `H` `L` は画面の上端・下端、`J` は行の連結だが、**窓の鍵のほうを
+    // 採る**のは端末版がそう決めたから。連結は `:combine` が持っている。
+    // **vim の流儀で、読んでいるときだけ** ── notepad の流儀はいつでも文字を
+    // 受けている面なので、`Shift+H` は大文字の H だ（端末版も `editing: false`
+    // を要求している）。
+    if (viewerDock && viewer.vim && !vimTyping() && !hex.editing && !viewer.zPending
+        && !el.vFoot.querySelector('input')
+        && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // 物理位置で見る ── `?` と `ZZ` と同じ理由（配列と IME で `key` はぶれる）。
+        const to = e.shiftKey
+            ? ({ KeyH: 'left', KeyL: 'right', KeyJ: 'shell' })[e.code]
+            : (e.key === 'Tab' ? (viewerDock === 'left' ? 'right' : 'left') : null);
+        if (to) {
+            e.stopPropagation();
+            e.preventDefault();
+            if (to === 'shell') {
+                if (term.on) { setShellFocus(true); say(tr('shell', 'シェル')); } else openShell();
+            } else {
+                focusPane(to);
+            }
+            return;
+        }
+    }
+    // F12 ── 嵌まっているパネルを窓いっぱいに広げる／戻す。
+    //
+    // 一覧とシェルの F12 と同じ鍵で同じこと（端末版 viewer.rs:757「F12 zooms
+    // the pane the panel is docked in — the same zoom the listings and the
+    // shell have」）。ここで受けるのは、キーがパネルにあるあいだ一覧の受け口が
+    // 降りているから ── 鍵が1つでも、受け口は面ごとに要る。
+    // **嵌まっているときだけ。** 窓を覆っているパネルの下で広げても、見える
+    // ものは何も変わらないのに「左ペインを広げました」と言う ── 画面に出ない
+    // 変化を言葉だけが報告する、いちばん質の悪い形になる。
+    if (viewerDock && e.key === 'F12' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.stopPropagation();
+        e.preventDefault();
+        zoomFocused();
+        return;
     }
     // `ZZ` saves and closes, `ZQ` closes without saving.
     //
@@ -10451,7 +10640,7 @@ async function drawDiagramZones() {
 /// "this key is taken".
 document.addEventListener('keydown', (e) => {
     if (!el.ask.hidden) return;
-    if (!viewer.on) return;
+    if (!viewerHasKeys()) return;
     if (e.key !== 'e' && e.key !== 'E') return;
     if (!mod(e) || e.altKey) return;
     e.stopPropagation();
@@ -10476,7 +10665,7 @@ document.addEventListener('keydown', (e) => {
 /// to perform the copy. Preventing the default would take the clipboard away
 /// from both of them, which is the bug wearing a different hat.
 document.addEventListener('keydown', (e) => {
-    if (!viewer.on || !viewer.vim) return;
+    if (!viewerHasKeys() || !viewer.vim) return;
     if (!mod(e) || e.altKey || e.shiftKey) return;
     if (!/^[cxvCXV]$/.test(e.key)) return;
     e.stopPropagation();
@@ -10492,7 +10681,7 @@ document.addEventListener('keydown', (e) => {
 /// document の capture で受けるのは、Monaco の textarea より先に見るため
 /// （その前に版を控えないと、挿入に入った手の「前」が分からない）。
 document.addEventListener('keydown', (e) => {
-    const act = viewer.on && activeVim();
+    const act = viewerHasKeys() && activeVim();
     if (!act) return;
     const { ed, vim } = act;
     const model = ed.getModel();
@@ -10993,7 +11182,10 @@ async function cmdScratch() {
         monaco = await loadMonaco();
     } catch (e) { say(e.message, true); return; }
     if (viewer.on) await closeView(false);
-    setViewerOn(true);
+    // 下書きも一覧のあった場所に嵌まる ── 端末版の空ファイルと同じ
+    // （viewer.rs:4801「Docked where you were, like anything else opened
+    // from a listing」）。
+    setViewerOn(true, dockForOpen());
     scratch.on = true;
     viewer.name = tr('Scratch', '下書き');
     el.view.hidden = false;
@@ -11291,7 +11483,7 @@ window.addEventListener('keydown', (e) => {
     // what vim in a terminal does. Getting the physical key *and* leaving the
     // IME on is not something a page can do — it needs the input source
     // switched off, which is `:ime` (see `syncIme`, and cian-ime.swift).
-    if (e[RESENT] || wantsTextInput() || viewer.on) return;
+    if (e[RESENT] || wantsTextInput() || viewerHasKeys()) return;
     // 229 is what a browser reports for "the IME has this one"; `isComposing`
     // is the modern spelling and not every platform sets it on the first key.
     if (!e.isComposing && e.keyCode !== 229 && e.key !== 'Process') return;
@@ -11326,7 +11518,7 @@ function wantsTextInput() {
     // whether or not it is taking text — the generic test below would say
     // "typing" in vim's normal mode, which is precisely the case this exists
     // to switch the IME *off* for.
-    if (viewer.on && viewer.ed) return STYLES[style][0] === 'vim' ? vimTyping() : true;
+    if (viewerHasKeys() && viewer.ed) return STYLES[style][0] === 'vim' ? vimTyping() : true;
     if (term.on && term.focused) return true;
     const at = document.activeElement;
     return !!at && (at.tagName === 'INPUT' || at.tagName === 'TEXTAREA' || at.isContentEditable);
@@ -11482,7 +11674,9 @@ function applyLayout(remember = true) {
 /// gap and the foot bars all move it.
 function placeGrips() {
     const panes = el.panes.getBoundingClientRect();
-    const left = el.left.getBoundingClientRect();
+    // 左の面 ── パネルが左に嵌まっていればそれが左の面だ。隠れたペインを
+    // 測ると矩形は 0 で、縦の掴み手が窓の左端に寄る（型④）。
+    const left = (viewerDock === 'left' ? el.view : el.left).getBoundingClientRect();
     el.gripPanes.style.top = `${panes.top}px`;
     el.gripPanes.style.height = `${panes.height}px`;
     el.gripPanes.style.left = `${left.right - 4}px`;
