@@ -707,6 +707,10 @@ async function main() {
         ['want:(()=>{const v=document.getElementById("s-preview");const was=v.hidden;v.hidden=false;const o=parseFloat(getComputedStyle(v).opacity);v.hidden=was;return o===1;})()', '追従表示は退かない'],
         ['Shift+J', 'シェルへ'], ['wait:700', ''],
         ['want:parseFloat(getComputedStyle(document.getElementById("s-panes")).opacity) === 1', 'キーが来たシェルは満額に戻る'],
+        // **満額はキーのある面だけ。** `.active` は「2つのうちどちらの一覧か」
+        // の答えで、「キーがそこにあるか」の答えではない ── シェルへ移った
+        // あとも直前の一覧が満額で残っていた（実機、2026-10-06）。
+        ['want:(()=>{const off=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--off-tone"));return [el.left,el.right].every((p)=>parseFloat(getComputedStyle(p.querySelector(".rows")).opacity)===off);})()', 'シェルにキーがあるときは一覧が両方とも退く'],
         ['Esc', 'ファイルへ戻る'], ['wait:500', ''],
 
         // AI の会話窓。**AI が設定されていなくても開く** ── 面と鍵と重なりは

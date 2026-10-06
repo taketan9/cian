@@ -380,10 +380,14 @@ html, body {
    **0.62 → 0.45。** 一段落とした。これ以上暗くすると、反対の一覧を
    読みながら作業する2画面ファイラの本分が削れる ── 退くのであって、
    消えるのではない。 */
-.pane:not(.active) .rows,
-.pane:not(.active) .crumb,
-.pane:not(.active) .dhead,
-.pane:not(.active) .tabs { opacity: var(--off-tone); }
+/* **満額は、キーのある面だけ。**
+   最初はここが `.pane:not(.active)` だけで、シェルに移ったとき直前まで
+   操作していた一覧が満額のまま残った ── 枠はシェルを指しているのに、
+   濃さは一覧を指す。実機で見つかった（本人、2026-10-06）。`.active` は
+   「2つのうちどちらの一覧か」の答えで、「キーがそこにあるか」の答えでは
+   ない。問いが2つあるのだから、条件も2つ要る。 */
+:is(.pane:not(.active), #work[data-focus="shell"] .pane)
+:is(.rows, .crumb, .dhead, .tabs) { opacity: var(--off-tone); }
 
 /* The details view takes the whole window: it is the Explorer arrangement,
    where the listing is the thing you are looking at. Tab still crosses to the

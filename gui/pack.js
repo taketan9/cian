@@ -154,6 +154,42 @@ function engineFile(platform) {
     return null;
 }
 
+/// 渡されたエンジンが**本当にそこに在るか**、組み立てを始める前に見る。
+///
+/// **順番の話だ。** 写すのは `layApp`、つまり出力先をまるごと消したあと ──
+/// 道が1文字違うと「前のビルドは消えた、新しいものは出来ていない」で終わる。
+/// 実機で起きた（2026-10-06、会社の Windows）。Electron の在り処は前から
+/// ここで見ていたのに、エンジンだけ素通りだった。
+///
+/// 出す言葉は `state.toml` のときと同じ作法で ── **解決した絶対パスを見せ、
+/// ありがちな原因を名指しする**。node の生のスタックは、読んだ人を
+/// 「何が無いのか」に辿り着かせない。
+function checkEngine(platform) {
+    const given = arg('engine');
+    if (!given || given === true) return;
+    const at = path.resolve(given);
+    if (fs.existsSync(at)) return;
+    console.error(`NG: エンジンが見つかりません: ${at}`);
+    // **在るものを言う。** 実機で起きたのはこれだった（2026-10-06）── 落とした
+    // ものが `cian-server-win-x64.exe.zip` のままで、`.exe` はまだ中に居た。
+    // 「無い」とだけ言われた人は道を疑うが、答えは「隣に在る」だった。
+    // 機械が知っていることを黙っているのがいちばん高くつく。
+    if (fs.existsSync(`${at}.zip`)) {
+        console.error(`  ${path.basename(at)}.zip は在ります ── まだ展開していませんか`);
+        console.error('  展開してできた .exe を渡してください。');
+        process.exit(1);
+    }
+    console.error('  --engine に渡した道を確かめてください。よくある原因:');
+    // 日本語 Windows ＋ OneDrive では、エクスプローラが「デスクトップ」と
+    // 見せていても実体が `Desktop` のことがある（desktop.ini が表示名を
+    // 差し替える）。アドレスバーから写した道は、その表示名のほうだ。
+    console.error('  ・エクスプローラの表示名と実体名が違う（デスクトップ / Desktop）');
+    console.error('  ・OneDrive の「オンラインのみ」で、実体がまだ降りていない');
+    console.error('  ・zip の中の道をそのまま渡している（先に展開してください）');
+    console.error('  手元へ一度写してから、相対の名前で渡すのがいちばん確かです。');
+    process.exit(1);
+}
+
 /// アプリ（`resources/app` の中身）を置く。フルでも `--app-only` でもここを通る。
 function layApp(appDir, platform) {
     fs.rmSync(appDir, { recursive: true, force: true });
@@ -439,6 +475,10 @@ function main() {
     const target = path.join(out, NAME);
     const appOnly = has('app-only');
 
+    // **消す前に確かめる。両方の道で。** `--app-only` も `resources/app` を
+    // まるごと消してから写すので、道が違えば同じことが起きる。
+    checkEngine(platform);
+
     console.log(`cian ${version} を ${platform} 向けに組み立てます → ${target}`);
 
     if (appOnly) {
@@ -463,7 +503,21 @@ function main() {
         process.exit(1);
     }
     console.log(`Electron: ${dist}`);
-    fs.rmSync(target, { recursive: true, force: true });
+    // `force` は「無いときに怒らない」だけで、掴まれているものには効かない。
+    // Windows では前に組んだ `cian.exe` が走っていると、その実体ファイルが
+    // ロックされていて消せない（EBUSY）── 実機で踏んだ（2026-10-06）。
+    // 数回待てば解けることが多いので待ち、それでも駄目なら**誰が掴んで
+    // いそうか**を言う。node の生のスタックには、それが書いていない。
+    try {
+        fs.rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch (e) {
+        if (e.code !== 'EBUSY' && e.code !== 'EPERM' && e.code !== 'ENOTEMPTY') throw e;
+        console.error(`NG: ${target} を消せません（${e.code}）── 中のファイルを何かが開いています。`);
+        console.error('  ・前に組んだ cian.exe がまだ走っていませんか（cian-server.exe / cian-tui.exe も）');
+        console.error('  ・エクスプローラでその階を開いていませんか（プレビュー ウィンドウが掴みます）');
+        console.error('  ・その中を作業ディレクトリにしている端末はありませんか');
+        process.exit(1);
+    }
     const appDir = platform === 'darwin' ? packMac(target, dist) : packWindows(target, dist);
     layApp(appDir, platform);
     if (platform === 'win32') burnIcon(target);
