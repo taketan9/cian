@@ -686,6 +686,29 @@ async function main() {
         // なったらその前提が崩れる。
         ['want:(()=>{el.shell.classList.add("logging");const w=parseFloat(getComputedStyle(el.shell).borderTopWidth)||0;el.shell.classList.remove("logging");return w>0;})()', '記録中の上辺が焦点枠の外にある'],
 
+        // **キーの無い面は退く ── 一覧もシェルも、同じ数で。**
+        //
+        // 「アクティブパネルがどこか誤ってしまう」（本人、2026-10-06）。
+        // 一覧は前から退いていたが、シェルは焦点のあるなしで色が変わらず、
+        // 三面のうち一つだけ「いつも手前」に見えていた。
+        //
+        // 数で見る ── 計算後の opacity は打鍵では動かないので、「動かなかった
+        // キー」には出ない。目で見て「薄いと思う」と言うのがいちばん危ない
+        // （型④）。`--off-tone` の1か所から来ていることも併せて見るので、
+        // 面ごとに別の数を書いた日に鳴る。
+        ['want:(()=>{const t=getComputedStyle(document.documentElement).getPropertyValue("--off-tone").trim();const off=parseFloat(t);return off>0 && off<0.7;})()', '退いた面の濃さが1か所で決まっている'],
+        ['want:(()=>{const off=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--off-tone"));const rows=(p)=>parseFloat(getComputedStyle(p.querySelector(".rows")).opacity);return rows(document.querySelector(".pane:not(.active)"))===off && rows(document.querySelector(".pane.active"))===1;})()', '非アクティブの一覧だけが退く'],
+        // シェルは**開いていて、キーが無い**状態で測る（起動直後がそれ）。
+        ['want:(()=>{const off=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--off-tone"));return !el.shell.classList.contains("on") && parseFloat(getComputedStyle(document.getElementById("s-panes")).opacity)===off;})()', 'キーの無いシェルも同じだけ退く'],
+        // **カーソル追従の表示は退かせない。** 一覧にキーがあるあいだ中身を
+        // 見せるための面で、そこを薄くすると、見るために作った面がいちばん
+        // 読みにくくなる。キーがシェルに無いいまの状態のまま測る ── 検査の
+        // ために状態をいじると、測っているものが本物でなくなる。
+        ['want:(()=>{const v=document.getElementById("s-preview");const was=v.hidden;v.hidden=false;const o=parseFloat(getComputedStyle(v).opacity);v.hidden=was;return o===1;})()', '追従表示は退かない'],
+        ['Shift+J', 'シェルへ'], ['wait:700', ''],
+        ['want:parseFloat(getComputedStyle(document.getElementById("s-panes")).opacity) === 1', 'キーが来たシェルは満額に戻る'],
+        ['Esc', 'ファイルへ戻る'], ['wait:500', ''],
+
         // AI の会話窓。**AI が設定されていなくても開く** ── 面と鍵と重なりは
         // モデルと無関係で、それがここで見たいもの。実際に答えが返るところは
         // `CIAN_CONFIG_DIR` に mock を書いた別走行で見る（`[mock +2]` が

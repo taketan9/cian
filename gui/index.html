@@ -200,6 +200,9 @@ html, body {
    on an 800px window left thirteen rows for a listing and three hundred
    pixels of empty terminal. */
 :root { --main-pct: 75%; --panes-pct: 50%; }
+/* キーの無い面の濃さ。ファイル一覧もシェルも同じ数を使う ── 「いまどこに
+   いるか」は1つの問いで、答えが面ごとに違う必要はない。 */
+:root { --off-tone: .45; }
 /* One hairline down the middle and nothing else. The listing is the window;
    every pixel spent on a frame around it is a row not shown. */
 #panes { flex: 1 1 auto; display: flex; background: var(--line); gap: 1px; min-height: 0; }
@@ -368,11 +371,19 @@ html, body {
    落として、既定（`--cian`）に落ちるようにした。緑（検索）と紫（コマンド）は**何を
    しているか**を言う色なので、そちらは残す。 */
 /* And the pane that is not current steps back rather than merely being a
-   shade darker — the eye should land on the live one without being asked. */
+   shade darker — the eye should land on the live one without being asked.
+
+   **濃さは1か所で決める**（`--off-tone`）。面ごとに数を書くと、片方だけ
+   直した日に「一覧は退くのにシェルは退かない」が生まれる ── 実際それが
+   起きていて、シェルは焦点があってもなくても同じ色だった（本人、
+   2026-10-06「アクティブパネルがどこか誤ってしまう」）。
+   **0.62 → 0.45。** 一段落とした。これ以上暗くすると、反対の一覧を
+   読みながら作業する2画面ファイラの本分が削れる ── 退くのであって、
+   消えるのではない。 */
 .pane:not(.active) .rows,
 .pane:not(.active) .crumb,
 .pane:not(.active) .dhead,
-.pane:not(.active) .tabs { opacity: .62; }
+.pane:not(.active) .tabs { opacity: var(--off-tone); }
 
 /* The details view takes the whole window: it is the Explorer arrangement,
    where the listing is the thing you are looking at. Tab still crosses to the
@@ -914,6 +925,16 @@ html, body {
    rectangles, so re-deriving it here out of nested boxes would be a second
    implementation of the same arithmetic. */
 .spanes { flex: 1 1 auto; position: relative; overflow: hidden; }
+/* **シェルもキーが無ければ退く。** 一覧は前から退いていたのに、ここだけ
+   焦点のあるなしで色が変わらず、三面のうち一つだけ「いつも手前」に見えて
+   いた ── どのパネルが生きているかを数秒考える羽目になる（本人、
+   2026-10-06）。退き方も一覧と同じ（同じ `--off-tone`、文字と中身だけ。
+   枠は `#work[data-focus]` が別に言う）。
+   **`.spreview` は退かせない** ── カーソルを追って中身を見せている面は、
+   キーが一覧にあるときにこそ読むものだ。退かせたら、見るために作った面が
+   いちばん読みにくくなる。 */
+#shell:not(.on) .vhead,
+#shell:not(.on) .spanes { opacity: var(--off-tone); }
 /* `:preview` — what the cursor is on, in the shell panel's area.
    The window used to open the whole editor over the screen for this, which is
    not a glance at a file, it is opening it. cian-tui borrows the shell

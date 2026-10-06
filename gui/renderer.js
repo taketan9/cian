@@ -415,8 +415,19 @@ function syncDockFocus() {
     if (has) {
         const ed = pair.on ? pair.ed : viewer.ed;
         if (ed) ed.focus();
-    } else if (document.activeElement && el.view.contains(document.activeElement)) {
-        document.activeElement.blur();
+    } else {
+        // **挿入したまま出ていかせない。**
+        //
+        // 端末版にはこの状態が無い ── パネルから出る鍵は編集中には開かない
+        // （`editing: false` を要求している）。窓版はマウスがあるので、
+        // 挿入の途中で隣の一覧をクリックできてしまい、「パネルは挿入中、
+        // キーは一覧」という、どちらの前端の設計にも無い状態が作れた。
+        // 下の blur と二重の備えだ: 焦点が外れそこねても、受けるほうが
+        // 文字を待っていなければ本文は汚れない。
+        leaveVimInsert();
+        if (document.activeElement && el.view.contains(document.activeElement)) {
+            document.activeElement.blur();
+        }
     }
 }
 
@@ -5804,16 +5815,22 @@ function armJJ() {
             },
             text: '',
         }]);
-        // Out the way Esc goes. **`viewer.vim` is the adapter, not the
-        // editor** — what `initVimMode` returns is monaco-vim's CodeMirror
-        // shim (`handleKeyDown`, `state`, `editor`), and that is what these
-        // take. Passing the Monaco editor threw `Cannot read properties of
-        // undefined (reading 'vim')` from inside the library.
-        // eslint-disable-next-line no-undef
-        const V = MonacoVim.VimMode.Vim;
-        if (V.exitInsertMode) V.exitInsertMode(viewer.vim);
-        else V.handleKey(viewer.vim, '<Esc>');
+        leaveVimInsert();
     });
+}
+
+/// 挿入モードから出る ── Esc が出るのと同じ道。
+///
+/// **`viewer.vim` は編集器ではなくアダプタ。** `initVimMode` が返すのは
+/// monaco-vim の CodeMirror の殻（`handleKeyDown`・`state`・`editor`）で、
+/// これらが取るのはそちらだ。Monaco の編集器を渡すと、ライブラリの中から
+/// `Cannot read properties of undefined (reading 'vim')` が飛ぶ。
+function leaveVimInsert() {
+    if (!viewer.vim || !vimTyping()) return;
+    // eslint-disable-next-line no-undef
+    const V = MonacoVim.VimMode.Vim;
+    if (V.exitInsertMode) V.exitInsertMode(viewer.vim);
+    else V.handleKey(viewer.vim, '<Esc>');
 }
 
 /// F7 / Shift+F7 — the next and previous difference.
