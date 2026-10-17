@@ -324,7 +324,15 @@ fn render(session: &PtySession) -> Option<serde_json::Value> {
     let (rows, cols) = screen.size();
     let mut lines = Vec::with_capacity(rows as usize);
 
+    // **折り返しの印。** 画面は桁で区切った升目なので、長い1行は何行にも
+    // なって並ぶ ── どこが「続き」かを窓へ伝えないと、そこから拾った文字列は
+    // 画面の桁で切られ、改行が挿し込まれた形になる（実機で測った、2026-10-17:
+    // 600 字の1行が `[149,149,149,149,4]` で戻る）。`vt100` は行ごとにこれを
+    // 持っているので、運ぶだけでいい。
+    let mut wrapped = Vec::with_capacity(rows as usize);
+
     for row in 0..rows {
+        wrapped.push(screen.row_wrapped(row));
         let mut runs: Vec<serde_json::Value> = Vec::new();
         let mut text = String::new();
         let mut style: Option<Style> = None;
@@ -360,6 +368,7 @@ fn render(session: &PtySession) -> Option<serde_json::Value> {
         "cursor": { "row": cr, "col": cc },
         "hidden": screen.hide_cursor(),
         "scrollback": screen.scrollback(),
+        "wrapped": wrapped,
         "title": session.window_title(),
         "lines": lines,
     }))

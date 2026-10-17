@@ -711,6 +711,21 @@ async function main() {
         // の答えで、「キーがそこにあるか」の答えではない ── シェルへ移った
         // あとも直前の一覧が満額で残っていた（実機、2026-10-06）。
         ['want:(()=>{const off=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--off-tone"));return [el.left,el.right].every((p)=>parseFloat(getComputedStyle(p.querySelector(".rows")).opacity)===off);})()', 'シェルにキーがあるときは一覧が両方とも退く'],
+
+        // ── シェルから拾った長い1行が、元の形で戻るか ────────────────────
+        //
+        // 端末の画面は桁で区切った升目なので、見たまま拾うと**画面の桁で
+        // 切られて改行が挿し込まれる**。実機で測ったときは 600 字の1行が
+        // `[149,149,149,149,4]` の5つに割れ、行末は空白で埋まっていた
+        // （2026-10-17、「コピーすると文字がロストする」の正体）。
+        //
+        // ここで見るのは**連なりの長さ**だ ── 字数の合計は壊れていても合う
+        // ので、「600 字あるから無事」は嘘をつく（型②: 同じ見方で測り直す
+        // 検査は、その誤りに永久に ok を返す）。
+        ['type:python3 -c "print(\'A\'*600)"', '長い1行を出す'], ['Enter', ''], ['wait:2500', ''],
+        ['read:(async()=>{const g=document.querySelector("#s-panes .sgrid.on")||document.querySelector("#s-panes .sgrid");const sel=window.getSelection();const r=document.createRange();r.selectNodeContents(g);sel.removeAllRanges();sel.addRange(r);shellCopy();await new Promise(x=>setTimeout(x,400));window.__COPIED=await navigator.clipboard.readText();sel.removeAllRanges();return "拾った "+window.__COPIED.length+" 字";})()', ''],
+        ['want:Math.max(...(window.__COPIED.match(/A+/g)||[0]).map((s)=>s.length)) === 600', '折り返した1行が1つながりで戻る'],
+        ['want:window.__COPIED.split(String.fromCharCode(10)).every((l)=>{const c=l.charCodeAt(l.length-1);return c!==32&&c!==9;})', '行末の空白が付いてこない'],
         ['Esc', 'ファイルへ戻る'], ['wait:500', ''],
 
         // AI の会話窓。**AI が設定されていなくても開く** ── 面と鍵と重なりは
@@ -1486,6 +1501,21 @@ async function main() {
         said = cdp.said;
         await cdp.send('Runtime.enable');
         await cdp.send('Log.enable');
+        // **窓に焦点を持たせる。**
+        //
+        // 人が使っている窓は前に出ていて焦点がある。この道具が起こす窓は
+        // 後ろに居るので、ブラウザから見ると「焦点の無い文書」だ ── そこで
+        // 断られるものがある: `navigator.clipboard.writeText` は
+        // `NotAllowedError: Document is not focused` で落ち、**コピーと
+        // 貼り付けの検証がそもそも始められない**（2026-10-17 に気づいた）。
+        // 打鍵が効かなくなる回があったのも、同じ理由を疑っている。
+        //
+        // `setFocusEmulationEnabled` は「この頁はいつも焦点がある」と頁に
+        // 言わせる CDP の設定で、実機で人が前に出している状態に近づける ──
+        // 本物より緩くするのではなく、**本物に合わせる**ための1行だ。
+        // 無い CDP でも落ちないように、失敗は黙って見送る。
+        await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
+        await cdp.send('Page.bringToFront').catch(() => {});
         await settle(cdp, sand);
 
         // What a state looks like in one line. Written once: the `click:` and
@@ -1600,6 +1630,34 @@ async function main() {
             // and the differences that kept surviving (the ◀ ▶ arrows, the
             // breadcrumb segments, the dividers) are all things you can only
             // reach with a pointer.
+            // `edit:copy` / `edit:paste` / `edit:selectAll` ── **本物の編集命令**。
+            //
+            // 合成した Cmd+C は、ブラウザから見れば「信用できない入力」なので
+            // 本物のコピーを起こさない ── 選択が 74,000 字あっても、
+            // クリップボードは一文字も変わらない。`Input.dispatchKeyEvent` の
+            // `commands` は、macOS の編集命令をキーに添えて送る道で、これが
+            // 人が押したときと同じ経路を通す唯一の手だ。
+            // **コピーと貼り付けは、これが無いと一度も試せない。**
+            if (key.startsWith('edit:')) {
+                const cmd = key.slice(5);
+                const before = await cdp.read(LOOK);
+                for (const type of ['rawKeyDown', 'keyUp']) {
+                    await cdp.send('Input.dispatchKeyEvent', {
+                        type,
+                        key: cmd === 'paste' ? 'v' : cmd === 'copy' ? 'c' : 'a',
+                        code: cmd === 'paste' ? 'KeyV' : cmd === 'copy' ? 'KeyC' : 'KeyA',
+                        windowsVirtualKeyCode: cmd === 'paste' ? 86 : cmd === 'copy' ? 67 : 65,
+                        modifiers: 4,
+                        commands: type === 'rawKeyDown' ? [cmd] : undefined,
+                    });
+                }
+                await sleep(400);
+                const after = await cdp.read(LOOK);
+                const moved = JSON.stringify(before) !== JSON.stringify(after);
+                console.log(`${moved ? '  ' : '× '}${key.padEnd(8)}${(what || '').padEnd(16)} ${after.status}`);
+                if (!moved) bad++;
+                continue;
+            }
             if (key.startsWith('click:')) {
                 const sel = key.slice(6);
                 const box = await cdp.read(`(() => {

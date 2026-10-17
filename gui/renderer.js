@@ -12129,6 +12129,10 @@ function drawShell(screen, into) {
             col += wide;
         }
         if (!div.childNodes.length) div.append(document.createTextNode(' '));
+        // **この行は折り返しの続きか。** 画面の行は桁で切った升目で、長い1行は
+        // 何行にもなって並ぶ ── 印が無いと、ここから拾った文字列は画面の桁で
+        // 切られた形になる（`shellSelectionText` が読む）。
+        if (screen.wrapped && screen.wrapped[row]) div.dataset.wrap = '1';
         frag.append(div);
     });
     node.replaceChildren(frag);
@@ -12203,11 +12207,55 @@ document.addEventListener('mouseup', () => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
     if (!el.sPanes.contains(sel.anchorNode)) return;
-    const text = sel.toString();
+    const text = shellSelectionText();
     if (!text.trim()) return;
     navigator.clipboard.writeText(text);
     say(tr(`${text.length} characters copied`, `${text.length} 文字をコピー`));
 });
+
+/// シェルで選んだところを、**画面の形ではなく元の文**にして返す。
+///
+/// 端末の画面は桁で区切った升目なので、`selection.toString()` は見たままを
+/// 返す ── 長い1行は画面の桁で切られ、改行が挿し込まれ、短い行は右端まで
+/// 空白で埋まっている。実機で測ると、600 字の1行が `[149,149,149,149,4]` の
+/// 5つに割れて戻った（2026-10-17）。字は1つも失われていないが、拾った道や
+/// SQL を他所へ貼ると切れた形で届く ── 「コピーすると文字がロストする」の
+/// 正体はこれだった。
+///
+/// 直し方は端末が昔からやっていることと同じ: **折り返しの続きは改行なしで
+/// つなぎ、折り返していない行の行末の空白は落とす**。続きかどうかはエンジンが
+/// `vt100` から持ってきて（`row_wrapped`）、行に印として付けてある。
+///
+/// 行ごとに選択範囲と重ねて取るのは、途中から途中までを選んだときのため ──
+/// 行まるごとで読むと、選んでいない前後まで付いてくる。
+function shellSelectionText() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return '';
+    if (!el.sPanes.contains(sel.anchorNode)) return '';
+    const range = sel.getRangeAt(0);
+    const rows = [...el.sPanes.querySelectorAll('.sgrid > div')];
+    const out = [];
+    for (const div of rows) {
+        const whole = document.createRange();
+        whole.selectNodeContents(div);
+        // 重なっていない行は飛ばす。
+        if (range.compareBoundaryPoints(Range.END_TO_START, whole) >= 0) continue;
+        if (range.compareBoundaryPoints(Range.START_TO_END, whole) <= 0) continue;
+        const part = whole.cloneRange();
+        if (range.compareBoundaryPoints(Range.START_TO_START, part) > 0) {
+            part.setStart(range.startContainer, range.startOffset);
+        }
+        if (range.compareBoundaryPoints(Range.END_TO_END, part) < 0) {
+            part.setEnd(range.endContainer, range.endOffset);
+        }
+        // 折り返している行は右端まで中身なので、空白を落とさない ── 落とすと、
+        // 続きとつないだ境目で本物の空白が消える。
+        const wrap = div.dataset.wrap === '1';
+        out.push({ text: wrap ? part.toString() : part.toString().replace(/[ \t]+$/, ''), wrap });
+    }
+    if (!out.length) return sel.toString();
+    return out.map((r, i) => (i === out.length - 1 || r.wrap ? r.text : `${r.text}\n`)).join('');
+}
 
 /// Is there a selection standing inside the shell panel?
 function shellHasSelection() {
@@ -12241,8 +12289,7 @@ function extendShellSelection(forward) {
 
 /// The selection in the shell, onto the clipboard.
 function shellCopy() {
-    const sel = window.getSelection();
-    const text = sel && !sel.isCollapsed && el.sPanes.contains(sel.anchorNode) ? sel.toString() : '';
+    const text = shellSelectionText();
     if (!text) {
         say(tr('nothing selected — drag to select, or use the menu to interrupt',
                '選択がありません ── ドラッグで選ぶか、メニューから中断できます'), true);
