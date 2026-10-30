@@ -1688,20 +1688,53 @@ impl Session {
                 Ok(serde_json::json!({ "pattern": pattern, "rows": rows }))
             }
             "renameapply" => {
-                let pairs = req.params["rows"].as_array().cloned().unwrap_or_default();
+                let rows = req.params["rows"].as_array().cloned().unwrap_or_default();
                 let mut done = 0usize;
                 let mut errors: Vec<String> = Vec::new();
-                for row in &pairs {
+                // **入れ替え（a↔b）を通すために、フォルダごとに二段で。**
+                //
+                // ここは1件ずつ `rename_in_place` を呼んでいて、`a → b` の
+                // 時点で `b` がまだ在るので断られた ── 断るのは正しい（以前は
+                // 黙って上書きして片方が消えていた）が、一括では巡回を解く道が
+                // 要る。端末版は前から二段でやっていて、窓版だけ素朴な繰り返し
+                // だった（2026-10-30）。`ops::rename_batch` に出して両方から呼ぶ。
+                let mut by_dir: std::collections::BTreeMap<std::path::PathBuf, Vec<(String, String)>> =
+                    Default::default();
+                for row in &rows {
                     let (Some(path), Some(to)) = (row["path"].as_str(), row["to"].as_str()) else {
                         continue;
                     };
                     let from = std::path::PathBuf::from(path);
-                    match cian_core::ops::rename_in_place(&from, to) {
-                        Ok(_) => {
-                            self.did(Undo::Rename { from: from.clone(), to: from.with_file_name(to) });
-                            done += 1;
+                    let (Some(dir), Some(name)) = (from.parent(), from.file_name()) else {
+                        errors.push(format!("{}: 親フォルダがありません", from.display()));
+                        continue;
+                    };
+                    by_dir
+                        .entry(dir.to_path_buf())
+                        .or_default()
+                        .push((name.to_string_lossy().into_owned(), to.to_string()));
+                }
+                for (dir, pairs) in by_dir {
+                    match cian_core::ops::rename_batch(&dir, &pairs) {
+                        Ok(n) => {
+                            for (from, to) in &pairs {
+                                self.did(Undo::Rename {
+                                    from: dir.join(from),
+                                    to: dir.join(to),
+                                });
+                            }
+                            done += n;
                         }
-                        Err(e) => errors.push(format!("{}: {e}", from.display())),
+                        // 窓版の画面は日本語で言う（エンジンのほかの断りと揃える）。
+                        Err(e) => errors.push(match &e {
+                            cian_core::ops::Refused::Exists(name) => {
+                                format!("{name} はすでにあります")
+                            }
+                            cian_core::ops::Refused::Duplicate(name) => {
+                                format!("{name} へ行く名前が2つあります")
+                            }
+                            cian_core::ops::Refused::Failed { .. } => e.to_string(),
+                        }),
                     }
                 }
                 for which in ["left", "right"] {

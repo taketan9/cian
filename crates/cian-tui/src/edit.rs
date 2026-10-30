@@ -130,54 +130,38 @@ impl App {
             self.message = Some(tr(self.lang, "no names changed", "変更はありません").into());
             return;
         }
-        // A target may exist on disk only if it is itself being renamed away
-        // (a swap); anything else would clobber a bystander.
-        let moving_away: std::collections::HashSet<&str> =
-            pairs.iter().map(|(from, _)| from.as_str()).collect();
-        for (_, to) in &pairs {
-            if dir.join(to).symlink_metadata().is_ok() && !moving_away.contains(to.as_str()) {
+        // **二段の入れ替えは `ops::rename_batch` が持っている。**
+        //
+        // ここに同じ処理が手書きで在って、窓版には無かった ── 同じ操作が
+        // 前端で違う結果になるので、core の1か所に出して両方から呼ぶ
+        // （2026-10-30）。断る条件（通行人の名前・同じ名前へ行く2件）も、
+        // 巻き戻しも、あちらが持っている。
+        match cian_core::ops::rename_batch(dir, &pairs) {
+            Ok(done) => {
+                self.message = Some(if self.lang == crate::Lang::Ja {
+                    format!("{} 件リネームしました", done)
+                } else {
+                    format!("renamed {} file(s)", done)
+                });
+            }
+            Err(why) => {
+                use cian_core::ops::Refused;
+                let said = match &why {
+                    Refused::Exists(name) => format!(
+                        "{}: {name}",
+                        tr(self.lang, "a name already exists", "既に存在する名前があります")
+                    ),
+                    Refused::Duplicate(name) => format!(
+                        "{}: {name}",
+                        tr(self.lang, "two names go to the same one", "同じ名前へ行くものが2つあります")
+                    ),
+                    Refused::Failed { .. } => why.to_string(),
+                };
                 self.message = Some(format!(
-                    "{}: {}",
-                    tr(self.lang, "bulk rename cancelled. a name already exists", "一括リネームを中止しました。既に存在する名前があります"),
-                    to
+                    "{}. {said}",
+                    tr(self.lang, "bulk rename cancelled", "一括リネームを中止しました")
                 ));
-                return;
             }
-        }
-        // Two phases via unique temp names, so a↔b swaps cannot collide.
-        let mut staged: Vec<(PathBuf, PathBuf)> = Vec::new();
-        for (n, (from, _)) in pairs.iter().enumerate() {
-            let tmp = dir.join(format!(".cian-rename-{}-{}", std::process::id(), n));
-            if let Err(e) = std::fs::rename(dir.join(from), &tmp) {
-                // Roll back what was staged so nothing is left half-moved.
-                for (orig, t) in &staged {
-                    let _ = std::fs::rename(t, orig);
-                }
-                self.message = Some(format!("bulk rename: {from}: {e}"));
-                self.reload_both();
-                return;
-            }
-            staged.push((dir.join(from), tmp));
-        }
-        let mut done = 0usize;
-        for ((_, tmp), (_, to)) in staged.iter().zip(&pairs) {
-            match std::fs::rename(tmp, dir.join(to)) {
-                Ok(()) => done += 1,
-                // Landing failed (permissions, name invalid on this FS): put
-                // the original name back rather than leaving a temp file.
-                Err(e) => {
-                    let (orig, _) = &staged[done];
-                    let _ = std::fs::rename(tmp, orig);
-                    self.message = Some(format!("bulk rename: {to}: {e}"));
-                }
-            }
-        }
-        if done == pairs.len() {
-            self.message = Some(if self.lang == crate::Lang::Ja {
-                format!("{} 件リネームしました", done)
-            } else {
-                format!("renamed {} file(s)", done)
-            });
         }
         if let Some(p) = self.active_pane_mut() {
             p.clear_marks();

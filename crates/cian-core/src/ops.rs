@@ -324,6 +324,85 @@ pub fn rename_in_place(src: &Path, new_name: &str) -> Result<PathBuf> {
     Ok(dest)
 }
 
+/// 一括リネームが断る理由。**言葉は前端が決める。**
+///
+/// `String` で返していたら、core が日本語で書いた文が英語の画面にそのまま
+/// 出た（テストが掴んだ）。何が起きたかは core が知っていて、どう言うかは
+/// 画面が決める ── 境目はそこだ。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Refused {
+    /// その名前は既にあり、しかも今回動かすものではない（通行人が消える）。
+    Exists(String),
+    /// 同じ名前へ行くものが2つある（あとの1件が前の1件を消す）。
+    Duplicate(String),
+    /// OS が断った（権限、その FS で使えない名前）。
+    Failed { name: String, why: String },
+}
+
+impl std::fmt::Display for Refused {
+    /// 英語。`rename_in_place` の `{} already exists` と同じ流儀で、
+    /// 日本語が要る画面は中身を見て自分で言う。
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Refused::Exists(name) => write!(f, "{name} already exists"),
+            Refused::Duplicate(name) => write!(f, "two names go to {name}"),
+            Refused::Failed { name, why } => write!(f, "{name}: {why}"),
+        }
+    }
+}
+
+/// 一括リネームを**二段で**適用する。`dir` の中の `(いまの名前, 新しい名前)`。
+///
+/// **`a↔b` の入れ替えを通すためにある。** 1件ずつ `rename_in_place` を呼ぶと、
+/// `a → b` の時点で `b` がまだ在るので断られる（断るのは正しい ── 以前は
+/// 黙って上書きして片方が消えていた）。全部を一時名へ逃がしてから本名へ
+/// 下ろせば、順番も巡回も関係なくなる。
+///
+/// **端末版は前からこれをやっていて、窓版だけが素朴な繰り返しだった**
+/// （2026-10-30）。同じ操作が前端で違う結果になるのは、どちらが正しいかを
+/// 人に覚えさせることになる ── だからここへ出して、両方から呼ぶ。
+///
+/// 断るのは2つ: **巡回の外に既にある名前**（通せば通行人が消える）と、
+/// **同じ名前へ行く2件**（あとの1件が前の1件を消す）。どちらも、やってから
+/// 謝るのではなく、始める前に止める。
+///
+/// 途中で失敗したら、**staged を全部戻してから**返す。半分だけ一時名のまま
+/// 残るのがいちばん悪い（名前が `.cian-rename-…` のファイルが並ぶ）。
+pub fn rename_batch(dir: &Path, pairs: &[(String, String)]) -> Result<usize, Refused> {
+    use std::collections::HashSet;
+    let moving_away: HashSet<&str> = pairs.iter().map(|(from, _)| from.as_str()).collect();
+    let mut seen: HashSet<&str> = HashSet::new();
+    for (_, to) in pairs {
+        if !seen.insert(to.as_str()) {
+            return Err(Refused::Duplicate(to.clone()));
+        }
+        if dir.join(to).symlink_metadata().is_ok() && !moving_away.contains(to.as_str()) {
+            return Err(Refused::Exists(to.clone()));
+        }
+    }
+    let mut staged: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for (n, (from, _)) in pairs.iter().enumerate() {
+        let tmp = dir.join(format!(".cian-rename-{}-{}", std::process::id(), n));
+        if let Err(e) = fs::rename(dir.join(from), &tmp) {
+            for (orig, t) in &staged {
+                let _ = fs::rename(t, orig);
+            }
+            return Err(Refused::Failed { name: from.clone(), why: e.to_string() });
+        }
+        staged.push((dir.join(from), tmp));
+    }
+    let mut done = 0usize;
+    for ((orig, tmp), (_, to)) in staged.iter().zip(pairs) {
+        if let Err(e) = fs::rename(tmp, dir.join(to)) {
+            // 下ろせなかったものは元の名前へ戻す（権限・その FS で使えない名前）。
+            let _ = fs::rename(tmp, orig);
+            return Err(Refused::Failed { name: to.clone(), why: e.to_string() });
+        }
+        done += 1;
+    }
+    Ok(done)
+}
+
 /// Strip a UTF-8 byte-order mark from the head of `path`, in place (via a
 /// sibling temp + rename, so a crash never half-writes). Returns what
 /// happened: `Some(true)` stripped, `Some(false)` no UTF-8 BOM to strip, and
@@ -671,5 +750,57 @@ mod renaming {
         fs::write(d.path().join("Report.txt"), "r").unwrap();
         let to = rename_in_place(&d.path().join("Report.txt"), "report.txt").unwrap();
         assert_eq!(fs::read_to_string(to).unwrap(), "r");
+    }
+    /// **`a↔b` の入れ替えが通る。**
+    ///
+    /// 1件ずつ改名すると `a → b` の時点で `b` がまだ在るので断られる
+    /// （断るのは正しい ── 以前は黙って上書きして片方が消えていた）。
+    /// 一括では一時名を経由して巡回を解く。中身まで見るのは、**名前だけ
+    /// 見ても入れ替わったか分からない**から ── 片方が消えても名前は揃う。
+    #[test]
+    fn a_batch_can_swap_two_names() {
+        let d = tempfile::tempdir().unwrap();
+        fs::write(d.path().join("a.txt"), "A の中身").unwrap();
+        fs::write(d.path().join("b.txt"), "B の中身").unwrap();
+        let pairs = vec![
+            ("a.txt".to_string(), "b.txt".to_string()),
+            ("b.txt".to_string(), "a.txt".to_string()),
+        ];
+        assert_eq!(rename_batch(d.path(), &pairs), Ok(2));
+        assert_eq!(fs::read_to_string(d.path().join("a.txt")).unwrap(), "B の中身");
+        assert_eq!(fs::read_to_string(d.path().join("b.txt")).unwrap(), "A の中身");
+        // 一時名が残っていない。
+        let left: Vec<String> = fs::read_dir(d.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with(".cian-rename-"))
+            .collect();
+        assert!(left.is_empty(), "一時名が残っている: {left:?}");
+    }
+
+    /// 巡回の外に居るファイルは、一括でも消さない。
+    #[test]
+    fn a_batch_refuses_to_clobber_a_bystander() {
+        let d = tempfile::tempdir().unwrap();
+        fs::write(d.path().join("a.txt"), "A").unwrap();
+        fs::write(d.path().join("keep.txt"), "通行人").unwrap();
+        let pairs = vec![("a.txt".to_string(), "keep.txt".to_string())];
+        assert_eq!(rename_batch(d.path(), &pairs), Err(Refused::Exists("keep.txt".into())));
+        assert_eq!(fs::read_to_string(d.path().join("keep.txt")).unwrap(), "通行人");
+        assert!(d.path().join("a.txt").exists(), "断ったのだから元のまま");
+    }
+
+    /// 同じ名前へ行くものが2つあれば、**始める前に**止める。
+    #[test]
+    fn a_batch_refuses_two_names_going_to_one() {
+        let d = tempfile::tempdir().unwrap();
+        fs::write(d.path().join("a.txt"), "A").unwrap();
+        fs::write(d.path().join("b.txt"), "B").unwrap();
+        let pairs = vec![
+            ("a.txt".to_string(), "same.txt".to_string()),
+            ("b.txt".to_string(), "same.txt".to_string()),
+        ];
+        assert_eq!(rename_batch(d.path(), &pairs), Err(Refused::Duplicate("same.txt".into())));
+        assert!(d.path().join("a.txt").exists() && d.path().join("b.txt").exists(), "どちらも動かない");
     }
 }
