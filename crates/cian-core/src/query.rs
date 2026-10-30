@@ -47,6 +47,14 @@ pub fn hits(hay: &str, query: &str) -> bool {
     groups.iter().any(|g| g.iter().all(|w| hay.contains(w)))
 }
 
+/// [`hits`] with the query already read by [`terms`], over a `hay`
+/// that is already lowercase. The listing filter asks this once per entry;
+/// reading the query and lowercasing the (pre-lowercased) name again for each
+/// of a hundred thousand rows was most of the cost of a keystroke.
+pub fn hits_lower(hay_lower: &str, groups: &[Vec<String>]) -> bool {
+    groups.is_empty() || groups.iter().any(|g| g.iter().all(|w| hay_lower.contains(w.as_str())))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

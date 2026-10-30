@@ -2878,8 +2878,22 @@ impl App {
         // Honour the show_hidden option on the initial panes (it defaults to
         // true, cian's long-standing behaviour).
         let show_hidden = config.options.show_hidden.unwrap_or(true);
-        let mut left_pane = Pane::new(left)?;
-        let mut right_pane = Pane::new(right)?;
+        // both panes usually open on the same folder (no arguments, a
+        // fresh session) — read it once. Two different folders are read side
+        // by side; each read is mostly waiting on stat.
+        let same = std::fs::canonicalize(&left).ok().is_some_and(|l| std::fs::canonicalize(&right).ok() == Some(l));
+        let (mut left_pane, mut right_pane) = if same {
+            let l = Pane::new(left)?;
+            let r = l.clone();
+            (l, r)
+        } else {
+            let (l, r) = std::thread::scope(|s| {
+                let h = s.spawn(|| Pane::new(right));
+                let l = Pane::new(left);
+                (l, h.join().unwrap_or_else(|_| Err(anyhow::anyhow!("pane thread panicked"))))
+            });
+            (l?, r?)
+        };
         left_pane.set_show_hidden(show_hidden);
         right_pane.set_show_hidden(show_hidden);
         let (macros, macro_error) = macro_run::load_macros();

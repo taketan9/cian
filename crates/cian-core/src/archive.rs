@@ -93,6 +93,19 @@ pub fn list(path: &Path) -> Result<Vec<Member>> {
 
 fn list_zip(path: &Path) -> Result<Vec<Member>> {
     let f = fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
+    // listing visits every member's local header (a seek and a read
+    // each — two system calls per member). A zip small enough to hold is
+    // read once and listed from memory; a large one stays on disk.
+    const IN_MEMORY: u64 = 64 << 20;
+    if f.metadata().map(|m| m.len() <= IN_MEMORY).unwrap_or(false) {
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut &f, &mut bytes).with_context(|| format!("read {}", path.display()))?;
+        return list_zip_from(path, std::io::Cursor::new(bytes));
+    }
+    list_zip_from(path, f)
+}
+
+fn list_zip_from<R: std::io::Read + std::io::Seek>(path: &Path, f: R) -> Result<Vec<Member>> {
     let mut zip = zip::ZipArchive::new(f)
         .with_context(|| format!("not a readable zip: {}", path.display()))?;
     let mut out = Vec::with_capacity(zip.len());
@@ -110,7 +123,7 @@ fn list_zip(path: &Path) -> Result<Vec<Member>> {
     }
     // Archives are stored in whatever order they were written; a listing wants
     // to be predictable.
-    out.sort_by_key(|m| m.name.to_lowercase());
+    out.sort_by_cached_key(|m| m.name.to_lowercase()); // one lowercase per member, not per comparison
     Ok(out)
 }
 
@@ -129,7 +142,7 @@ fn list_tar(reader: Box<dyn Read>) -> Result<Vec<Member>> {
         // A tar has no per-entry compressed size; show the stored size.
         out.push(Member { name, is_dir, size, compressed: size });
     }
-    out.sort_by_key(|m| m.name.to_lowercase());
+    out.sort_by_cached_key(|m| m.name.to_lowercase()); // one lowercase per member, not per comparison
     Ok(out)
 }
 

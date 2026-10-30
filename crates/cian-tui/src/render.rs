@@ -3660,6 +3660,20 @@ fn draw_image_gfx(f: &mut Frame, rect: Rect, inner: Rect, app: &mut App) {
 /// Width of the viewer's blame gutter: `hash(7) + " " + author(11) + " "`.
 const BLAME_W: usize = 20;
 
+/// [`hl_style`] for all eight categories, computed against the
+/// surface as it is now.
+struct HlTable([Style; 8]);
+impl HlTable {
+    fn now() -> Self {
+        use cian_core::highlight::Category as C;
+        HlTable([C::Plain, C::Keyword, C::Type, C::Str, C::Comment, C::Number, C::Tag, C::Attr].map(hl_style))
+    }
+    fn get(&self, c: cian_core::highlight::Category) -> Style {
+        use cian_core::highlight::Category as C;
+        self.0[match c { C::Plain => 0, C::Keyword => 1, C::Type => 2, C::Str => 3, C::Comment => 4, C::Number => 5, C::Tag => 6, C::Attr => 7 }]
+    }
+}
+
 /// Colour for a syntax-highlight category (a VS Code-dark-ish palette).
 fn hl_style(cat: cian_core::highlight::Category) -> Style {
     Style::default().fg(hl_style_for(cat))
@@ -6966,9 +6980,12 @@ fn draw_viewer(
             // Same as the preview's grid: these are colours, so a theme
             // change makes them wrong rather than merely stale.
             if hl.is_empty() || *md_gen != gen {
+                // eight categories, one surface — fit each colour once
+                // per pass instead of once per character.
+                let table = HlTable::now();
                 *hl = cian_core::highlight::highlight(&view.lines, *lang)
                     .into_iter()
-                    .map(|cats| cats.into_iter().map(hl_style).collect())
+                    .map(|cats| cats.into_iter().map(|c| table.get(c)).collect())
                     .collect();
                 *md_gen = gen;
             }
@@ -8531,5 +8548,32 @@ mod md_tests {
         assert_eq!(code[0].0, "x = **not bold** here");
         let _close = md_body_line("```", 40, g, b, &mut in_code);
         assert!(!in_code, "closing fence leaves code mode");
+    }
+}
+
+#[cfg(test)]
+mod proto_identity {
+    use super::*;
+    #[test]
+    #[ignore]
+    fn hl_table_equals_hl_style_on_every_preset_and_big_file() {
+        use cian_core::highlight::Category as C;
+        let path = std::path::PathBuf::from(std::env::var("CIANPERF_DATA").unwrap()).join("Big.java");
+        let lines = cian_core::viewer::view_file(&path).unwrap().lines;
+        let lang = cian_core::highlight::detect(&path).unwrap();
+        let cats = cian_core::highlight::highlight(&lines, lang);
+        let mut checked = 0;
+        for name in crate::theme::THEME_NAMES.iter() {
+            crate::theme::set_theme(crate::theme::theme_preset(name).unwrap());
+            let t = HlTable::now();
+            for c in [C::Plain, C::Keyword, C::Type, C::Str, C::Comment, C::Number, C::Tag, C::Attr] {
+                assert_eq!(t.get(c), hl_style(c), "{name} {c:?}");
+            }
+            let old: Vec<Vec<Style>> = cats.iter().map(|l| l.iter().map(|c| hl_style(*c)).collect()).collect();
+            let new: Vec<Vec<Style>> = cats.iter().map(|l| l.iter().map(|c| t.get(*c)).collect()).collect();
+            assert!(old == new, "{name}");
+            checked += 1;
+        }
+        eprintln!("IDENTITY hl: {checked} presets x {} lines identical", lines.len());
     }
 }

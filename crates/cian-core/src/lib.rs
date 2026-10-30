@@ -555,8 +555,12 @@ impl Pane {
         // Forget marks whose path no longer exists in this directory. This
         // checks the unfiltered list on purpose: narrowing the view must not
         // silently drop marks on entries the filter is hiding.
-        let live: HashSet<PathBuf> = self.all_entries.iter().map(|e| e.path.clone()).collect();
-        self.marks.retain(|p| live.contains(p));
+        // nothing marked, nothing to forget — skip building a set of
+        // every path in the directory.
+        if !self.marks.is_empty() {
+            let live: HashSet<&PathBuf> = self.all_entries.iter().map(|e| &e.path).collect();
+            self.marks.retain(|p| live.contains(p));
+        }
         Ok(())
     }
 
@@ -621,6 +625,7 @@ impl Pane {
         // reverse, gone with hidden files off — and a server's home with
         // thirty dot-directories showed no way up at all.
         let up = self.all_entries.iter().find(|e| e.is_parent).cloned();
+        let groups = crate::query::terms(&needle);
         let mut entries: Vec<Entry> = self
             .all_entries
             .iter()
@@ -633,7 +638,7 @@ impl Pane {
                 // filter do not agree only until somebody types two words. A
                 // plain one-word filter goes down the same road and comes out
                 // where it always did.
-                needle.is_empty() || crate::query::hits(&e.name_lower, &needle)
+                needle.is_empty() || crate::query::hits_lower(&e.name_lower, &groups)
             })
             // The mask, on top of the filter: they are different questions
             // and both can be true at once. A directory always survives it —

@@ -451,9 +451,9 @@ pub fn list_dir(target: &Target, remote_path: &str) -> Result<(String, Vec<Remot
             }
             out.push(RemoteEntry { is_dir, size, name, link });
         }
-        out.sort_by(|a, b| {
-            b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-        });
+        // same order (directories first, then lowercased name, stable),
+        // one lowercase per entry instead of two per comparison.
+        out.sort_by_cached_key(|e| (!e.is_dir, e.name.to_lowercase()));
         let _ = sftp.close().await;
         Ok((canon, out))
     })
