@@ -18,9 +18,14 @@ cargo test --workspace                                  # 2分ほど（本数は
 cargo clippy --workspace --all-targets -- -D warnings   # CI と同じ物差し
 ~/.cache/cian-tui-env/bin/python scripts/tui-drive.py   # 端末版を**本物の pty で**動かす
 pkill -f "Electron.app/Contents/MacOS/Electron"; sleep 1   # 先に前のものを落とす
-node gui/drive.js                                       # 窓版を動かす（例外 0 件が基準）
+node gui/drive.js                                       # 窓版を動かす（例外 0 件だけが基準）
 ```
 
+- **`drive.js` で見るのは「例外 0 件」だけ。** 末尾に出る「動かなかったキー」の
+  **数は同じ commit でも揺れる** ── 2026-10-31 に v3.4.16 で 66 / 71 / 67 と出た
+  （差の中身は `Esc` と IME の合い間の打鍵で、**IME が拾っているあいだは `?` すら
+  `Process` になる**という既知の型）。数が増えたのを退化と読んで追いかけない。
+  同じ commit でもう一度回して、揺れかどうかを先に見る
 - **`cargo test` だけで済ませない。** CI は `-D warnings` で回る。テストが
   緑でも clippy で赤くなり、3回続けて CI を落としたことがある
 - **文書はテストが縛っている。** マニュアル・パレット・README が存在しない
