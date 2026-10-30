@@ -3384,8 +3384,19 @@ impl App {
             } else {
                 // Written back with the line ending the file arrived with:
                 // opening a CRLF file to read it must not quietly convert it.
+                //
+                // **末尾の改行も「元のまま」。** ここは `+ sep` で必ず足して
+                // いて、改行で終わっていないファイルを開いて保存しただけで
+                // 1バイト増えていた ── 窓版（`grepedit::write_text`）は元の
+                // ままなので、同じファイルを2つの前端で保存すると結果が違った
+                // （2026-10-30、本人の裁定で「元のまま」に揃えた）。vim の
+                // 既定は足すほうだが、**見ただけのファイルが git の差分に出る**
+                // ほうが会社では高くつく。
                 let sep = view.eol.as_str();
-                let text = view.lines.join(sep) + sep;
+                let mut text = view.lines.join(sep);
+                if view.trailing_eol {
+                    text.push_str(sep);
+                }
                 let mut bytes = Vec::new();
                 // …and with the byte-order mark it arrived with. Dropping one
                 // is a real edit to the file — it is exactly what `:nobom`
@@ -4736,6 +4747,13 @@ impl App {
     /// rather than something you arrive at by pressing a key twice.
     pub(crate) fn open_scratch_viewer(&mut self) {
         let mut view = cian_core::viewer::View::from_text(String::new(), 0, false);
+        // **これから書くファイルは、改行で終わらせる。**
+        //
+        // 「末尾の改行は元のまま」は*ディスクから来たファイル*の規則で、
+        // 新規には元が無い ── 無いものを根拠に「足さない」と決めると、
+        // cian で作ったファイルだけ最後の行に改行が付かないことになる。
+        // POSIX のテキストファイルも vim の既定もこちら側だ。
+        view.trailing_eol = true;
         // One empty line rather than none: the cursor has to be somewhere, and
         // "a file with nothing in it" is a file with one blank line.
         if view.lines.is_empty() {

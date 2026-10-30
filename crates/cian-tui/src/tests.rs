@@ -3317,6 +3317,48 @@ use crate::ai::StoredChatExt;
     }
 
     /// Shift+Tab steps between the file and the panes, and opens an empty one
+    /// 保存は、**そのファイルが持っていた終わり方**を変えない。
+    ///
+    /// ここは `join(sep) + sep` で必ず改行を足していて、改行で終わって
+    /// いないファイルを開いて保存しただけで1バイト増えた ── 窓版は
+    /// `grepedit::write_text` を通るので元のままで、**同じファイルを2つの
+    /// 前端で保存すると結果が違った**（2026-10-30、本人の裁定で「元のまま」）。
+    ///
+    /// 1バイトの差は画面に出ない。git の差分で初めて出る種類なので、
+    /// **バイトで確かめる**。
+    #[test]
+    fn saving_keeps_the_ending_the_file_arrived_with() {
+        for (name, body) in [("no-eol.txt", "ひとつめ\nふたつめ"), ("with-eol.txt", "ひとつめ\nふたつめ\n")] {
+            let dir = tempfile::tempdir().unwrap();
+            let at = dir.path().join(name);
+            std::fs::write(&at, body).unwrap();
+            let p = dir.path().to_path_buf();
+            let mut app = App::new(p.clone(), p, en_config()).unwrap();
+            let i = app
+                .active_pane()
+                .unwrap()
+                .entries
+                .iter()
+                .position(|e| e.name == name)
+                .expect("その名前が一覧にある");
+            app.active_pane_mut().unwrap().cursor = i;
+            app.handle_key(code(KeyCode::Enter)).unwrap();
+            assert!(matches!(app.popup, Popup::Viewer { .. }), "開いた: {}", name);
+            // 中身を変えずに保存する ── 足すか足さないかだけを見たい。
+            for k in [':', 'w'] {
+                app.handle_key(key(k)).unwrap();
+            }
+            app.handle_key(code(KeyCode::Enter)).unwrap();
+            assert_eq!(
+                std::fs::read_to_string(&at).unwrap(),
+                body,
+                "{} は開いて保存しただけで中身が変わらない（message: {:?}）",
+                name,
+                app.message
+            );
+        }
+    }
+
     /// when there is nothing to step back into — which is what makes the
     /// viewer somewhere to start writing rather than only somewhere to read.
     #[test]

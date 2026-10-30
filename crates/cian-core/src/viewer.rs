@@ -200,6 +200,15 @@ pub struct View {
     pub bom: bool,
     /// The line ending the file arrived with, and the one a save writes back.
     pub eol: Eol,
+    /// **元のファイルが末尾に改行を持っていたか。**
+    ///
+    /// `str::lines()` は末尾の改行を落とすので、これを覚えておかないと
+    /// 書き戻すときに区別がつかない ── 端末版は `join(sep) + sep` で**必ず
+    /// 足して**いて、改行で終わっていないファイルを開いて保存しただけで
+    /// 1バイト増えていた（窓版は `grepedit::write_text` を通るので元のまま
+    /// で、前端どうしでずれていた。2026-10-30 に本人の裁定で「元のまま」に
+    /// 揃えた）。見ただけのファイルが git の差分に出るのは、会社で困る。
+    pub trailing_eol: bool,
     /// The raw prefix that was read, kept so [`View::redecode`] can rebuild
     /// `lines` in a different encoding.
     bytes: Vec<u8>,
@@ -212,9 +221,10 @@ impl View {
     /// exactly as for a real text file.
     pub fn from_text(text: String, total_bytes: u64, truncated: bool) -> View {
         let eol = Eol::detect(&text);
+        let trailing_eol = text.ends_with('\n') || text.ends_with('\r');
         let bytes = text.into_bytes();
         let lines = to_lines(&String::from_utf8_lossy(&bytes));
-        View { kind: ViewKind::Text, lines, total_bytes, truncated, encoding: TextEncoding::Utf8, bom: false, eol, bytes }
+        View { kind: ViewKind::Text, lines, total_bytes, truncated, encoding: TextEncoding::Utf8, bom: false, eol, trailing_eol, bytes }
     }
 
     /// Re-decode the kept bytes as `enc`, switching to text if it was showing
@@ -224,6 +234,7 @@ impl View {
         self.kind = ViewKind::Text;
         let decoded = enc.decode(&self.bytes);
         self.eol = Eol::detect(&decoded);
+        self.trailing_eol = decoded.ends_with('\n') || decoded.ends_with('\r');
         self.lines = to_lines(&decoded);
     }
 }
@@ -273,7 +284,8 @@ pub fn view_file(path: &Path) -> Result<View> {
         let decoded = enc.decode(&buf);
         let eol = Eol::detect(&decoded);
         let lines = to_lines(&decoded);
-        return Ok(View { kind: ViewKind::Text, lines, total_bytes, truncated, encoding: enc, bom: true, eol, bytes: buf });
+        let trailing_eol = decoded.ends_with('\n') || decoded.ends_with('\r');
+        return Ok(View { kind: ViewKind::Text, lines, total_bytes, truncated, encoding: enc, bom: true, eol, trailing_eol, bytes: buf });
     }
 
     // A NUL in the first few KB is the usual signal; UTF-8 text does not
@@ -288,7 +300,8 @@ pub fn view_file(path: &Path) -> Result<View> {
             total_bytes,
             truncated,
             encoding: TextEncoding::Utf8,
-            bom: false, eol, bytes: buf,
+            // 16進は**生のバイトをそのまま書き戻す**道なので、この旗は読まれない。
+            bom: false, eol, trailing_eol: false, bytes: buf,
         });
     }
 
@@ -319,7 +332,8 @@ pub fn view_file(path: &Path) -> Result<View> {
     };
     let eol = Eol::detect(&text);
     let lines = to_lines(&text);
-    Ok(View { kind: ViewKind::Text, lines, total_bytes, truncated, encoding, bom: false, eol, bytes: buf })
+    let trailing_eol = text.ends_with('\n') || text.ends_with('\r');
+    Ok(View { kind: ViewKind::Text, lines, total_bytes, truncated, encoding, bom: false, eol, trailing_eol, bytes: buf })
 }
 
 impl View {

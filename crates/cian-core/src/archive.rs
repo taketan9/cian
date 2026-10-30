@@ -198,6 +198,22 @@ pub fn extract(
 /// Stream a tarball (optionally gunzipped), writing the wanted members. Tar is
 /// sequential, so this walks the whole archive once, skipping over anything not
 /// requested. A first header-only pass gives the progress bar its totals.
+/// シンボリックリンクを作る。**OS の違いはここだけ。**
+///
+/// Windows の `symlink_file` は既定の権限では失敗する（開発者モードか管理者が
+/// 要る）。失敗を文字にして返し、呼ぶ側が報告へ載せる ── 黙って空のファイルを
+/// 置くより、「作れませんでした」と言われたほうが手が打てる。
+fn link_to(to: &Path, at: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(to, at).map_err(|e| e.to_string())
+    }
+    #[cfg(windows)]
+    {
+        std::os::windows::fs::symlink_file(to, at).map_err(|e| e.to_string())
+    }
+}
+
 fn extract_tar(
     archive: &Path,
     gz: bool,
@@ -262,6 +278,56 @@ fn extract_tar(
         if e.header().entry_type().is_dir() {
             if let Err(err) = fs::create_dir_all(&target) {
                 report.note_error(format!("{}: {}", name, err));
+            }
+            continue;
+        }
+        // **リンクは、中身の無いエントリだ。**
+        //
+        // ここは「ディレクトリか否か」しか見ていなかったので、tar の中の
+        // シンボリックリンクは**空のファイル**として展開されていた ── 行き先が
+        // 黙って失われ、展開したものを見ても気づけない（2026-10-30 に crmaine
+        // が見つけた）。
+        //
+        // **行き先が外へ出るリンクは作らない。** 作ること自体は書き込みでは
+        // ないが、同じ書庫の後ろのエントリがそのリンクを**通って**外へ書ける
+        // （`File::create` はリンクを辿る）── `safe_join` が道について守って
+        // いるのと同じ線を、行き先にも引く。
+        let kind = e.header().entry_type();
+        if kind.is_symlink() || kind.is_hard_link() {
+            let to = e.link_name().ok().flatten().map(|l| l.to_path_buf());
+            let Some(to) = to else {
+                report.note_error(format!("{}: リンクの行き先が読めません", name));
+                continue;
+            };
+            if to.is_absolute() || to.components().any(|c| c == std::path::Component::ParentDir) {
+                report.note_error(format!(
+                    "{}: 展開しません（リンクの行き先 {} が展開先の外を指しています）",
+                    name,
+                    to.display()
+                ));
+                continue;
+            }
+            if let Some(parent) = target.parent() {
+                if let Err(err) = fs::create_dir_all(parent) {
+                    report.note_error(format!("{}: {}", name, err));
+                    continue;
+                }
+            }
+            // 同じ名前のものが先に在ると `symlink` は失敗する（tar は同じ道を
+            // 二度持てる）。作り直すほうが、黙って元のままより分かりやすい。
+            let _ = fs::remove_file(&target);
+            let made = if kind.is_symlink() {
+                link_to(&to, &target)
+            } else {
+                // 固いリンクの行き先は、同じ書庫の中の**すでに展開した**もの。
+                fs::hard_link(dest.join(&to), &target).map_err(|e| e.to_string())
+            };
+            match made {
+                Ok(()) => report.ok += 1,
+                // **できなかったことを言う。** Windows の symlink は既定では
+                // 作れない（開発者モードか管理者が要る）ので、ここは実際に
+                // 通る道だ ── 空のファイルを置いて黙るのがいちばん悪い。
+                Err(why) => report.note_error(format!("{}: リンクを作れません（{}）", name, why)),
             }
             continue;
         }
@@ -1150,6 +1216,60 @@ mod tests {
 
     fn ctl<'a>(c: &'a AtomicBool, f: &'a mut dyn FnMut(&Progress)) -> Ctl<'a> {
         Ctl { cancel: c, on_progress: f }
+    }
+
+    /// tar の中のリンクは、リンクとして展開される。
+    ///
+    /// **空のファイルになっていた**（2026-10-30）── ここは「ディレクトリか
+    /// 否か」しか見ておらず、中身の無いエントリは中身の無いファイルとして
+    /// 置かれ、行き先は黙って失われていた。展開したものを見ても気づけない形
+    /// なので、**行き先まで読んで**確かめる。
+    #[cfg(unix)]
+    #[test]
+    fn a_link_in_a_tar_comes_out_as_a_link() {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join("l.tar");
+        {
+            let f = fs::File::create(&path).unwrap();
+            let mut b = tar::Builder::new(f);
+            let body = b"the real thing";
+            let mut h = tar::Header::new_gnu();
+            h.set_size(body.len() as u64);
+            h.set_mode(0o644);
+            h.set_cksum();
+            b.append_data(&mut h, "real.txt", &body[..]).unwrap();
+            let mut lh = tar::Header::new_gnu();
+            lh.set_entry_type(tar::EntryType::Symlink);
+            lh.set_size(0);
+            lh.set_mode(0o777);
+            b.append_link(&mut lh, "link.txt", "real.txt").unwrap();
+            // **外を指すリンクは作らない。** 作ること自体は書き込みでないが、
+            // 後ろのエントリがそれを通って外へ書ける。
+            let mut eh = tar::Header::new_gnu();
+            eh.set_entry_type(tar::EntryType::Symlink);
+            eh.set_size(0);
+            eh.set_mode(0o777);
+            b.append_link(&mut eh, "escape.txt", "../outside.txt").unwrap();
+            b.finish().unwrap();
+        }
+        let dest = d.path().join("out");
+        fs::create_dir_all(&dest).unwrap();
+        let cancel = AtomicBool::new(false);
+        let mut n = |_: &Progress| {};
+        let report = extract(&path, &[], &dest, None, "", &mut ctl(&cancel, &mut n));
+
+        let link = dest.join("link.txt");
+        let how = fs::symlink_metadata(&link).expect("link.txt が在る");
+        assert!(how.file_type().is_symlink(), "リンクとして展開される（空のファイルではなく）");
+        assert_eq!(fs::read_link(&link).unwrap(), Path::new("real.txt"), "行き先が残っている");
+        assert_eq!(fs::read_to_string(&link).unwrap(), "the real thing", "辿れる");
+
+        assert!(!dest.join("escape.txt").exists(), "外を指すリンクは作らない");
+        assert!(
+            report.errors.iter().any(|e| e.contains("escape.txt")),
+            "断った理由を言う: {:?}",
+            report.errors
+        );
     }
 
     /// Build a tarball at `dir/a.tar` (or `.tar.gz` when `gz`) with the same

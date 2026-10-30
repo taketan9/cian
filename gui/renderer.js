@@ -11372,34 +11372,6 @@ function scanShortfall(partial) {
 
 
 /// The bulk-rename confirmation, callable with rows from anywhere — the
-/// pattern rename builds them from a pattern, the AI from an instruction.
-function showRenamePlanRows(rows, title) {
-    const changing = rows.filter((x) => !x.same);
-    if (!changing.length) { say(tr('no name would change', '変わる名前がありません')); return; }
-    show(title, tr('choose them one row at a time', '一行ずつ選べます'),
-        // A row whose name does not change starts unticked and stays that
-        // way — there is nothing in it to do.
-        rows.map((x) => ({
-            n: x.same ? '=' : '→', label: x.from, sub: x.to,
-            from: x.from, to: x.to, same: x.same, on: !x.same,
-        })),
-        {
-            checks: true,
-            foot: tr('Space off/on   a all   n none   Enter run   Esc cancel', 'Space 外す／戻す   a 全部   n 全部外す   Enter 実行   Esc 取消'),
-            pick: async (chosen) => {
-                const going = chosen.filter((x) => !x.same);
-                if (!going.length) { say(tr('no row is chosen', '選ばれている行がありません'), true); return; }
-                closeReport();
-                if (!await confirm(tr(`Rename ${going.length}`, `${going.length} 件の名前を変えます`),
-                    going.map((x) => `${x.from}  →  ${x.to}`).join('\n'))) { say(tr('stopped', 'やめました')); return; }
-                const done = await ask('renameapply', { rows: going.map((x) => ({ from: x.from, to: x.to })) });
-                if (!done) return;
-                await reread();
-                if (done.errors.length) say(done.errors.join('  /  '), true);
-                else say(tr(`renamed ${done.renamed}`, `${done.renamed} 件の名前を変えました`));
-            },
-        });
-}
 
 
 /// The three switches cian-tui keeps in `T` and this build did not have at
