@@ -110,9 +110,9 @@ jobs:
       - name: Fetch the bundled font
         run: |
           mkdir -p vendor-font
-          curl -sL -o font.zip "$FONT_URL"
-          unzip -q font.zip -d font
-          cp "$(find font -name 'HackGenConsoleNF-Regular.ttf' | head -1)" vendor-font/cian.ttf
+          curl -sL -o "$RUNNER_TEMP/font.zip" "$FONT_URL"
+          unzip -q "$RUNNER_TEMP/font.zip" -d "$RUNNER_TEMP/font"
+          cp "$(find "$RUNNER_TEMP/font" -name 'HackGenConsoleNF-Regular.ttf' | head -1)" vendor-font/cian.ttf
         env:
           FONT_URL: https://github.com/yuru7/HackGen/releases/download/v2.10.0/HackGen_NF_v2.10.0.zip
 
@@ -178,6 +178,13 @@ jobs:
         run: |
           cp target/release/cian-tui cian-tui-macos.bin
           zip -X -q cian-tui-macos.bin.zip cian-tui-macos.bin
+
+      # **資材が自分の名前を名乗れるか、上げる前に。** `--version` の
+      # `<版> (<SHA>)` が `Cargo.toml` といまの HEAD と一致し、`-dirty` でも
+      # `unknown` でもないこと。8分かけて作ったものが自分の名前を間違えて
+      # いても、これまで誰も見ていなかった。
+      - name: The package says which build it is
+        run: python3 scripts/buildstamp.py cian-tui-macos.bin
 
       - name: Upload the terminal build
         uses: actions/upload-artifact@v6
@@ -245,13 +252,20 @@ jobs:
       # file into `vendor/fonts/cian.ttf`, which is the face the window draws
       # its file-type glyphs with. The window's zip needs it; that one is
       # optional, this is not.
+      # **中間物は作業ツリーの外に置く。** v3.4.14 と v3.4.15 の
+      # `cian-tui-win-x64.exe` は `-dirty` と名乗っていた ── ここで落とす
+      # `font.zip` と展開先の `font/` が `.gitignore` に無く、`cargo build`
+      # より前に置かれるので `crates/cian-tui/build.rs` の
+      # `git status --porcelain` が空でなくなる。タグの commit そのものを
+      # 建てているのに、資材は「編集が乗っている」と言い続けていた。
+      # 下の関門（`scripts/buildstamp.py`）が、戻ったら落ちる。
       - name: Fetch the bundled font
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path vendor-font | Out-Null
-          Invoke-WebRequest -Uri "$env:FONT_URL" -OutFile font.zip
-          Expand-Archive font.zip -DestinationPath font
-          Copy-Item (Get-ChildItem -Recurse -Filter "HackGenConsoleNF-Regular.ttf" font)[0].FullName vendor-font/cian.ttf
+          Invoke-WebRequest -Uri "$env:FONT_URL" -OutFile "$env:RUNNER_TEMP/font.zip"
+          Expand-Archive -Force "$env:RUNNER_TEMP/font.zip" -DestinationPath "$env:RUNNER_TEMP/font"
+          Copy-Item (Get-ChildItem -Recurse -Filter "HackGenConsoleNF-Regular.ttf" "$env:RUNNER_TEMP/font")[0].FullName vendor-font/cian.ttf
         env:
           FONT_URL: https://github.com/yuru7/HackGen/releases/download/v2.10.0/HackGen_NF_v2.10.0.zip
 
@@ -299,6 +313,12 @@ jobs:
         run: |
           Copy-Item target/release/cian-tui.exe cian-tui-win-x64.exe
           Compress-Archive -Path cian-tui-win-x64.exe -DestinationPath cian-tui-win-x64.exe.zip
+
+      # 上の macOS 側と同じ関門。**嘘が実際に出たのはこちら**（資材に
+      # 載るのが Windows の3点だけなので）。
+      - name: The package says which build it is
+        shell: pwsh
+        run: python scripts/buildstamp.py cian-tui-win-x64.exe cian-server-win-x64.exe
 
       - name: Upload the terminal build
         uses: actions/upload-artifact@v6
@@ -415,9 +435,9 @@ jobs:
       - name: Fetch the bundled font
         run: |
           mkdir -p vendor-font
-          curl -sL -o font.zip "$FONT_URL"
-          unzip -q font.zip -d font
-          cp "$(find font -name 'HackGenConsoleNF-Regular.ttf' | head -1)" vendor-font/cian.ttf
+          curl -sL -o "$RUNNER_TEMP/font.zip" "$FONT_URL"
+          unzip -q "$RUNNER_TEMP/font.zip" -d "$RUNNER_TEMP/font"
+          cp "$(find "$RUNNER_TEMP/font" -name 'HackGenConsoleNF-Regular.ttf' | head -1)" vendor-font/cian.ttf
         env:
           FONT_URL: https://github.com/yuru7/HackGen/releases/download/v2.10.0/HackGen_NF_v2.10.0.zip
 

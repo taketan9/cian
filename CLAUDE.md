@@ -39,6 +39,7 @@ cian-core` の片方向依存を保つ**。対応は macOS と Windows の2つ�
 | **辿り着けないコマンド・メニュー項目を残さない**（関数が生きていても、押す道が無ければ死んでいる） | `scripts/audit.py` |
 | **テストは全部通す**（本数は走らせれば出る） | `cargo test --workspace` |
 | **警告を1つも出さない** | `cargo clippy --workspace --all-targets -- -D warnings`（CI と同じ物差し） |
+| **資材は、自分がどのビルドかを名乗る** ── `--version` の `<版> (<SHA>)` が `Cargo.toml` といまの HEAD と一致し、`-dirty` でも `unknown` でもない | `scripts/buildstamp.py` ── CI が staging の直後、上げる前に当てる。**走らせずに読むので、落とした Windows の exe にも当てられる** |
 | **pty の venv は `~/.cache/cian-tui-env`** ── `/tmp` は macOS の掃除で消える（2回踏んだ） | `scripts/claudemd.py` |
 | **この表が名乗る関門は実在する** | `scripts/claudemd.py` |
 | **版を切ったら、手元から届かなかったところを `UNREACHED.ja.md` に書く**（Windows・彼の JIS と IME・社内の経路・彼の目。**無ければ「無し」の1行**） | `scripts/unreached.py` |
@@ -67,6 +68,11 @@ cian-core` の片方向依存を保つ**。対応は macOS と Windows の2つ�
 - 資材を Asset に上げるのは **`scripts/release-asset.py`** ── 手でやらない
 
 版が据え置きでも資材は見分けられる ── `:version` が git SHA と `-dirty` を出す。
+**ただしその印が意味を持つのは、CI が素の HEAD で建てているあいだだけ。**
+v3.4.14 と v3.4.15 の端末版は、ビルドの前に作業ツリーへ置かれる書体の中間物の
+せいで**常に `-dirty` と名乗っていた** ── 「それは編集中のビルドです」と
+「それは配った資材です」を分ける唯一の印が、何も分けていなかった
+（`scripts/buildstamp.py` が関門）。
 
 ---
 
