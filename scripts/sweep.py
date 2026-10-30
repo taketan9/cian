@@ -2,13 +2,13 @@
 """**全部触る。** 端末版のコマンドを一つずつ叩いて、四つの物差しで見る。
 
 `tui-drive.py` は「一巡」で 23 手を打つ。それは**壊れていないか**の見張りで、
-「全機能の動作検証」ではない ── `commands.rs` が答える verb は **151 個**あって、
-そのうち一巡で触れるのはひと握り。触ったことのない道は、間違っていても誰も
-気づかない。
+「全機能の動作検証」ではない ── `commands.rs` が答える verb は **180 個近く**あり
+（この道具が毎回自分で数えるので、固定の一覧は持たない）、一巡で触れるのは
+ひと握り。触ったことのない道は、間違っていても誰も気づかない。
 
-    /tmp/tuienv/bin/python scripts/sweep.py            # 全部
-    /tmp/tuienv/bin/python scripts/sweep.py --list     # 一つずつ結果を出す
-    /tmp/tuienv/bin/python scripts/sweep.py theme du   # 名前を指定して
+    ~/.cache/cian-tui-env/bin/python scripts/sweep.py            # 全部
+    ~/.cache/cian-tui-env/bin/python scripts/sweep.py --list     # 一つずつ結果を出す
+    ~/.cache/cian-tui-env/bin/python scripts/sweep.py theme du   # 名前を指定して
 
 ## 一つの verb について見るもの
 
@@ -70,8 +70,8 @@ def verbs() -> list[str]:
 SKIP = {
     # verb ではない。`:cd -`（ひとつ前のディレクトリ）の**引数**が、
     # `parity.py` の数え方（12桁インデントの match 腕）に verb として拾われて
-    # いる ── 「コマンド 151 件」はそのぶん多い。この掃引が迷子として先に
-    # 見つけた
+    # いる ── `parity.py` のコマンド件数はそのぶん多い。この掃引が迷子として
+    # 先に見つけた
     "-": "`:cd -` の引数であって、コマンドではない",
     "q": "終わる。叩いたら以降が測れない",
     "quit": "同上",
@@ -135,7 +135,7 @@ QUIET_OK = {
 def sandbox() -> str:
     """一つの砂場を全部の verb で使い回す。
 
-    verb ごとに立て直すと 151 回の起動で 10 分を超える。**代わりに、一つ叩く
+    verb ごとに立て直すと verb の数だけ起動して 10 分を超える。**代わりに、一つ叩く
     たびに Esc を3回**打って面を閉じ、次の verb を素の一覧から始める。
     """
     d = tempfile.mkdtemp(prefix="cian-sweep-")
@@ -611,7 +611,7 @@ def monkey(steps: int, seed: int, listing: bool) -> int:
             print(f"  ✗ {x}")
         print(f"  打った順（そのまま再現できます）:")
         print("      " + " ".join(history))
-        print(f"  もう一度: /tmp/tuienv/bin/python scripts/sweep.py --monkey {steps} --seed {seed}")
+        print(f"  もう一度: ~/.cache/cian-tui-env/bin/python scripts/sweep.py --monkey {steps} --seed {seed}")
         print("=" * 72)
         return 1
     print(f"  {len(history)} 手、落ちず、桁も崩れませんでした")
@@ -785,7 +785,7 @@ def main() -> int:
         print("  反応の無いものは**候補**です。正しいなら QUIET_OK に理由を書くこと")
         print("=" * 72)
         return 1
-    print("  151 個ぜんぶ、叩けば何かが起きて、桁は揃っていて、迷子はいません")
+    print(f"  {len(names)} 個ぜんぶ、叩けば何かが起きて、桁は揃っていて、迷子はいません")
     print("=" * 72)
     return 0
 

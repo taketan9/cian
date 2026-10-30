@@ -11,9 +11,10 @@ description: リリース前の定例点検。TUI と GUI の両方が動くか�
 ## ① 動くか（TUI / GUI の両方）
 
 ```bash
-cargo test --workspace                                  # 690本ほど・1分
+cargo test --workspace                                  # 1081本・2分ほど
 cargo clippy --workspace --all-targets -- -D warnings   # CI と同じ物差し
-python3 scripts/tui-drive.py                            # 端末版を**本物の pty で**動かす
+~/.cache/cian-tui-env/bin/python scripts/tui-drive.py   # 端末版を**本物の pty で**動かす
+pkill -f "Electron.app/Contents/MacOS/Electron"; sleep 1   # 先に前のものを落とす
 node gui/drive.js                                       # 窓版を動かす（例外 0 件が基準）
 ```
 
@@ -26,8 +27,9 @@ node gui/drive.js                                       # 窓版を動かす（�
   文書の嘘は機械が保証している**
 - **GUI は同じレンダラ。** 描画の直しは片方だけ見れば足りることが多いが、
   ウィンドウ固有（フォント・DPI・マウス）を触ったら両方起動する
-- **Windows は手元で見られない。** CI のマトリクスを信じ、実機確認は
-  月曜にまとめる
+- **Windows は手元で見られない。** `ci.yml` は **macOS と Windows の2つ**
+  （Linux は 2026-09-06 に外した）。CI を信じ、実機は彼が CI の成果物で試す ──
+  **どの zip か訊く**
 
 ### 端末版も実機で動く（2026-09-06 から）
 
@@ -36,9 +38,9 @@ node gui/drive.js                                       # 窓版を動かす（�
 kitty graphics）のに素の pty が答えないから。**答えれば動く。**
 
 ```bash
-python3 -m venv /tmp/cian-tui-env && /tmp/cian-tui-env/bin/pip install pyte
-/tmp/cian-tui-env/bin/python scripts/tui-drive.py
-/tmp/cian-tui-env/bin/python scripts/tui-drive.py -- j j Space   # 好きな手
+python3 -m venv ~/.cache/cian-tui-env && ~/.cache/cian-tui-env/bin/pip install pyte
+~/.cache/cian-tui-env/bin/python scripts/tui-drive.py
+~/.cache/cian-tui-env/bin/python scripts/tui-drive.py -- j j Space   # 好きな手
 ```
 
 見るのは**この道具にしか答えられないこと**だけ ── 実際のバイト列、実際の桁、
@@ -78,7 +80,8 @@ python3 scripts/configcover.py   # init.lua の設定を、窓版がいくつ読
 python3 scripts/parity.py        # 端末版と窓版が同じものを同じ言葉で呼んでいるか
 python3 scripts/i18n.py          # 窓版のうち両方の言葉で言えるもの
 python3 scripts/keycover.py      # ヘルプが挙げるキーのうち、押されたことがある割合
-python3 scripts/requests.py      # 依頼の台帳
+python3 scripts/requests.py      # 依頼の台帳（150 件・落ちたら直す前に訊く）
+python3 scripts/settingscover.py # 設定画面が init.lua のどれを出しているか
 ```
 
 **`widths.py` は 2026-09-06 に足した。** 同じ日に「字数で画面の幅を測る」バグが

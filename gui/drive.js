@@ -505,7 +505,7 @@ async function main() {
     const keys = process.argv.slice(2).filter((a) => a !== '--commands' && a !== '--values');
     // `--commands` ── **辞書にある名前を、一つずつ全部打つ。**
     //
-    // 端末版には `scripts/sweep.py` があって 151 個の verb を叩く。窓版には
+    // 端末版には `scripts/sweep.py` があって verb を全部叩く。窓版には
     // 何も無く、`drive.js` の一周が触るのはひと握りだった ── **配布は窓版
     // 一本**なので、触ったことのない道がそのまま人の手元へ行く。
     //

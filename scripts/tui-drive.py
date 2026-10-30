@@ -36,8 +36,8 @@
 画面を組み立てるのに VT のエミュレータが要る。**入っていなければ、その旨を
 言って終わる** ── 黙って飛ばすと、走っていないものを「通った」と読む。
 
-    python3 -m venv /tmp/cian-tui-env && /tmp/cian-tui-env/bin/pip install pyte
-    /tmp/cian-tui-env/bin/python scripts/tui-drive.py
+    python3 -m venv ~/.cache/cian-tui-env && ~/.cache/cian-tui-env/bin/pip install pyte
+    ~/.cache/cian-tui-env/bin/python scripts/tui-drive.py
 
 （Homebrew の python は PEP 668 で `pip install` を拒むので venv が要る。）
 """
@@ -61,9 +61,9 @@ try:
 except ImportError:
     sys.stderr.write(
         "pyte が要ります（画面を組み立てる VT エミュレータ）:\n"
-        "  python3 -m venv /tmp/cian-tui-env\n"
-        "  /tmp/cian-tui-env/bin/pip install pyte\n"
-        "  /tmp/cian-tui-env/bin/python scripts/tui-drive.py\n"
+        "  python3 -m venv ~/.cache/cian-tui-env\n"
+        "  ~/.cache/cian-tui-env/bin/pip install pyte\n"
+        "  ~/.cache/cian-tui-env/bin/python scripts/tui-drive.py\n"
     )
     raise SystemExit(2)
 

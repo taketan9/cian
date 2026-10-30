@@ -17,12 +17,12 @@ description: 全機能を一つずつ触って、細部の質を見る。文言�
 ```bash
 git log -1 --format='%h %s'
 cargo build --bin cian-tui -p cian-server
-/tmp/tuienv/bin/python -c "import pyte" || { rm -rf /tmp/tuienv; python3 -m venv /tmp/tuienv; /tmp/tuienv/bin/pip -q install pyte; }
+~/.cache/cian-tui-env/bin/python -c "import pyte" || { rm -rf ~/.cache/cian-tui-env; python3 -m venv ~/.cache/cian-tui-env; ~/.cache/cian-tui-env/bin/pip -q install pyte; }
 ```
 
-**`/tmp` の venv は腐る。** macOS の掃除が `pyvenv.cfg` を先に消すと、
-`python` は動くのに `import pyte` だけが落ちる ── `python -m venv` を上書きで
-走らせても壊れた site-packages が残るので、`rm -rf` してから作り直す。
+**`/tmp` に置くな。** macOS の掃除が `pyvenv.cfg` を先に消すと、`python` は
+動くのに `import pyte` だけが落ちる（2回踏んだ）。だから `~/.cache` に置く。
+壊れていたら `python -m venv` の上書きでは直らないので、`rm -rf` から作り直す。
 
 **これを飛ばして3ラウンド失ったことがある。** 彼は `cargo run` を使うので、
 編集をまたいだセッションでは編集前のビルドを触っている。「直っていない」と
@@ -56,21 +56,21 @@ python3 scripts/settingscover.py # 設定画面が、cian の設定のどこま�
 ## ①' 全部叩く（`scripts/sweep.py`）
 
 ```bash
-/tmp/tuienv/bin/python scripts/sweep.py                  # コマンド 151 個を一つずつ
-/tmp/tuienv/bin/python scripts/sweep.py --keys           # マニュアルのキーを一つずつ
-/tmp/tuienv/bin/python scripts/sweep.py --monkey 400     # 乱数で 400 手（種は --seed）
-/tmp/tuienv/bin/python scripts/sweep.py --list           # 一つずつ結果を出す
-/tmp/tuienv/bin/python scripts/sweep.py theme du         # 名前を指定して
-node gui/drive.js --commands                             # 窓版の辞書 179 個を全部打つ
+~/.cache/cian-tui-env/bin/python scripts/sweep.py                  # verb を全部、一つずつ（いま 178・うち 13 は外部起動で飛ばす）
+~/.cache/cian-tui-env/bin/python scripts/sweep.py --keys           # マニュアルのキーを一つずつ
+~/.cache/cian-tui-env/bin/python scripts/sweep.py --monkey 400     # 乱数で 400 手（種は --seed）
+~/.cache/cian-tui-env/bin/python scripts/sweep.py --list           # 一つずつ結果を出す
+~/.cache/cian-tui-env/bin/python scripts/sweep.py theme du         # 名前を指定して
+node gui/drive.js --commands                             # 窓版の辞書を全部打つ（いま 205）
 node gui/drive.js --values                               # 欄に意地の悪い値を入れて往復させる
-/tmp/tuienv/bin/python scripts/sweep.py --names          # 入力欄に意地の悪い名前
+~/.cache/cian-tui-env/bin/python scripts/sweep.py --names          # 入力欄に意地の悪い名前
 ```
 
 ## ①''' 押すだけでは出ないもの ── **書いた値が、同じもので戻るか**
 
 鍵を押す掃引は「押したら何か起きるか」を見る。**書いた値が同じもので戻るかは、
 押しても出ない** ── スニペットに複数行を入れると保存が壊れていたのがその型で、
-151 個のコマンドも 78 個のキーも 8,000 手の乱数も、一度も触れなかった。
+全部のコマンドも 78 個のキーも 8,000 手の乱数も、一度も触れなかった。
 
 意地の悪さは、**行き先の形**から選ぶ。`init.lua` は Lua なので:
 
@@ -138,14 +138,14 @@ node gui/drive.js --values                               # 欄に意地の悪い
 
 ```bash
 pkill -f "Electron.app/Contents/MacOS/Electron"; sleep 1
-/tmp/tuienv/bin/python scripts/tui-drive.py     # 端末版を**本物の pty で**
+~/.cache/cian-tui-env/bin/python scripts/tui-drive.py     # 端末版を**本物の pty で**
 node gui/drive.js                                # 窓版（例外 0 件が基準）
 ```
 
 好きな手を打つときは:
 
 ```bash
-/tmp/tuienv/bin/python scripts/tui-drive.py -- T j j Enter   # 最後の画面も出る
+~/.cache/cian-tui-env/bin/python scripts/tui-drive.py -- T j j Enter   # 最後の画面も出る
 node gui/drive.js , T ? Esc
 ```
 
