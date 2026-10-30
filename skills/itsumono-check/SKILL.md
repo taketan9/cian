@@ -5,13 +5,16 @@ description: リリース前の定例点検。TUI と GUI の両方が動くか�
 
 # いつものチェック
 
+**規則そのものは `CLAUDE.md` にある**（規則と、それを見張る関門の対応表）。
+ここはその関門を実際に通す手順。
+
 実機からの依頼は毎回この3つ。**目視でやらない** ―― 3万行を人が読み返すのは
 無理で、読み返したつもりになるのが一番危ない。
 
 ## ① 動くか（TUI / GUI の両方）
 
 ```bash
-cargo test --workspace                                  # 1081本・2分ほど
+cargo test --workspace                                  # 2分ほど（本数は出力に出る）
 cargo clippy --workspace --all-targets -- -D warnings   # CI と同じ物差し
 ~/.cache/cian-tui-env/bin/python scripts/tui-drive.py   # 端末版を**本物の pty で**動かす
 pkill -f "Electron.app/Contents/MacOS/Electron"; sleep 1   # 先に前のものを落とす
@@ -82,6 +85,7 @@ python3 scripts/i18n.py          # 窓版のうち両方の言葉で言えるも
 python3 scripts/keycover.py      # ヘルプが挙げるキーのうち、押されたことがある割合
 python3 scripts/requests.py      # 依頼の台帳（150 件・落ちたら直す前に訊く）
 python3 scripts/settingscover.py # 設定画面が init.lua のどれを出しているか
+python3 scripts/claudemd.py       # CLAUDE.md の規則に、実在する関門が付いているか
 ```
 
 **`widths.py` は 2026-09-06 に足した。** 同じ日に「字数で画面の幅を測る」バグが

@@ -143,3 +143,12 @@ jobs:
       # 揃いを見るが、**打てる名前の食い違い**はこちらにしか出ない。
       - name: The same names in both front ends
         run: python3 scripts/names.py
+
+      # CLAUDE.md は規則を、その規則を見張る関門の名前と並べて書いてある。
+      # これはその並びへの関門 ── 名乗った関門が実在するか、そして venv を
+      # `/tmp` に向けたファイルが戻っていないかを見る。2026-10-30 に、
+      # 「`/tmp` に置かない」規則があるのに手順を出す4か所が全部 `/tmp` の
+      # ままだったのが、この検査の生まれた理由。**規則は、落ちる関門が付く
+      # まで効いていない。**
+      - name: Every rule in CLAUDE.md names a gate that exists
+        run: python3 scripts/claudemd.py
