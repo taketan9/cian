@@ -177,12 +177,26 @@ pub fn copy_many(
             report.note_error(format!("{}: has no name", src.display()));
             continue;
         };
+        if let Some(why) = crate::ops::cannot_place(src, dest_dir) {
+            report.note_error(why);
+            continue;
+        }
         let root = dest_dir.join(name);
         if root.exists() && on_conflict == Conflict::Skip {
             report.skipped += 1;
             continue;
         }
         let mut failed = false;
+        // **A folder that cannot be read is an error, not nothing** (2026-10-30).
+        // It was skipped and the copy reported success — and a move, which
+        // removes the source after a clean copy, then deleted what it had not
+        // copied. AVD's ACLs make this an everyday shape.
+        for rel in dirs_deepest_first(src) {
+            if fs::read_dir(src.join(&rel)).is_err() {
+                report.note_error(format!("{}: cannot be read", src.join(&rel).display()));
+                failed = true;
+            }
+        }
         for (abs, rel) in walk(src) {
             if ctl.stopped() {
                 break;
@@ -209,6 +223,9 @@ pub fn copy_many(
         // written under this root, deepest first.
         if !failed && !ctl.stopped() {
             for rel in dirs_deepest_first(src) {
+                // Empty folders are part of the tree too; nothing was written
+                // inside them, so nothing made them (2026-10-30).
+                let _ = fs::create_dir_all(root.join(&rel));
                 crate::ops::copy_times(&src.join(&rel), &root.join(&rel));
             }
             report.ok += 1;
@@ -236,10 +253,22 @@ pub fn move_many(
             break;
         }
         let Some(name) = src.file_name() else { continue };
+        if let Some(why) = crate::ops::cannot_place(src, dest_dir) {
+            report.note_error(why);
+            continue;
+        }
         let target = dest_dir.join(name);
         if target.exists() {
             if on_conflict == Conflict::Skip {
                 report.skipped += 1;
+                continue;
+            }
+            // **A folder onto a folder is merged, as a copy is.** It used to
+            // `remove_dir_all` the destination first — not to the bin — so
+            // everything only the destination had was gone, behind the same
+            // "a = overwrite" a copy shows for a merge.
+            if target.is_dir() && src.is_dir() {
+                slow.push(src.clone());
                 continue;
             }
             let _ = if target.is_dir() {
@@ -505,5 +534,103 @@ mod tests {
         let p = Progress { files_done: 1, files_total: 2, ..Default::default() };
         assert!((p.fraction() - 0.5).abs() < 1e-6);
         assert_eq!(Progress::default().fraction(), 0.0);
+    }
+}
+
+#[cfg(test)]
+mod placing {
+    //! Two panes on one folder, and a folder moved into itself: what `c` and
+    //! `m` used to turn into a zero-byte file and a deletion (2026-10-30).
+    use super::*;
+    use crate::ops::Conflict;
+
+    fn run(f: impl FnOnce(&mut Ctl) -> OpReport) -> OpReport {
+        let cancel = AtomicBool::new(false);
+        let mut nil = |_: &Progress| {};
+        let mut c = Ctl { cancel: &cancel, on_progress: &mut nil };
+        f(&mut c)
+    }
+
+    #[test]
+    fn a_file_copied_or_moved_onto_itself_survives() {
+        let d = tempfile::tempdir().unwrap();
+        let a = d.path().join("a.txt");
+        fs::write(&a, b"eight by").unwrap();
+        let r = run(|c| copy_many(std::slice::from_ref(&a), d.path(), Conflict::Overwrite, c));
+        assert_eq!(r.ok, 0);
+        assert_eq!(r.errors.len(), 1);
+        assert_eq!(fs::read(&a).unwrap(), b"eight by");
+        let r = run(|c| move_many(std::slice::from_ref(&a), d.path(), Conflict::Overwrite, c));
+        assert_eq!(r.ok, 0);
+        assert!(a.exists(), "a move onto itself must not delete it");
+    }
+
+    #[test]
+    fn a_folder_is_not_moved_into_itself() {
+        let d = tempfile::tempdir().unwrap();
+        let src = d.path().join("src");
+        fs::create_dir_all(src.join("sub")).unwrap();
+        fs::write(src.join("keep.txt"), b"x").unwrap();
+        let r = run(|c| move_many(std::slice::from_ref(&src), &src.join("sub"), Conflict::Skip, c));
+        assert_eq!(r.ok, 0);
+        assert_eq!(fs::read(src.join("keep.txt")).unwrap(), b"x");
+    }
+
+    #[test]
+    fn moving_a_folder_over_a_folder_merges_like_a_copy() {
+        let d = tempfile::tempdir().unwrap();
+        let (from, to) = (d.path().join("from"), d.path().join("to"));
+        fs::create_dir_all(from.join("x")).unwrap();
+        fs::create_dir_all(to.join("x")).unwrap();
+        fs::write(from.join("x/new.txt"), b"n").unwrap();
+        fs::write(to.join("x/only_here.txt"), b"o").unwrap();
+        let r = run(|c| move_many(&[from.join("x")], &to, Conflict::Overwrite, c));
+        assert!(r.errors.is_empty(), "{:?}", r.errors);
+        assert!(to.join("x/only_here.txt").exists(), "what only the destination had is kept");
+        assert!(to.join("x/new.txt").exists());
+        assert!(!from.join("x").exists());
+    }
+}
+
+#[cfg(test)]
+mod whole_trees {
+    use super::*;
+    use crate::ops::Conflict;
+
+    fn run(f: impl FnOnce(&mut Ctl) -> OpReport) -> OpReport {
+        let cancel = AtomicBool::new(false);
+        let mut nil = |_: &Progress| {};
+        let mut c = Ctl { cancel: &cancel, on_progress: &mut nil };
+        f(&mut c)
+    }
+
+    #[test]
+    fn empty_folders_are_copied() {
+        let (s, d) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        fs::create_dir_all(s.path().join("t/empty")).unwrap();
+        fs::write(s.path().join("t/a.txt"), b"a").unwrap();
+        let r = run(|c| copy_many(&[s.path().join("t")], d.path(), Conflict::Skip, c));
+        assert!(r.errors.is_empty());
+        assert!(d.path().join("t/empty").is_dir());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_folder_stops_a_move_from_deleting_it() {
+        use std::os::unix::fs::PermissionsExt;
+        let (s, d) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let secret = s.path().join("t/secret");
+        fs::create_dir_all(&secret).unwrap();
+        fs::write(secret.join("x.txt"), b"x").unwrap();
+        fs::set_permissions(&secret, fs::Permissions::from_mode(0o000)).unwrap();
+        if fs::read_dir(&secret).is_ok() {
+            fs::set_permissions(&secret, fs::Permissions::from_mode(0o755)).unwrap();
+            return; // running as root: nothing is unreadable
+        }
+        let r = run(|c| copy_many(&[s.path().join("t")], d.path(), Conflict::Skip, c));
+        fs::set_permissions(&secret, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(r.ok, 0);
+        assert!(!r.errors.is_empty());
+        assert!(secret.join("x.txt").exists());
     }
 }

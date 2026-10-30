@@ -1219,7 +1219,7 @@ impl Session {
                 let binary = matches!(shown.kind, cian_core::viewer::ViewKind::Binary);
                 // The editable copy is only fetched for real text: a hex dump
                 // is a rendering, and saving one back would write the dump.
-                let file = if binary {
+                let file = if binary || shown.truncated {
                     None
                 } else {
                     cian_core::grepedit::read_text(&path).ok()
@@ -1255,6 +1255,16 @@ impl Session {
             }
             // Write the open file back, in the encoding it arrived in.
             "save" => {
+                // **先頭しか読んでいないものは書かない**（2026-10-30）。窓版は編集させて
+                // いたので、6MB のログを1行直して保存すると、後ろの 2MB が消えました。
+                // 端末版は前から断っています
+                if self.open.is_none() {
+                    if let Some((_, s)) = &self.shown {
+                        if s.truncated {
+                            anyhow::bail!("先頭しか読んでいないので保存できません（全部を直すなら別のエディタで）");
+                        }
+                    }
+                }
                 let Some((path, original, stamp)) = self.open.as_ref() else {
                     anyhow::bail!("開いているファイルがありません");
                 };
@@ -1767,8 +1777,16 @@ impl Session {
                     Some(m) if !m.is_empty() => vec![m.to_string()],
                     _ => Vec::new(),
                 };
+                // **The whole archive goes into a new folder**, as the terminal
+                // front end does: into the current folder, a `README.md` in the
+                // archive silently overwrote the one already there (2026-10-30).
+                let into = if members.is_empty() {
+                    cian_core::archive::unique_dir(&cwd, &cian_core::archive::archive_stem(&name))
+                } else {
+                    cwd.clone()
+                };
                 let report = quietly(|ctl| cian_core::archive::extract(
-                    &path, &members, &cwd, req.params["password"].as_str(), "", ctl));
+                    &path, &members, &into, req.params["password"].as_str(), "", ctl));
                 let pane = self.pane_mut(&which)?;
                 pane.reload()?;
                 Ok(serde_json::json!({
@@ -5742,10 +5760,9 @@ impl Session {
                 }
                 let (from, _, _) = self.selected(&which)?;
                 let dest = from.with_file_name(&to);
-                if dest.exists() {
-                    anyhow::bail!("{to} はすでにあります");
-                }
-                cian_core::ops::rename_in_place(&from, &to)?;
+                // 既にある名前は core が断ります（大文字小文字だけの改名は通します）
+                cian_core::ops::rename_in_place(&from, &to)
+                    .map_err(|_| anyhow::anyhow!("{to} はすでにあります"))?;
                 self.did(Undo::Rename { from: from.clone(), to: dest });
                 let pane = self.pane_mut(&which)?;
                 pane.reload()?;

@@ -102,7 +102,7 @@ fn list_zip(path: &Path) -> Result<Vec<Member>> {
         // in the central directory, not behind the password).
         let e = zip.by_index_raw(i).with_context(|| format!("entry {} of {}", i, path.display()))?;
         out.push(Member {
-            name: e.name().to_string(),
+            name: member_name(e.name(), e.name_raw()),
             is_dir: e.is_dir(),
             size: e.size(),
             compressed: e.compressed_size(),
@@ -330,7 +330,9 @@ fn extract_zip(
     let wanted: Vec<usize> = (0..zip.len())
         .filter(|i| {
             members.is_empty()
-                || zip.by_index_raw(*i).map(|e| members.iter().any(|m| m == e.name())).unwrap_or(false)
+                || zip.by_index_raw(*i)
+                    .map(|e| members.iter().any(|m| *m == member_name(e.name(), e.name_raw())))
+                    .unwrap_or(false)
         })
         .collect();
     let mut p = Progress {
@@ -367,7 +369,7 @@ fn extract_zip(
                 continue;
             }
         };
-        let name = e.name().to_string();
+        let name = member_name(e.name(), e.name_raw());
         let rel = name.strip_prefix(strip).unwrap_or(&name);
         let Some(target) = safe_join(dest, rel) else {
             report.note_error(format!("{}: refused, escapes the destination", name));
@@ -696,7 +698,7 @@ pub fn zip_modify(
                     continue;
                 }
             };
-            let name = entry.name().to_string();
+            let name = member_name(entry.name(), entry.name_raw());
             // Dropped, or about to be replaced by an addition of the same name.
             if dropped.contains(name.as_str()) || added.contains(name.as_str()) {
                 continue;
@@ -725,17 +727,22 @@ pub fn zip_modify(
         }
         p.current = name.clone();
         (ctl.on_progress)(&p);
+        // **The file is opened before its entry is started**, and a failure
+        // abandons the whole rewrite (2026-10-30). Started first, an unreadable
+        // replacement left the member at zero bytes — and the original had
+        // already been left out, so the archive was rewritten without it.
+        let mut src_f = match fs::File::open(path) {
+            Ok(f) => f,
+            Err(e) => {
+                drop(zip);
+                fail(&mut report, &tmp, format!("{}: {}", name, e));
+                return report;
+            }
+        };
         if let Err(e) = zip.start_file(name, base_opts) {
             report.note_error(format!("{}: {}", name, e));
             continue;
         }
-        let mut src_f = match fs::File::open(path) {
-            Ok(f) => f,
-            Err(e) => {
-                report.note_error(format!("{}: {}", name, e));
-                continue;
-            }
-        };
         let mut buf = vec![0u8; 256 * 1024];
         let mut failed = false;
         loop {
@@ -1055,6 +1062,58 @@ pub fn members_under<'a>(members: &'a [Member], prefix: &str) -> Vec<&'a Member>
         .collect()
 }
 
+
+/// One rule for both front ends (2026-10-30): the window extracted straight
+/// into the current folder and overwrote what was there with the same name.
+///
+/// The base name of an archive without its extension, handling the two-part
+/// `.tar.gz` / `.tar.bz2` / `.tar.xz` / `.tgz` cases: `proj.tar.gz` → `proj`.
+pub fn archive_stem(name: &str) -> String {
+    let low = name.to_lowercase();
+    for suf in [".tar.gz", ".tar.bz2", ".tar.xz", ".tgz"] {
+        if low.ends_with(suf) {
+            return name[..name.len() - suf.len()].to_string();
+        }
+    }
+    match name.rfind('.') {
+        Some(i) if i > 0 => name[..i].to_string(),
+        _ => name.to_string(),
+    }
+}
+
+/// A directory path under `parent` named `stem`, made unique by appending
+/// `-1`, `-2`, … so extracting never merges into an existing folder.
+pub fn unique_dir(parent: &Path, stem: &str) -> PathBuf {
+    let base = parent.join(stem);
+    if !base.exists() {
+        return base;
+    }
+    for n in 1.. {
+        let cand = parent.join(format!("{stem}-{n}"));
+        if !cand.exists() {
+            return cand;
+        }
+    }
+    base
+}
+
+
+/// A member's name as a person would read it.
+///
+/// A zip made by Explorer on a Japanese Windows writes names in CP932 and does
+/// not set the UTF-8 flag, so the zip crate reads them as CP437:
+/// `日本語.txt` arrived as `ô·û{îΩ.txt` — listed, extracted and matched by that
+/// name (2026-10-30). Valid UTF-8 is taken as it is (that covers every name
+/// with the flag set, and plain ASCII); otherwise a clean CP932 decode wins;
+/// otherwise the zip crate's reading stands. One function, because the name is
+/// also the key a member is found by when extracting or rewriting.
+fn member_name(read: &str, raw: &[u8]) -> String {
+    if let Ok(s) = std::str::from_utf8(raw) {
+        return s.to_string();
+    }
+    let (s, _, bad) = encoding_rs::SHIFT_JIS.decode(raw);
+    if bad { read.to_string() } else { s.into_owned() }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1517,5 +1576,16 @@ mod tests {
             !d.path().join("bag.tar.cian-new").exists(),
             "and left no half-written file behind"
         );
+    }
+}
+
+#[cfg(test)]
+mod japanese_names {
+    #[test]
+    fn a_cp932_name_reads_as_japanese() {
+        let raw = encoding_rs::SHIFT_JIS.encode("日本語.txt").0.into_owned();
+        assert_eq!(super::member_name("ô·û{îΩ.txt", &raw), "日本語.txt");
+        assert_eq!(super::member_name("日本語.txt", "日本語.txt".as_bytes()), "日本語.txt");
+        assert_eq!(super::member_name("a/b.txt", b"a/b.txt"), "a/b.txt");
     }
 }

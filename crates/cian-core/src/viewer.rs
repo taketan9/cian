@@ -157,6 +157,23 @@ impl TextEncoding {
     /// Encode `text` back to this encoding, for saving an edited file in the
     /// encoding it was read in. UTF-16 is not one of encoding_rs' output
     /// encodings, so those two are written by hand.
+    /// The characters this encoding cannot hold, in the order they first
+    /// appear. encoding_rs writes them as `&#128512;` and reports success, so
+    /// a save that does not ask first leaves that text in the file (2026-10-30).
+    pub fn cannot_hold(self, text: &str) -> Vec<char> {
+        let mut out: Vec<char> = Vec::new();
+        if self != TextEncoding::ShiftJis || !self.engine().encode(text).2 {
+            return out;
+        }
+        let mut buf = [0u8; 4];
+        for c in text.chars() {
+            if !out.contains(&c) && self.engine().encode(c.encode_utf8(&mut buf)).2 {
+                out.push(c);
+            }
+        }
+        out
+    }
+
     pub fn encode(self, text: &str) -> Vec<u8> {
         match self {
             TextEncoding::Utf8 => text.as_bytes().to_vec(),
@@ -280,6 +297,15 @@ pub fn view_file(path: &Path) -> Result<View> {
     // alert logs, AIX batch output) are still written in it. Only a clean
     // SJIS decode wins; otherwise the U+FFFD-marked UTF-8 stands, which at
     // least shows *where* the bytes are broken.
+    // **A file cut at the limit is judged on whole lines** (2026-10-30). The
+    // cut can land inside a two-byte Shift_JIS character, the SJIS decode
+    // then fails on that last byte alone, and a whole 4MB log fell back to
+    // UTF-8 and showed as nothing but U+FFFD.
+    if truncated {
+        if let Some(end) = buf.iter().rposition(|&b| b == b'\n') {
+            buf.truncate(end + 1);
+        }
+    }
     let (utf8, _, utf8_errors) = encoding_rs::UTF_8.decode(&buf);
     let (text, encoding) = if utf8_errors {
         let (sjis, _, sjis_errors) = encoding_rs::SHIFT_JIS.decode(&buf);
@@ -483,5 +509,28 @@ mod tests {
         assert_eq!(v.kind, ViewKind::Text);
         assert_eq!(v.encoding, TextEncoding::Utf16Le);
         assert_eq!(v.lines[0], "Hi");
+    }
+}
+
+#[cfg(test)]
+mod cut_at_the_limit {
+    use super::*;
+
+    #[test]
+    fn a_large_shift_jis_log_is_still_shift_jis() {
+        let d = tempfile::tempdir().unwrap();
+        for shift in 0..2usize {
+            let p = d.path().join(format!("big{shift}.log"));
+            let mut bytes = vec![b'x'; shift];
+            let line = encoding_rs::SHIFT_JIS.encode("障害が発生しました\n").0.into_owned();
+            while (bytes.len() as u64) <= VIEW_LIMIT + 100 {
+                bytes.extend_from_slice(&line);
+            }
+            std::fs::write(&p, &bytes).unwrap();
+            let v = view_file(&p).unwrap();
+            assert!(v.truncated);
+            assert_eq!(v.encoding, TextEncoding::ShiftJis, "shift {shift}");
+            assert!(v.lines[1].contains("障害"), "{:?}", v.lines[1]);
+        }
     }
 }

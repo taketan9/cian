@@ -1153,10 +1153,17 @@ impl App {
                 // editable: saving would write back only the visible 4MB and
                 // silently destroy the rest of the file. Binary files edit as
                 // hex (overwrite-only), under the same truncation rule.
+                // Nor one that did not decode cleanly: EUC-JP (old AIX settings and
+                // logs) reads as U+FFFD, and `:w` wrote the U+FFFD back — every
+                // Japanese byte replaced (2026-10-30). The window refuses these
+                // already ("neither UTF-8 nor Shift_JIS").
+                let misread = matches!(view.kind, cian_core::viewer::ViewKind::Text)
+                    && view.lines.iter().any(|l| l.contains('\u{FFFD}'));
                 let editable = matches!(
                     view.kind,
                     cian_core::viewer::ViewKind::Text | cian_core::viewer::ViewKind::Binary
-                ) && !view.truncated;
+                ) && !view.truncated
+                    && !misread;
                 // Highlight recognised code (Markdown keeps its rendered preview).
                 let hl_lang = (!markdown && editable)
                     .then(|| cian_core::highlight::detect(path))
@@ -1882,7 +1889,7 @@ impl App {
             return;
         }
         let archive = e.path.clone();
-        let dest = unique_dir(&p.cwd, &archive_stem(&e.name));
+        let dest = cian_core::archive::unique_dir(&p.cwd, &cian_core::archive::archive_stem(&e.name));
         self.start_extract(archive, Vec::new(), dest);
     }
 
@@ -4260,37 +4267,6 @@ impl App {
         }
         Ok(())
     }
-}
-
-/// The base name of an archive without its extension, handling the two-part
-/// `.tar.gz` / `.tar.bz2` / `.tar.xz` / `.tgz` cases: `proj.tar.gz` → `proj`.
-fn archive_stem(name: &str) -> String {
-    let low = name.to_lowercase();
-    for suf in [".tar.gz", ".tar.bz2", ".tar.xz", ".tgz"] {
-        if low.ends_with(suf) {
-            return name[..name.len() - suf.len()].to_string();
-        }
-    }
-    match name.rfind('.') {
-        Some(i) if i > 0 => name[..i].to_string(),
-        _ => name.to_string(),
-    }
-}
-
-/// A directory path under `parent` named `stem`, made unique by appending
-/// `-1`, `-2`, … so extracting never merges into an existing folder.
-fn unique_dir(parent: &Path, stem: &str) -> PathBuf {
-    let base = parent.join(stem);
-    if !base.exists() {
-        return base;
-    }
-    for n in 1.. {
-        let cand = parent.join(format!("{stem}-{n}"));
-        if !cand.exists() {
-            return cand;
-        }
-    }
-    base
 }
 
 /// Build the per-file command lines for `:each`. `{}` in `template` expands to

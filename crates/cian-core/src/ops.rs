@@ -140,6 +140,28 @@ fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
+/// Why `src` cannot go into `dest_dir` at all, if it cannot: it is already
+/// there, or it is a folder being put inside itself.
+///
+/// One answer for both ways of carrying files. `transfer_one` had these two
+/// guards and `progress::copy_many` / `move_many` — the ones `c` and `m`
+/// actually use — did not: two panes on one folder turned a copy into a
+/// zero-byte file and a move into a deletion, both reported as success
+/// (2026-10-30).
+pub fn cannot_place(src: &Path, dest_dir: &Path) -> Option<String> {
+    if same_file(src, &dest_for(src, dest_dir)) {
+        return Some(format!("{} is already there — a file cannot be copied onto itself", src.display()));
+    }
+    let inside = |a: &Path, b: &Path| a.starts_with(b);
+    let (d, s) = (dest_dir.canonicalize().ok(), src.canonicalize().ok());
+    if src.is_dir()
+        && (inside(dest_dir, src) || matches!((&d, &s), (Some(d), Some(s)) if inside(d, s)))
+    {
+        return Some(format!("{} cannot be put inside itself", src.display()));
+    }
+    None
+}
+
 fn dest_for(src: &Path, dest_dir: &Path) -> PathBuf {
     let name = src
         .file_name()
@@ -288,6 +310,15 @@ pub fn rename_in_place(src: &Path, new_name: &str) -> Result<PathBuf> {
         .parent()
         .with_context(|| format!("no parent for {}", src.display()))?;
     let dest = parent.join(new_name);
+    // **An existing name is refused, unless it is this same file** (only the
+    // case differs, on a volume that does not tell case apart). `fs::rename`
+    // overwrites without asking, and the four places that rename disagreed
+    // about it: `r` replaced the other file and could not undo it, a swap in
+    // the window's bulk rename lost one of the two, and the window's own
+    // check refused `Report.txt` → `report.txt` (2026-10-30).
+    if dest.symlink_metadata().is_ok() && !same_file(src, &dest) {
+        anyhow::bail!("{} already exists", dest.display());
+    }
     fs::rename(src, &dest)
         .with_context(|| format!("rename {} -> {}", src.display(), dest.display()))?;
     Ok(dest)
@@ -617,5 +648,28 @@ mod make_touch_tests {
             vec![dst.path().join("new.txt"), dst.path().join("tree")],
             "the pre-existing name is left out, in source order"
         );
+    }
+}
+
+#[cfg(test)]
+mod renaming {
+    use super::*;
+
+    #[test]
+    fn a_rename_never_replaces_another_file() {
+        let d = tempfile::tempdir().unwrap();
+        fs::write(d.path().join("a.txt"), "AAA").unwrap();
+        fs::write(d.path().join("b.txt"), "BBB").unwrap();
+        assert!(rename_in_place(&d.path().join("a.txt"), "b.txt").is_err());
+        assert_eq!(fs::read_to_string(d.path().join("b.txt")).unwrap(), "BBB");
+        assert_eq!(fs::read_to_string(d.path().join("a.txt")).unwrap(), "AAA");
+    }
+
+    #[test]
+    fn only_the_case_can_change() {
+        let d = tempfile::tempdir().unwrap();
+        fs::write(d.path().join("Report.txt"), "r").unwrap();
+        let to = rename_in_place(&d.path().join("Report.txt"), "report.txt").unwrap();
+        assert_eq!(fs::read_to_string(to).unwrap(), "r");
     }
 }

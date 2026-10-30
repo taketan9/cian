@@ -526,7 +526,9 @@ pub fn to_html(lines: &[String]) -> String {
             continue;
         }
 
-        if t.starts_with("> ") || t == ">" {
+        // `>メモ` のように空白の無い引用も引用です（下の段落が `>` で止まるので、
+        // ここで拾わないと i が進まず、窓版のプレビューが止まりました）
+        if t.starts_with('>') {
             close_all_lists(&mut out, &mut open_lists, &mut li_open);
             let mut body = Vec::new();
             while i < lines.len() {
@@ -580,13 +582,16 @@ pub fn to_html(lines: &[String]) -> String {
         while i < lines.len() {
             let p = &lines[i];
             let pt = p.trim();
-            if pt.is_empty()
+            // **一行目は必ず取る。** 表にならない `| a | b |` や `\t|---|` は上の
+            // どの形にも当たらず、ここでも `|` で止まると i が進まず、
+            // エンジンごと止まってメモリを食い続けました
+            if !para.is_empty() && (pt.is_empty()
                 || heading(p).is_some()
                 || is_rule(p)
                 || fence_lang(p).is_some()
                 || list_item(p).is_some()
                 || pt.starts_with('|')
-                || pt.starts_with('>')
+                || pt.starts_with('>'))
             {
                 break;
             }
@@ -904,5 +909,27 @@ mod tests {
         let html = to_html(&["# 使い方".to_string(), "## Getting started".to_string()]);
         assert!(html.contains("<h1 id=\"使い方\">"), "{html}");
         assert!(html.contains("<h2 id=\"getting-started\">"), "{html}");
+    }
+}
+
+#[cfg(test)]
+mod no_hang {
+    // 窓版のプレビューが止まらなくなった形（2026-10-30 の総点検）
+    #[test]
+    fn 表にならない縦棒や空白の無い引用でも止まらない() {
+        for lines in [
+            vec!["| a | b |"],
+            vec![">quoted without space"],
+            vec!["表:", "| 項目 | 値 |"],
+            vec!["\t|---|"],
+            vec![">>二重"],
+            vec![""],
+        ] {
+            let v: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
+            let html = super::to_html(&v);
+            assert!(!html.is_empty() || v == vec![String::new()], "{lines:?}");
+        }
+        assert!(super::to_html(&[">メモ".to_string()]).contains("<blockquote>"));
+        assert!(super::to_html(&["| a | b |".to_string()]).contains("| a | b |"));
     }
 }

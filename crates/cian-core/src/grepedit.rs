@@ -107,6 +107,14 @@ pub fn write_text(path: &Path, file: &TextFile) -> Result<()> {
             TextEncoding::ShiftJis => &[][..],
         });
     }
+    let lost = file.encoding.cannot_hold(&text);
+    if !lost.is_empty() {
+        anyhow::bail!(
+            "{} is Shift_JIS, which has no {} — not saved",
+            path.display(),
+            lost.iter().collect::<String>()
+        );
+    }
     bytes.extend_from_slice(&file.encoding.encode(&text));
     std::fs::write(path, bytes).with_context(|| format!("write {}", path.display()))
 }

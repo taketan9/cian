@@ -582,11 +582,40 @@ async fn sftp_upload(
     let mut src = tokio::fs::File::open(local)
         .await
         .with_context(|| format!("open {}", local.display()))?;
+    // **Written beside the file, then renamed over it** (2026-10-30). Creating
+    // the target directly truncated it first, so a cancelled or dropped upload
+    // left the server's copy at zero bytes.
+    let part = format!("{remote_path}.cian-part");
     let mut dst = sftp
-        .create(remote_path)
+        .create(&part)
         .await
-        .with_context(|| format!("create remote {}", remote_path))?;
+        .with_context(|| format!("create remote {}", part))?;
+    let sent = sftp_send(&mut src, &mut dst, total, ctl).await;
+    if let Err(e) = sent {
+        drop(dst);
+        let _ = sftp.remove_file(&part).await;
+        return Err(e);
+    }
+    dst.shutdown().await.context("finish remote file")?;
+    drop(dst);
+    // SFTP's rename does not replace an existing file on most servers.
+    if sftp.rename(&part, remote_path).await.is_err() {
+        let _ = sftp.remove_file(remote_path).await;
+        if let Err(e) = sftp.rename(&part, remote_path).await {
+            let _ = sftp.remove_file(&part).await;
+            return Err(anyhow!("put {remote_path} in place: {e}"));
+        }
+    }
+    sftp_finish(sftp, local, remote_path, mode).await;
+    Ok(())
+}
 
+async fn sftp_send(
+    src: &mut tokio::fs::File,
+    dst: &mut russh_sftp::client::fs::File,
+    total: u64,
+    ctl: &mut Ctl<'_>,
+) -> Result<()> {
     let mut buf = vec![0u8; CHUNK];
     let mut done = 0u64;
     let mut pacer = Pacer::new(ctl.limit_bps);
@@ -607,7 +636,10 @@ async fn sftp_upload(
             tokio::time::sleep(wait).await;
         }
     }
-    dst.shutdown().await.context("finish remote file")?;
+    Ok(())
+}
+
+async fn sftp_finish(sftp: &SftpSession, local: &Path, remote_path: &str, mode: Option<u32>) {
     // Apply the requested permission bits (e.g. 0o777), and carry the local
     // file's date across — an upload is a copy, and a copy keeps its date (see
     // `cian_core::ops::copy_times`). Both in one round trip; both best-effort,
@@ -625,7 +657,6 @@ async fn sftp_upload(
         let _ = sftp.set_metadata(remote_path, attrs).await;
     }
     let _ = sftp.close().await;
-    Ok(())
 }
 
 /// A local file's mtime as SFTP wants it: seconds since the epoch.
@@ -656,18 +687,51 @@ async fn sftp_download(
         .open(remote_path)
         .await
         .with_context(|| format!("open remote {}", remote_path))?;
-    let mut dst = tokio::fs::File::create(local)
+    // **Written beside the file, then renamed over it** (2026-10-30). Creating
+    // the target directly emptied it first, and a cancel then removed it: a
+    // file that was already there before the download was gone.
+    let part = partial(local);
+    let mut dst = tokio::fs::File::create(&part)
         .await
-        .with_context(|| format!("create {}", local.display()))?;
+        .with_context(|| format!("create {}", part.display()))?;
+    let got = sftp_fetch(&mut src, &mut dst, total, ctl).await;
+    if let Err(e) = got {
+        drop(dst);
+        let _ = tokio::fs::remove_file(&part).await;
+        return Err(e);
+    }
+    dst.flush().await.context("finish local file")?;
+    // After the handle is done with it, or the write would move the date back.
+    drop(dst);
+    tokio::fs::rename(&part, local)
+        .await
+        .with_context(|| format!("put {} in place", local.display()))?;
+    if let Some(secs) = remote_mtime {
+        set_local_mtime_secs(local, secs);
+    }
+    let _ = sftp.close().await;
+    Ok(())
+}
 
+/// Where a download is written until it is complete.
+fn partial(local: &Path) -> std::path::PathBuf {
+    let mut name = local.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(".cian-part");
+    local.with_file_name(name)
+}
+
+async fn sftp_fetch(
+    src: &mut russh_sftp::client::fs::File,
+    dst: &mut tokio::fs::File,
+    total: u64,
+    ctl: &mut Ctl<'_>,
+) -> Result<()> {
     let mut buf = vec![0u8; CHUNK];
     let mut done = 0u64;
     let mut pacer = Pacer::new(ctl.limit_bps);
     (ctl.on_progress)(0, total);
     loop {
         if ctl.cancel.load(Ordering::Relaxed) {
-            // Don't leave a half file masquerading as the real download.
-            let _ = tokio::fs::remove_file(local).await;
             return Err(anyhow!("cancelled"));
         }
         let n = src.read(&mut buf).await.context("read remote")?;
@@ -682,13 +746,6 @@ async fn sftp_download(
             tokio::time::sleep(wait).await;
         }
     }
-    dst.flush().await.context("finish local file")?;
-    // After the handle is done with it, or the write would move the date back.
-    drop(dst);
-    if let Some(secs) = remote_mtime {
-        set_local_mtime_secs(local, secs);
-    }
-    let _ = sftp.close().await;
     Ok(())
 }
 
@@ -822,15 +879,23 @@ async fn scp_download(
         .context("start remote scp -f")?;
     let mut stream = channel.into_stream();
 
-    let mut dst = tokio::fs::File::create(local)
+    // Beside the file first, as `sftp_download` does: a failed download must
+    // not cost the file that was already there.
+    let part = partial(local);
+    let mut dst = tokio::fs::File::create(&part)
         .await
-        .with_context(|| format!("create {}", local.display()))?;
+        .with_context(|| format!("create {}", part.display()))?;
     match scp_recv(&mut stream, &mut dst, ctl).await {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            // Don't leave a half or empty file masquerading as the download.
+        Ok(()) => {
+            dst.flush().await.context("finish local file")?;
             drop(dst);
-            let _ = tokio::fs::remove_file(local).await;
+            tokio::fs::rename(&part, local)
+                .await
+                .with_context(|| format!("put {} in place", local.display()))
+        }
+        Err(e) => {
+            drop(dst);
+            let _ = tokio::fs::remove_file(&part).await;
             Err(e)
         }
     }

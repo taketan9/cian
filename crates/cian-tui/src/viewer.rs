@@ -3399,6 +3399,15 @@ impl App {
                         cian_core::viewer::TextEncoding::ShiftJis => &[][..],
                     });
                 }
+                let lost = view.encoding.cannot_hold(&text);
+                if !lost.is_empty() {
+                    // Not `&#128512;` in the file and "saved" on the screen.
+                    self.message = Some(format!(
+                        "not saved: Shift_JIS has no {}",
+                        lost.iter().collect::<String>()
+                    ));
+                    return;
+                }
                 bytes.extend_from_slice(&view.encoding.encode(&text));
                 (path.clone(), bytes)
             }

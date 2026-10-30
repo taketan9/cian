@@ -6260,7 +6260,10 @@ async function showFile(f) {
     ].filter(Boolean).join('  ·  ');
     // A hex dump is a rendering of the file, not the file. Saving one back
     // would write the dump, so it opens read-only and says so.
-    viewer.readOnly = !!f.binary;
+    // A file shown only up to the limit is read-only too: saving it wrote back
+    // only the part that was read, and the rest of the file was gone
+    // (2026-10-30). The terminal front end has always refused it.
+    viewer.readOnly = !!f.binary || !!f.truncated;
     viewer.name = f.name;
     // Where it came from, so the gutter can ask the engine what is on disk.
     // A hex dump has no line-for-line disk to compare against.
