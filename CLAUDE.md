@@ -41,6 +41,7 @@ cian-core` の片方向依存を保つ**。対応は macOS と Windows の2つ�
 | **警告を1つも出さない** | `cargo clippy --workspace --all-targets -- -D warnings`（CI と同じ物差し） |
 | **pty の venv は `~/.cache/cian-tui-env`** ── `/tmp` は macOS の掃除で消える（2回踏んだ） | `scripts/claudemd.py` |
 | **この表が名乗る関門は実在する** | `scripts/claudemd.py` |
+| **版を切ったら、手元から届かなかったところを `UNREACHED.ja.md` に書く**（Windows・彼の JIS と IME・社内の経路・彼の目。**無ければ「無し」の1行**） | `scripts/unreached.py` |
 | **関門を入れたら、わざと壊して捕まることを確かめる** | （手順。「検査が黙った」を5回やっている） |
 | **主張は自分で再現してから直す** ── 他のセッションの報告も鵜呑みにしない | （手順） |
 
@@ -85,6 +86,9 @@ cian-core` の片方向依存を保つ**。対応は macOS と Windows の2つ�
 端末だが、**本物の Windows ではない**。`drive.js` は本物のキーとクリックだが、
 **彼の JIS キーボードと IME ではない**（`e.key` ではなく `e.code` で当てる。
 Mac で通っても JIS では外れる）。
+
+**届かなかったところは `UNREACHED.ja.md` に版ごとに書く。** チャットで言うと
+流れる。書くのは**黙って壊れるもの**だけで、無ければ「無し」の1行でよい。
 
 **「直っていない」と言われたら `:version` を訊く** ── 版・git SHA・`-dirty`。
 `cargo run` なので、編集をまたいだセッションは編集前のビルドを動かしている。

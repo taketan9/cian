@@ -3328,7 +3328,16 @@ use crate::ai::StoredChatExt;
     /// **バイトで確かめる**。
     #[test]
     fn saving_keeps_the_ending_the_file_arrived_with() {
-        for (name, body) in [("no-eol.txt", "ひとつめ\nふたつめ"), ("with-eol.txt", "ひとつめ\nふたつめ\n")] {
+        // CRLF も混ぜる。改行の種類と「終わり方」は別の軸で、CRLF で終わって
+        // **いない**ファイルがその交点 ── `trailing_eol` を足したときに測った
+        // のは LF の2通りだけだった。Windows から来るファイルはこちらなので、
+        // 交点を外すと「手元では出ないが実機で出る」の形になる。
+        for (name, body) in [
+            ("no-eol.txt", "ひとつめ\nふたつめ"),
+            ("with-eol.txt", "ひとつめ\nふたつめ\n"),
+            ("no-eol-crlf.txt", "ひとつめ\r\nふたつめ"),
+            ("with-eol-crlf.txt", "ひとつめ\r\nふたつめ\r\n"),
+        ] {
             let dir = tempfile::tempdir().unwrap();
             let at = dir.path().join(name);
             std::fs::write(&at, body).unwrap();

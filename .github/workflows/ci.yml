@@ -152,3 +152,9 @@ jobs:
       # まで効いていない。**
       - name: Every rule in CLAUDE.md names a gate that exists
         run: python3 scripts/claudemd.py
+
+      # 版ごとに「手元から届かなかったところ」が書いてあるか。見張っている
+      # のは彼の作業ではなく、**こちらが「確かめた」と言った範囲が黙って
+      # 広がらないこと**。大半の版は「無し」の1行で済み、それが正しい答え。
+      - name: This version says what the Mac could not reach
+        run: python3 scripts/unreached.py

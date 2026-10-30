@@ -86,6 +86,7 @@ python3 scripts/keycover.py      # ヘルプが挙げるキーのうち、押さ
 python3 scripts/requests.py      # 依頼の台帳（150 件・落ちたら直す前に訊く）
 python3 scripts/settingscover.py # 設定画面が init.lua のどれを出しているか
 python3 scripts/claudemd.py       # CLAUDE.md の規則に、実在する関門が付いているか
+python3 scripts/unreached.py      # この版が、手元から届かなかったところを言っているか
 ```
 
 **`widths.py` は 2026-09-06 に足した。** 同じ日に「字数で画面の幅を測る」バグが
