@@ -52,6 +52,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+# **Windows の runner の標準出力は cp1252。** 日本語を1行出した瞬間に
+# `UnicodeEncodeError` で落ち、関門が「資材が悪い」のではなく「関門が壊れた」で
+# ジョブを赤くする（2026-10-31、実際にそうなった）。環境変数で直すと、次に
+# 誰かが別のジョブから呼んだときにまた踏むので、ここで直す。
+for stream in (sys.stdout, sys.stderr):
+    try:
+        stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+
 ROOT = Path(__file__).resolve().parent.parent
 
 STAMP = re.compile(r"^cian (\S+) \(([^)]+)\)$")
@@ -101,8 +111,12 @@ def said(exe: str) -> str | None:
     # **止まることがある。** `--version` は端末を要らないはずだが、runner の上で
     # 何かを待ったら関門が8分のジョブを道連れにする ── 待たない。中の文字列は
     # どちらにしても読めるので、ここで読めないことは落ちる理由にはしない。
+    # **裸のファイル名を渡すと PATH を探しにいく。** CI は `cian-tui-macos.bin`
+    # のように cwd のものを渡すので、絶対パスにしないと `--version` の側は
+    # 一度も走らないまま「中の文字列」だけで通る（それで通ってしまっていた）。
     try:
-        out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=60)
+        at = str(Path(exe).resolve())
+        out = subprocess.run([at, "--version"], capture_output=True, text=True, timeout=60)
     except (OSError, subprocess.SubprocessError):
         return None
     if out.returncode != 0:
