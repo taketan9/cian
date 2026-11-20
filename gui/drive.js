@@ -681,6 +681,16 @@ async function main() {
         // 出る ── どちらも 3px で、重ねない（重ねると 6px になる）。
         ['want:(()=>{const band=(n)=>{n.classList.add("remote");const cs=getComputedStyle(n),af=getComputedStyle(n,"::after");const o=cs.outlineStyle==="none"?0:parseFloat(cs.outlineWidth)||0;const f=parseFloat(af.borderTopWidth)||0;n.classList.remove("remote");return Math.max(o,f);};return band(document.querySelector(".pane.active"))===3&&band(document.querySelector(".pane:not(.active)"))===3;})()', 'サーバの枠は焦点にかかわらず 3px'],
         ['want:["remote","dropping"].every((c)=>{const p=document.querySelector(".pane.active");p.classList.add(c);const cs=getComputedStyle(p),af=getComputedStyle(p,"::after");const off=Math.abs(parseFloat(cs.outlineOffset)||0),w=parseFloat(af.borderTopWidth)||0;const ok=cs.outlineStyle==="none"||off>=w;p.classList.remove(c);return ok;})', '内側の outline が焦点枠を避けている'],
+        // **サーバを見ているペインの上部は、サーバのパスを言う。**
+        //
+        // `pane.cwd` は繋ぐ前に立っていたローカルのパスのままなので、上部に
+        // それを出すと、行と状態行がサーバを指しているのに**いちばん読まれる
+        // 行だけがローカル**を指していた（2026-11-20、本人が実機で気づいた
+        // ── 「リモートのパスが下側に表示されていてわかりにくい」）。
+        // 繋がなくても測れる: 状態を偽のサーバにして描き直し、上部の字を読む。
+        // **壊して確かめるには** renderer.js の `where` を `pane.cwd` に戻す。
+        ['want:(()=>{const p=state[state.focus];const keep=[p.remote,p.remote_path];p.remote="tak@sakura";p.remote_path="/var/opt/todoke";draw(state.focus);const t=document.querySelector(".pane.active .crumb .path").textContent;p.remote=keep[0];p.remote_path=keep[1];draw(state.focus);return t.includes("tak@sakura:/var/opt/todoke")&&!t.includes(p.cwd);})()', 'サーバのペインの上部はサーバのパス'],
+
         // シェルの状態（記録中・シンクロ）は**自分の border** で言うので、
         // 焦点枠（padding box の内側）とは帯が別 ── 覆われない。太さが 0 に
         // なったらその前提が崩れる。

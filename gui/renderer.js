@@ -505,8 +505,13 @@ function draw(which) {
             return t;
         }));
     }
+    // **リモートペインの `cwd` は、繋ぐ前に立っていたローカルのディレクトリ。**
+    // それをここに出していたので、窓でいちばん読まれる行だけがローカルを指し、
+    // 行と下の状態行はサーバを指していた ── 同じペインが2つの場所を名乗り、
+    // 上に出ていたほうが間違っていた。コピーの確認シートは同じ罠で既に
+    // 直してある（下の `dest.remote_path`）が、パンくずは直っていなかった。
     const where = pane.remote
-        ? `${pane.remote}:${pane.cwd}`
+        ? `${pane.remote}:${pane.remote_path ?? ''}`
         : pane.archive
             ? tr(`inside ${pane.archive.split(/[\\/]/).pop()}`, `${pane.archive.split(/[\\/]/).pop()} の中`)
             : (pane.flat ? `${pane.flat} — ${pane.cwd}` : pane.cwd);
