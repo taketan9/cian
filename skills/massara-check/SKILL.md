@@ -137,7 +137,7 @@ node gui/drive.js --values                               # 欄に意地の悪い
 ## ② 触る ―― 本物の端末と、本物の窓で
 
 ```bash
-pkill -f "Electron.app/Contents/MacOS/Electron"; sleep 1
+pkill -f "$PWD/gui/node_modules/[e]lectron"; sleep 1   # この作業ツリーのものだけ
 ~/.cache/cian-tui-env/bin/python scripts/tui-drive.py     # 端末版を**本物の pty で**
 node gui/drive.js                                # 窓版（例外 0 件が基準）
 ```

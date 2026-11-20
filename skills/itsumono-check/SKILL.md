@@ -17,7 +17,7 @@ description: リリース前の定例点検。TUI と GUI の両方が動くか�
 cargo test --workspace                                  # 2分ほど（本数は出力に出る）
 cargo clippy --workspace --all-targets -- -D warnings   # CI と同じ物差し
 ~/.cache/cian-tui-env/bin/python scripts/tui-drive.py   # 端末版を**本物の pty で**動かす
-pkill -f "Electron.app/Contents/MacOS/Electron"; sleep 1   # 先に前のものを落とす
+pkill -f "$PWD/gui/node_modules/[e]lectron"; sleep 1   # この作業ツリーの前のものだけ落とす
 node gui/drive.js                                       # 窓版を動かす（例外 0 件だけが基準）
 ```
 
