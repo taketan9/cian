@@ -41,6 +41,7 @@ cian-core` の片方向依存を保つ**。対応は macOS と Windows の2つ�
 | **警告を1つも出さない** | `cargo clippy --workspace --all-targets -- -D warnings`（CI と同じ物差し） |
 | **資材は、自分がどのビルドかを名乗る** ── `--version` の `<版> (<SHA>)` が `Cargo.toml` といまの HEAD と一致し、`-dirty` でも `unknown` でもない | `scripts/buildstamp.py` ── CI が staging の直後、上げる前に当てる。**走らせずに読むので、落とした Windows の exe にも当てられる** |
 | **pty の venv は `~/.cache/cian-tui-env`** ── `/tmp` は macOS の掃除で消える（2回踏んだ） | `scripts/claudemd.py` |
+| **設計書は、実在する名前だけを名乗る**（`docs/*.ja.md` の関数・パス・リンク） | `scripts/designdoc.py` ── **数に下限がある**（取りこぼして「所見なし」になるのを防ぐ） |
 | **この表が名乗る関門は実在する** | `scripts/claudemd.py` |
 | **版を切ったら、手元から届かなかったところを `UNREACHED.ja.md` に書く**（Windows・彼の JIS と IME・社内の経路・彼の目。**無ければ「無し」の1行**） | `scripts/unreached.py` |
 | **関門を入れたら、わざと壊して捕まることを確かめる** | （手順。「検査が黙った」を5回やっている） |
