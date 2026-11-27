@@ -814,8 +814,23 @@ impl App {
         let cwd = self.shell_cwd();
         self.shell.ensure(&cwd);
         self.focus(FocusedPane::Shell);
+        // **プロンプトを空にしてから書く。** 書き込みはいまの行の後ろに足すので、
+        // 打ちかけの字が残っていればその後ろに繋がる ── `clear` と打ったまま
+        // ssh ピッカーで選ぶと `clearssh user@host` が走った（本物の pty で
+        // 再現した）。消す鍵はシェルによって違うので `cian-core` が決める。
+        // 立ち上がる途中（`None`）は行が空なので、消すものがない。
+        let clear = {
+            let screen = self
+                .shell
+                .active_session()
+                .and_then(|s| s.parser().lock().ok().map(|p| p.screen().contents()));
+            cian_core::shellwhere::line_clear(&self.shell_cmd_name(), screen.as_deref())
+        };
         match self.shell.active_session_mut() {
-            Some(s) => s.write_input(cmd.as_bytes()),
+            Some(s) => {
+                s.write_input(clear);
+                s.write_input(cmd.as_bytes());
+            }
             // Still spawning: hand it to `poll_pending`'s follow-up.
             None => self.pending_shell_input = Some(cmd),
         }

@@ -103,6 +103,38 @@ pub fn shell_looks_unix(screen: &str) -> Option<bool> {
 }
 
 
+/// 打ちかけの行を消すバイト列 ── **コマンドを打ち込む前に送るもの。**
+///
+/// cian がシェルにコマンドを書くとき、プロンプトに**打ちかけの字が残っている**
+/// ことがある。書き込みはいまの行の後ろに足すので、`clear` と打って Enter を
+/// 押さないまま「右クリック ▸ SSH接続」を選ぶと、シェルは `clearssh user@host`
+/// を受け取って走らせる（本物の pty で再現した ── `zsh: command not found:
+/// clearecho`）。**打ち込む側が、行を空にしてから書く。**
+///
+/// `Ctrl+E` で行末へ、`Ctrl+U` で行頭まで削る ── readline（bash）・zle（zsh）・
+/// PSReadLine（PowerShell）のどれでも、この2つで行が空になる。`cmd.exe` だけは
+/// その2つを知らず、行を消すのは `Esc` なので分ける。
+///
+/// **`Ctrl+C` にしていない。** どのシェルでも行を捨てられるが、前面で何かが
+/// 走っていればそれを殺す。行を削るバイトなら、走っているプログラムの標準入力へ
+/// 流れても何も壊さない ── 判定を外したときの被害が軽いほうを選ぶ。
+///
+/// `screen` は pty の見えている中身。`ssh` した先が Unix なら、手元の `cmd.exe`
+/// ではなく**向こうの shell が相手**なので、画面の判定を先に効かせる。
+pub fn line_clear(started: &str, screen: Option<&str>) -> &'static [u8] {
+    const KILL: &[u8] = b"\x05\x15"; // Ctrl+E, Ctrl+U
+    const ESC: &[u8] = b"\x1b";
+    if screen.and_then(shell_looks_unix) == Some(true) {
+        return KILL;
+    }
+    let name = started.rsplit(['/', '\\']).next().unwrap_or(started).to_ascii_lowercase();
+    if name == "cmd.exe" || name == "cmd" {
+        ESC
+    } else {
+        KILL
+    }
+}
+
 /// What to tell a model about where its command will run.
 ///
 /// `notes` is what `init.lua` records about a known host — "AIX 7.2, ksh, no
@@ -144,6 +176,39 @@ pub fn describe(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **打ちかけを消す鍵はシェルで違う。** 外すと、消えないか、別の字が入る。
+    #[test]
+    fn the_line_is_cleared_with_what_that_shell_understands() {
+        let kill = b"\x05\x15".as_slice();
+        let esc = b"\x1b".as_slice();
+        // readline / zle / PSReadLine
+        assert_eq!(line_clear("zsh", None), kill);
+        assert_eq!(line_clear("/bin/bash", None), kill);
+        assert_eq!(line_clear("powershell.exe", None), kill);
+        assert_eq!(
+            line_clear("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", None),
+            kill
+        );
+        // cmd.exe だけ Esc
+        assert_eq!(line_clear("cmd.exe", None), esc);
+        assert_eq!(line_clear("C:\\Windows\\System32\\cmd.exe", None), esc);
+        // **Ctrl+C は送らない** ── 前面のプログラムを殺さないため
+        assert!(!line_clear("zsh", None).contains(&0x03));
+        assert!(!line_clear("cmd.exe", None).contains(&0x03));
+    }
+
+    /// `ssh` した先が相手。手元が `cmd.exe` でも、向こうが Unix なら Unix の鍵。
+    #[test]
+    fn the_far_shell_wins_over_the_one_cian_started() {
+        let kill = b"\x05\x15".as_slice();
+        let esc = b"\x1b".as_slice();
+        assert_eq!(line_clear("cmd.exe", Some("taketan@web01:~/proj$ ")), kill);
+        // PowerShell と読めても Ctrl+U は効く。cmd.exe だけが Esc
+        assert_eq!(line_clear("zsh", Some("PS C:\\Users\\t> ")), kill);
+        assert_eq!(line_clear("cmd.exe", Some("PS C:\\Users\\t> ")), esc);
+    }
+
 
     #[test]
     fn a_title_names_its_host() {

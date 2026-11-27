@@ -631,6 +631,27 @@ impl Session {
     }
 
     /// The pane with the keyboard, in the tab that is showing.
+    /// コマンドを**プロンプトを空にしてから**打ち込む。
+    ///
+    /// 書き込みはいまの行の後ろに足すので、打ちかけの字が残っていればその後ろに
+    /// 繋がる ── `clear` と打ったまま「右クリック ▸ SSH接続」を選ぶと
+    /// `clearssh user@host` が走った（2026-11-27、本人が会社で。本物の pty で
+    /// 再現した）。**コマンドを打ち込む道は全部ここを通す。** 貼り付けと生の
+    /// バイト（`shellinput`）は通さない ── あれは行を置き換える話ではない。
+    fn write_command(&mut self, line: &str) -> anyhow::Result<()> {
+        let Some(sh) = self.shell_now() else {
+            anyhow::bail!("シェルが開いていません");
+        };
+        let (started, screen) = (sh.program.clone(), sh.contents());
+        let clear = cian_core::shellwhere::line_clear(&started, screen.as_deref());
+        let Some(sh) = self.shell_now() else {
+            anyhow::bail!("シェルが開いていません");
+        };
+        sh.write(clear);
+        sh.write(format!("{line}\n").as_bytes());
+        Ok(())
+    }
+
     fn shell_now(&mut self) -> Option<&mut shell::Shell> {
         let id = self.tabs.get(self.shell_at)?.focus;
         self.shells.iter_mut().find(|s| s.id == id).filter(|s| s.alive())
@@ -2274,10 +2295,7 @@ impl Session {
                     .replace("%d", &quote(&cwd.display().to_string()))
                     .replace("%f", &file)
                     .replace('%', &quoted.join(" "));
-                let Some(sh) = self.shell_now() else {
-                    anyhow::bail!("シェルが開いていません");
-                };
-                sh.write(format!("{text}\n").as_bytes());
+                self.write_command(&text)?;
                 Ok(serde_json::json!({ "sent": text }))
             }
             // One command per marked file. `{}` is the path — the terminal
@@ -2289,12 +2307,9 @@ impl Session {
                     anyhow::bail!("{{}} がありません（例: :each grep -l foo {{}}）");
                 }
                 let paths = self.targets(&which)?;
-                let Some(sh) = self.shell_now() else {
-                    anyhow::bail!("シェルが開いていません");
-                };
                 for p in &paths {
                     let one = line.replace("{}", &quote(&p.display().to_string()));
-                    sh.write(format!("{one}\n").as_bytes());
+                    self.write_command(&one)?;
                 }
                 Ok(serde_json::json!({ "ran": paths.len() }))
             }
@@ -2645,11 +2660,14 @@ impl Session {
                     });
                     self.shell_at = self.tabs.len() - 1;
                 }
-                let Some(sh) = self.shell_now() else {
+                if self.shell_now().is_none() {
                     anyhow::bail!("シェルが開けませんでした");
-                };
-                sh.write(format!("{line}\n").as_bytes());
+                }
+                self.write_command(&line)?;
                 if let Some(secret) = secret {
+                    let Some(sh) = self.shell_now() else {
+                        anyhow::bail!("シェルが開けませんでした");
+                    };
                     sh.arm_auth(secret);
                 }
                 let mut reply = self.shell_reply();

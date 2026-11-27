@@ -2910,7 +2910,7 @@ function aiRows() {
     if (term.on && term.focused) {
         return [
             { label: tr("Chat", 'チャット'), value: ':ai', run: () => cmdAiAsk('') },
-            { label: tr("Command from description", '説明からコマンド生成'), value: ':aicmd', run: () => cmdAiCmd('') },
+            { label: tr("Command from description", '説明からコマンド生成'), value: ':aicmd', run: promptAiCmd },
             { label: tr("Explain the last error", '直近のエラーを説明'), value: ':explain', run: cmdAiError },
         ];
     }
@@ -7700,6 +7700,25 @@ async function cmdBookmark(name) {
 /// worker — it waits on a python process talking to somebody else's network —
 /// so this is a question asked and an answer heard, not a call.
 let aiWaiting = null;
+
+/// 右クリックから選んだときは、**やりたいことを先に訊く。**
+///
+/// メニューの行は `cmdAiCmd('')` を呼んでいて、エンジンが「やりたいことを
+/// 書いてください」と断る一行が状態行に出るだけだった ── 窓が開かないので、
+/// 選んでも**何も起きないように見える**（2026-11-27、本人が会社で）。
+/// 端末版は同じ項目で入力窓を開く（`MenuItem::AiShellCmd` →
+/// `start_ai_shell_prompt`）。`:aicmd` はパレットでも引数が必須で、
+/// 引数を省ける `:ai` とはそこが違う。
+async function promptAiCmd() {
+    const what = await askFor(
+        tr("describe what you want to do", 'やりたいことを説明してください'),
+        '',
+        { hint: tr("what you want", 'やりたいこと'), note: ':aicmd', wide: true },
+    );
+    if (what === null) return;
+    if (!what.trim()) { say(tr("nothing to describe", 'やりたいことが空です'), true); return; }
+    await cmdAiCmd(what.trim());
+}
 
 async function cmdAiCmd(want) {
     const r = await ask('ai', { pane: state.focus, what: 'cmd', text: want });

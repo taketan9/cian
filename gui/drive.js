@@ -691,6 +691,20 @@ async function main() {
         // **壊して確かめるには** renderer.js の `where` を `pane.cwd` に戻す。
         ['want:(()=>{const p=state[state.focus];const keep=[p.remote,p.remote_path];p.remote="tak@sakura";p.remote_path="/var/opt/todoke";draw(state.focus);const t=document.querySelector(".pane.active .crumb .path").textContent;p.remote=keep[0];p.remote_path=keep[1];draw(state.focus);return t.includes("tak@sakura:/var/opt/todoke")&&!t.includes(p.cwd);})()', 'サーバのペインの上部はサーバのパス'],
 
+        // **右クリック ▸ AI の「説明からコマンド生成」は、やりたいことを訊く。**
+        //
+        // 行が `cmdAiCmd('')` を呼んでいて、エンジンの「やりたいことを書いて
+        // ください」が状態行に出るだけだった ── 窓が開かないので、選んでも何も
+        // 起きないように見える（2026-11-27、本人が会社で）。端末版は同じ項目で
+        // 入力窓を開く。**壊して確かめるには** renderer.js のその行を
+        // `run: () => cmdAiCmd('')` に戻す。
+        // **閉じるのは本物の Esc で。** `el.ask.hidden` を直に立てると
+        // `askFor` の `keydown`（capture・残りを全部 stopPropagation）が
+        // 付いたままになり、以降の打鍵を全部食う ── それで後ろの3歩が
+        // 落ちた。扉は1つ、閉じ方も1つ。
+        ['want:(()=>{const keep=[term.on,term.focused];term.on=true;term.focused=true;const r=aiRows().find((x)=>x.value===":aicmd");term.on=keep[0];term.focused=keep[1];if(!r)return "その行が無い";r.run();const head=el.ask.querySelector(".head").textContent;return !el.ask.hidden&&head.length>0&&!head.includes(":aicmd")})()', 'AI のコマンド生成は、やりたいことを訊く'],
+        ['Esc', '訊く窓を閉じる'],
+
         // シェルの状態（記録中・シンクロ）は**自分の border** で言うので、
         // 焦点枠（padding box の内側）とは帯が別 ── 覆われない。太さが 0 に
         // なったらその前提が崩れる。

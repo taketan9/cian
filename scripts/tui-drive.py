@@ -423,6 +423,45 @@ def check_shell_selection(d, bad):
     t.close()
 
 
+def check_pending_line(d, bad):
+    """⑨ 打ちかけの行 ── **コマンドを打ち込む前に、プロンプトを空にする。**
+
+    彼が会社で見たのは窓版の「右クリック ▸ SSH接続」で `clearssh host@host`
+    （2026-11-27）。書き込みはいまの行の後ろに足すので、`clear` と打って Enter
+    を押さないまま打ち込むと、前に残った字と繋がって別のコマンドになる。
+    同じ形が端末版の `run_in_shell` にもあり、ここで本物の pty で再現した ──
+    `clearecho HELLO "…"` が走って `zsh: command not found: clearecho`。
+
+    **壊して確かめるには** `actions.rs` の `run_in_shell` から
+    `s.write_input(clear)` の行を消す。ここが落ちる。
+    """
+    t = start(d)
+    t.pump(3.0)
+    t.send("J", 1.2)              # シェルへ
+    t.send("clear", 1.0)          # 打つだけ ── Enter は押さない
+    pending = "clear" in t.text()
+    t.click(10, 3, 0.8)           # 一覧へ（鍵の名前に頼らない）
+    t.send("j", 0.4)
+    t.send("j", 0.4)
+    t.send(":", 0.5)
+    t.send("each echo HELLO", 0.5)
+    t.send("Enter", 2.5)
+    after = t.text()
+    glued = "clearecho" in after
+    ran = "echo HELLO" in after
+    ok = pending and ran and not glued
+    print(f"⑨ 打ちかけの行  : 残した `clear` → "
+          + ("混ざらない" if not glued else "混ざった（clearecho）")
+          + ("  ✓" if ok else "  ✗"))
+    if not pending:
+        bad.append("シェルに打ちかけの字を残せなかった（この検査自体が測れていない）")
+    elif glued:
+        bad.append("打ちかけの行にコマンドが繋がった（clearecho が走った）")
+    elif not ran:
+        bad.append("打ち込んだコマンドがシェルに出ていない")
+    t.close()
+
+
 def cells_wide(line: str) -> int:
     """その行が占める**桁**。全角は2つぶん。"""
     return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in line)
@@ -637,6 +676,7 @@ def main() -> int:
         check_columns(d, bad)
         check_resize(d, bad)
         check_denied(d, bad)
+        check_pending_line(d, bad)
     finally:
         shutil.rmtree(d, ignore_errors=True)
     print("=" * 72)
