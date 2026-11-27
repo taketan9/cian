@@ -270,6 +270,13 @@ struct Session {
     /// The right-hand file of a side-by-side comparison, when one is up.
     /// `open` holds the left; both are kept so a save on either goes back
     /// through the encoding that side arrived with.
+    /// 時間のかかった要求を、新しい順に。
+    ///
+    /// **窓が固まったという報告は、何が返らなかったのかが分からないまま届きます。**
+    /// エンジンは要求を1本ずつ処理するので、固まっている間に走っている1件が
+    /// そのまま答えです。診断ログを事前に入れていなくても `:log` で読めるよう、
+    /// しきい値を超えたものだけをここに持ちます。
+    slow: Vec<(String, u128)>,
     pair: Option<(std::path::PathBuf, cian_core::grepedit::TextFile)>,
     /// The file open in the viewer, as `view_file` read it — kept whether it
     /// is text or a binary, because re-decoding needs the raw bytes and a
@@ -331,6 +338,26 @@ struct Session {
 }
 
 impl Session {
+    /// この時間を超えた要求だけを残します（ミリ秒）。
+    ///
+    /// 5秒は本人が待てると答えた上限で、検査が失敗と見なす値です。ここは
+    /// その手前に置きます ── 5秒だけを記録すると、4秒の要求が毎回あっても
+    /// 記録に出ず、**遅くなっていく過程が見えません。**
+    const SLOW_MS: u128 = 1_000;
+
+    /// 何件まで残すか。固まった直前の数件だけが読まれるためです。
+    const SLOW_KEEP: usize = 10;
+
+    /// 要求1件の所要時間を受け取り、遅ければ残します。
+    fn note_slow(&mut self, method: &str, ms: u128) {
+        if ms < Self::SLOW_MS {
+            return;
+        }
+        cian_core::log::log(&format!("slow request: {method} took {ms}ms"));
+        self.slow.insert(0, (method.to_string(), ms));
+        self.slow.truncate(Self::SLOW_KEEP);
+    }
+
     fn new(dir: std::path::PathBuf, out: Out) -> anyhow::Result<Self> {
         Ok(Session {
             // A high start, so a transfer's op can never collide with a job
@@ -344,6 +371,7 @@ impl Session {
             undo: Stack::default(),
             find: Find::default(),
             clip: None,
+            slow: Vec::new(),
             open: None,
             shown: None,
             pair: None,
@@ -4516,6 +4544,23 @@ impl Session {
                         if f["present"].as_bool().unwrap_or(false) { "" } else { "  (not present)" },
                     ));
                 }
+                // 遅かった要求 ── 送ってもらう写しにも入れます。固まったという
+                // 報告に、何が遅かったかが付いてくるようにするためです。
+                let slow: Vec<serde_json::Value> = self
+                    .slow
+                    .iter()
+                    .map(|(m, ms)| serde_json::json!({ "method": m, "ms": ms }))
+                    .collect();
+                if slow.is_empty() {
+                    plain.push(String::new());
+                    plain.push(format!("slow requests (over {}ms): none", Session::SLOW_MS));
+                } else {
+                    plain.push(String::new());
+                    plain.push(format!("slow requests (over {}ms), newest first:", Session::SLOW_MS));
+                    for (m, ms) in &self.slow {
+                        plain.push(format!("  {m}: {ms}ms"));
+                    }
+                }
                 let report_file = std::env::temp_dir().join("cian-state.txt");
                 let saved = std::fs::write(&report_file, plain.join("\n") + "\n")
                     .ok()
@@ -4527,6 +4572,7 @@ impl Session {
                     "built_at": env!("CIAN_BUILT_AT").parse::<i64>().unwrap_or(0),
                     "portable": cian_lua::is_portable(),
                     "saved": saved,
+                    "slow": slow,
                     "files": files,
                     // Where the lines are going — which is not always where
                     // they were asked for: an unwritable path falls back to
@@ -6190,10 +6236,17 @@ fn main() -> anyhow::Result<()> {
         // front end waiting on an id it will never be sent is the worst way
         // for this to go wrong.
         match serde_json::from_str::<Request>(&line) {
-            Ok(req) => match session.handle(&req) {
-                Ok(ok) => out.reply(req.id, ok),
-                Err(e) => out.fail(req.id, e),
-            },
+            Ok(req) => {
+                // **固まりは、返らない1件として現れます。** 所要時間をここで
+                // 測るのは、要求を処理する道がここ1本しかないためです。
+                let at = std::time::Instant::now();
+                let done = session.handle(&req);
+                session.note_slow(&req.method, at.elapsed().as_millis());
+                match done {
+                    Ok(ok) => out.reply(req.id, ok),
+                    Err(e) => out.fail(req.id, e),
+                }
+            }
             Err(e) => out.send(serde_json::json!({
                 "id": serde_json::Value::Null,
                 "error": format!("bad request: {e}"),

@@ -11105,6 +11105,15 @@ async function cmdState(arg = '') {
         // build is the half of the answer that explains a rendering fault.
         { label: tr('Front end', '前面'), sub: (navigator.userAgent.match(/Electron\/[\d.]+|Chrome\/[\d.]+/g) || []).join('  ') || navigator.userAgent },
         { label: tr('Typeface', '書体'), sub: `${resolvedFace()}   ${FONT.at}px` },
+        // **固まったという報告に、何が遅かったかを添えられるように。**
+        // エンジンは要求を1本ずつ処理するので、固まっている間に走っている
+        // 1件が答えです。診断ログを事前に入れていなくても読めます。
+        {
+            label: tr('Slow requests', '遅かった要求'),
+            sub: (r.slow && r.slow.length)
+                ? r.slow.map((x) => `${x.method} ${x.ms}ms`).join('   ')
+                : tr('none over 1s', '1秒を超えたものはありません'),
+        },
         {
             label: tr('Diagnostics', '診断ログ'),
             // Where it is *going*, not where it was asked to go: an

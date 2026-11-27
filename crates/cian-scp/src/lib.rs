@@ -976,9 +976,37 @@ where
     rt.block_on(f())
 }
 
+/// How long the connection and the login may take.
+///
+/// **Without a limit, a host that accepts the connection and then says nothing
+/// froze the whole window.** The engine handles one request at a time, so a
+/// `connect` that never returns is a window that never paints again; the
+/// injection harness (`scripts/inject.py`, finding S4) hit exactly that with a
+/// socket that accepts and never speaks SSH. A dead address is the same shape
+/// of fault — the TCP connect alone can sit for over a minute.
+///
+/// 20 seconds, so a slow corporate route still gets through: the handshake on
+/// a loaded jump host is seconds, not tens of seconds. It covers the whole
+/// sequence (name resolution, TCP, key exchange, authentication) because any
+/// of those can be the one that stalls.
+const HANDSHAKE: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Connect and authenticate, giving up after [`HANDSHAKE`].
+async fn connect(target: &Target) -> Result<client::Handle<BlindClient>> {
+    match tokio::time::timeout(HANDSHAKE, connect_now(target)).await {
+        Ok(r) => r,
+        Err(_) => Err(anyhow!(
+            "{}:{} did not answer within {}s",
+            target.host,
+            target.port,
+            HANDSHAKE.as_secs()
+        )),
+    }
+}
+
 /// Connect and authenticate with a password. The returned handle owns the SSH
 /// connection every channel rides on, so it must outlive the transfer.
-async fn connect(target: &Target) -> Result<client::Handle<BlindClient>> {
+async fn connect_now(target: &Target) -> Result<client::Handle<BlindClient>> {
     let config = std::sync::Arc::new(client::Config::default());
     let mut handle = client::connect(config, (target.host.as_str(), target.port), BlindClient)
         .await
