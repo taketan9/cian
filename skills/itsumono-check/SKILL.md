@@ -19,6 +19,10 @@ cargo clippy --workspace --all-targets -- -D warnings   # CI と同じ物差し
 ~/.cache/cian-tui-env/bin/python scripts/tui-drive.py   # 端末版を**本物の pty で**動かす
 pkill -f "$PWD/gui/node_modules/[e]lectron"; sleep 1   # この作業ツリーの前のものだけ落とす
 node gui/drive.js                                       # 窓版を動かす（例外 0 件だけが基準）
+
+# AI のコマンド生成だけは、答えが返る側まで別走行で見る（網も鍵も要らない）
+mkdir -p ~/.cache/cian-mock && printf 'cian.ai {\n  endpoint = "https://example.invalid/llmaoai",\n  model = "gpt-5-mini",\n  auth_mode = "mock",\n  python = "python3",\n}\n' > ~/.cache/cian-mock/init.lua
+CIAN_CONFIG_DIR=~/.cache/cian-mock node gui/drive.js --ai
 ```
 
 - **`drive.js` で見るのは「例外 0 件」だけ。** 末尾に出る「動かなかったキー」の

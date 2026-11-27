@@ -502,7 +502,7 @@ async function main() {
         ['とても長い', 'x'.repeat(400)],
         ['タブ', 'a\tb'],
     ];
-    const keys = process.argv.slice(2).filter((a) => a !== '--commands' && a !== '--values');
+    const keys = process.argv.slice(2).filter((a) => a !== '--commands' && a !== '--values' && a !== '--ai');
     // `--commands` ── **辞書にある名前を、一つずつ全部打つ。**
     //
     // 端末版には `scripts/sweep.py` があって verb を全部叩く。窓版には
@@ -617,7 +617,30 @@ async function main() {
         return out;
     };
 
-    const round = process.argv.includes('--values') ? valueRound()
+    // `--ai` ── **AI のコマンド生成を、答えが返るところまで通す。**
+    //
+    // 普段の一巡では「訊く窓が開くか」しか見ていない（AI が設定されていない
+    // ため）。`CIAN_CONFIG_DIR` に `auth_mode = "mock"` を書いた設定を渡すと、
+    // 網も鍵も要らずに**答えが返る側まで**測れる:
+    //
+    //   CIAN_CONFIG_DIR=<mock の設定> node gui/drive.js --ai
+    //
+    // 依頼 702 で直したのは「訊かずに空で呼んでいた」ところだが、壊れうるのは
+    // その後ろ（要求・確認の面・プロンプトに置く）も同じだけある。
+    const aiRound = () => [
+        ['J', 'シェルへ'], ['wait:1200', ''],
+        ['read:(()=>{const r=aiRows().find((x)=>x.value===":aicmd");if(!r)return "行が無い";r.run();return "窓="+(!el.ask.hidden)})()', 'やりたいことを訊く窓'],
+        ['want:!el.ask.hidden', '窓が開いている'],
+        ['type:ファイルの一覧を出す', ''], ['Enter', '問い合わせる'], ['wait:5000', ''],
+        ['want:!!document.querySelector("#confirm:not([hidden]), #ask:not([hidden])")', '確認の面が出る'],
+        ['want:/[Mm]ock/.test(document.body.textContent)', 'mock の答えが面に載っている'],
+        ['Enter', 'プロンプトに置く'], ['wait:2500', ''],
+        ['want:/実行はしていません|nothing has run/.test(document.querySelector("#status").textContent)', '置くだけで実行しないと言う'],
+        ['want:/[Mm]ock/.test((document.querySelector("#s-panes .sgrid.on")||document.querySelector("#s-panes .sgrid")).textContent)', '答えがシェルのプロンプトに載った'],
+    ];
+
+    const round = process.argv.includes('--ai') ? aiRound()
+        : process.argv.includes('--values') ? valueRound()
         : process.argv.includes('--commands') ? commandRound()
         : keys.length ? keys.map((k) => [k, '']) : [
         [',', 'ソート'], [',', 'ソートもう一度'],
