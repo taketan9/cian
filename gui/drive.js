@@ -1594,32 +1594,6 @@ async function main() {
             return true;
         };
 
-        // **要求1件に 5 秒の締切。** 固まる現象は、いまの物差しでは
-        // 「動かなかったキー」に化けていた（押しても画面が変わらないのと
-        // 区別が付かない）。エンジンは要求を1本ずつ処理するので、返らない
-        // 1件がそのまま窓全体の固まりになる ── 本人の答えは「重い操作でも
-        // 5秒は待てる」（2026-11-28）なので、それを超えたものは**正当に
-        // 重い操作ではなく、報告すべきもの**として扱う。
-        //
-        // 測るのは `window.cian.call` の前後。`ask()` は毎回これを引くので、
-        // ここを包めば全部の要求が通る。
-        await cdp.read(`(()=>{
-            if (window.__SLOW) return 'もう入っている';
-            window.__SLOW = [];
-            const inner = window.cian.call;
-            window.cian.call = async (method, params) => {
-                const at = Date.now();
-                // **測るだけでは、返らない要求を捕まえられない。**
-                // 後始末は要求が返ったときしか走らないので、永久に返らない
-                // 1件は記録に出ず、道具ごと止まる。だから時限で切る。
-                const bell = new Promise((_, rej) => setTimeout(
-                    () => rej(new Error('5秒の締切を超えました: ' + method)), 5000));
-                try { return await Promise.race([inner(method, params), bell]); }
-                finally { window.__SLOW.push([method, Date.now() - at]); }
-            };
-            return '締切を入れた';
-        })()`);
-
         for (const [key, what] of round) {
             // `list` reads instead of pressing: every row of whatever sheet is
             // open, with its right-hand column. The menus were compared with
@@ -1959,6 +1933,29 @@ async function main() {
             console.log(`${moved ? '  ' : '× '}${key.padEnd(8)}${note.padEnd(16)} ${after.status}${marks(after)}`);
             if (!moved) bad++;
         }
+        // **5秒の締切は、エンジン自身の記録で見る。**
+        //
+        // 最初は `ask` を包んで測った。`window.cian.call` は contextBridge の
+        // 読み取り専用の窓口で代入が効かず、`ask` を包むと**一部の要求しか
+        // 通らなかった**（`T`＋Enter で記録は1件だけ）。エンジンは要求を
+        // 1本ずつ処理し、`note_slow` がその1本の所要時間を必ず測るので、
+        // そこが唯一の正しい測り場所になる。
+        //
+        // 本人の答えは「重い操作でも5秒は待てる」（2026-11-28）。5秒を超えた
+        // ものは例外に数え、1秒から5秒のものは情報として出す（遅くなっていく
+        // 過程は、超える前に見えていたほうがよい）。
+        const diag = await cdp.read('(async()=>{const r=await ask("diag",{});return r&&r.slow?r.slow:[]})()');
+        if (Array.isArray(diag) && diag.length) {
+            const over = diag.filter((x) => x.ms > 5000);
+            const near = diag.filter((x) => x.ms <= 5000);
+            if (near.length) {
+                console.log(`  遅い要求  ${near.map((x) => `${x.method} ${x.ms}ms`).join('  ')}`);
+            }
+            for (const one of over) {
+                crashes.push(`5秒の締切を超えた要求: ${one.method} ${one.ms}ms`);
+            }
+        }
+
         // Let the last job finish before looking. A copy started by the
         // final key is still running when the loop ends.
         await sleep(600);
@@ -1996,21 +1993,6 @@ async function main() {
     }
     // A key that changed nothing is not always wrong — pressing `,` twice only
     // reverses — so this reports rather than fails. The crashes are the failure.
-        // 締切を超えた要求 ── 新しい順に、同じ名前はいちばん遅かったものだけ。
-        const slow = await cdp.read(`(()=>{
-            const over = (window.__SLOW || []).filter(([, ms]) => ms > 5000);
-            const worst = new Map();
-            for (const [m, ms] of over) {
-                if (!worst.has(m) || worst.get(m) < ms) worst.set(m, ms);
-            }
-            return [...worst].sort((a, b) => b[1] - a[1]).map(([m, ms]) => m + ' ' + ms + 'ms');
-        })()`);
-        if (Array.isArray(slow) && slow.length) {
-            for (const one of slow) {
-                crashes.push(`5秒の締切を超えた要求: ${one}`);
-            }
-        }
-
     console.log(`\n動かなかったキー ${bad} 件、例外 ${crashes.length} 件`
         + (unshot ? `、撮れなかった写真 ${unshot} 件` : ''));
     process.exit(crashes.length ? 1 : 0);
