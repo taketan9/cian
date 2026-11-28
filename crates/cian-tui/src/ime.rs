@@ -97,7 +97,7 @@ impl App {
         }
         log.reported = true;
         if let Some(e) = &log.error {
-            self.message = Some(format!("ime: {} — {e}", log.cmd));
+            self.message = Some(format!("ime: {}. {e}", log.cmd));
         }
     }
 
@@ -147,15 +147,15 @@ impl App {
             queue(Job::LeaveText, &cfg);
             tr(
                 self.lang,
-                "IME was on — switched off so the keys work again",
-                "IME が ON でした — コマンドが効くよう OFF に戻しました",
+                "IME was on. switched off so the keys work again",
+                "IME が ON でした。コマンドが効くよう OFF に戻しました",
             )
             .into()
         } else {
             tr(
                 self.lang,
-                "IME is on — commands need it off. cian can switch it for you: see cian.ime{} (:ime)",
-                "IME が ON です — コマンドは OFF で。cian が自動で切替できます: cian.ime{}（:ime）",
+                "IME is on. commands need it off. cian can switch it for you: see cian.ime{} (:ime)",
+                "IME が ON です。コマンドは OFF で。cian が自動で切替できます: cian.ime{}（:ime）",
             )
             .into()
         });
@@ -196,7 +196,7 @@ impl App {
             None => tr(self.lang, "not set yet", "まだ切り替えていません"),
         };
         let remembered = remembered_source().unwrap_or_else(|| {
-            tr(self.lang, "(nothing yet — text opens off)", "（まだ覚えていません — 入力のときもオフのまま）").into()
+            tr(self.lang, "(nothing yet. text opens off)", "（まだ覚えていません。入力のときもオフのまま）").into()
         });
         let last = match last_switch()
             .lock()
@@ -228,7 +228,7 @@ impl App {
             .to_string(),
             tr(
                 self.lang,
-                "typed with — cian reads it each time it takes the keyboard back",
+                "typed with. cian reads it each time it takes the keyboard back",
                 "いた入力ソースに戻します（毎回読み取って覚えています）",
             )
             .to_string(),

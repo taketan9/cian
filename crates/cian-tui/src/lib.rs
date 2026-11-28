@@ -1394,8 +1394,8 @@ impl MenuItem {
             MenuItem::CopyPathText => tr(lang, "Copy path text  (p)", "パスをコピー  (p)"),
             MenuItem::CopyFileRef => tr(
                 lang,
-                "Copy file(s) — paste into Finder/Explorer  (Shift+P)",
-                "ファイルをコピー — Finder/エクスプローラに貼り付け  (Shift+P)",
+                "Copy file(s). paste into Finder/Explorer  (Shift+P)",
+                "ファイルをコピー。Finder/エクスプローラに貼り付け  (Shift+P)",
             ),
             MenuItem::ShellSplitLR => tr(lang, "Split left / right  (S-F8)", "左右に分割  (S-F8)"),
             MenuItem::ShellSplitTB => tr(lang, "Split top / bottom  (S-F9)", "上下に分割  (S-F9)"),
@@ -4262,7 +4262,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry("  editing a member", None, "F3 inside a zip, edit, Ctrl+S or :w — it goes back into the zip", "zip 内で F3 → 編集 → Ctrl+S か :w で zip に書き戻す"),
                 entry(":office", None, "open a synced Office file's cloud copy in the desktop app (also right-click ▸ OS)", "同期された Office 文書のクラウド側をアプリで開く（右クリック ▸ OS からも）"),
                 entry(":officelink", None, "write a .url shortcut to the cloud copy — the thing to paste into a mail", "クラウド側への .url ショートカットを作成（メールに貼るのはこれ）"),
-                entry("Ctrl+A, :markall", None, "mark everything here — in the viewer, select the whole file", "ここにある全部をマーク — ビューアではファイル全体を選択"),
+                entry("Ctrl+A, :markall", None, "mark everything here — in the viewer, select the whole file", "ここにある全部をマーク。ビューアではファイル全体を選択"),
                 entry(":key", None, "report every keystroke as cian receives it, and which keyboard mode is in use", "受け取ったキーをそのまま表示（キーボードのモードも表示）"),
                 entry("  set_keymap", None, "init.lua: cian.set_keymap(\"alt+g\", \"grep_recursive\") — modifiers allowed", "init.lua: cian.set_keymap(\"alt+g\", \"grep_recursive\") — 修飾キーも書ける"),
                 entry("  CIAN_LEGACY_KEYS=1", None, "start without the enhanced-keyboard request — try it if every Ctrl shortcut is dead", "拡張キーボード要求なしで起動 — Ctrl 系が全滅するときに試す"),
@@ -4406,7 +4406,7 @@ pub(crate) fn viewer_manual_lines(lang: Lang) -> Vec<String> {
         ("d", "cut the selection", "選択を切り取り"),
         (">>  <<", "shift lines by a tab stop (> and < on a selection)", "行をタブ幅ずらす（選択中は > と <）"),
         ("~", "swap the case under the cursor", "カーソル位置の大小を反転"),
-        ("jj  ｊｊ  っｊ", "leave insert mode — the last two are what a Japanese IME makes of pressing j twice", "挿入モードを抜ける。後ろ2つは、IME オンで j を2回押したときに出るもの"),
+        ("jj  ｊｊ  っｊ", "leave insert mode. the last two are what a Japanese IME makes of pressing j twice", "挿入モードを抜ける。後ろ2つは、IME オンで j を2回押したときに出るもの"),
         ("ZZ  ZQ", "save and close / close without saving", "保存して閉じる ／ 保存せずに閉じる"),
         ("u", "undo (Ctrl+Z)", "取り消し（Ctrl+Z）"),
         ("Ctrl+R", "redo (Ctrl+Y, :redo)", "やり直し（Ctrl+Y・:redo）"),
@@ -4962,8 +4962,8 @@ fn suspend_and_edit<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Re
     let Some(cmd) = edit::resolve_editor(&app.config) else {
         app.message = Some(tr(
             app.lang,
-            "no editor found — install nvim/vim/vi, or set cian.set_option(\"editor\", …)",
-            "エディタが見つかりません — nvim/vim/vi を入れるか cian.set_option(\"editor\", …) を設定してください",
+            "no editor found. install nvim/vim/vi, or set cian.set_option(\"editor\", …)",
+            "エディタが見つかりません。nvim/vim/vi を入れるか cian.set_option(\"editor\", …) を設定してください",
         ).into());
         return Ok(());
     };

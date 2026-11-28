@@ -6784,7 +6784,7 @@ fn verify_transfer(
         Ok(())
     } else {
         let short = |s: &str| s.chars().take(12).collect::<String>();
-        Err(format!("中身が違います — 手元 {}… ≠ 向こう {}…", short(&local), short(&remote)))
+        Err(format!("中身が違います。手元 {}… ≠ 向こう {}…", short(&local), short(&remote)))
     }
 }
 

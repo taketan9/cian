@@ -303,13 +303,13 @@ impl App {
                     let ja = self.lang == Lang::Ja;
                     self.message = Some(match (self.transfer_limit, ja) {
                         (Some(b), true) => {
-                            format!("転送速度の上限: {} — :limit off で解除", rate_text(b))
+                            format!("転送速度の上限: {}。:limit off で解除", rate_text(b))
                         }
                         (Some(b), false) => {
-                            format!("transfer limit: {} — :limit off to remove", rate_text(b))
+                            format!("transfer limit: {}. :limit off to remove", rate_text(b))
                         }
-                        (None, true) => "転送速度の上限なし — :limit 2M で設定".to_string(),
-                        (None, false) => "no transfer limit — :limit 2M to set one".to_string(),
+                        (None, true) => "転送速度の上限なし。:limit 2M で設定".to_string(),
+                        (None, false) => "no transfer limit. :limit 2M to set one".to_string(),
                     });
                 }
                 arg => match parse_rate(arg) {
@@ -539,8 +539,8 @@ impl App {
                 self.message = Some(
                     tr(
                         self.lang,
-                        "rm works on the marks, or the file under the cursor — it takes no name",
-                        "rm はマークかカーソル位置のファイルを消します — 名前は指定できません",
+                        "rm works on the marks, or the file under the cursor. it takes no name",
+                        "rm はマークかカーソル位置のファイルを消します。名前は指定できません",
                     )
                     .into(),
                 )

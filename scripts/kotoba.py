@@ -116,12 +116,12 @@ ENGLISH_ONLY_CEILING = 2  # 端末版。既定が日本語なのに英語しか�
 #   使い方案内。**端末版を毎日使う人の言葉は日本語**なので、失敗の知らせが
 #   英語のままなのは窓版の裏返しの同じ不具合だった。残りは案内文と記録用
 ENGLISH_ONLY_JS_CEILING = 0  # 窓版。片付いた（2026-11-28、`:view` の使い方案内が最後の1本）
-DASH_CEILING_RS = 125        # 端末版。`tr()` の両方の言葉ぶんを数えるので、報せの数のほぼ倍
+DASH_CEILING_RS = 0        # 端末版。`tr()` の両方の言葉ぶんを数えるので、報せの数のほぼ倍
 #   124 → 125（2026-09-12）。**文章が増えたのではなく、見る場所が増えた** ──
 #   エンジン（`cian-server`）の断りの言葉を読むようにしたら、そこに1本あった
 #   （`中身が違います — 手元 … ≠ 向こう …`）。数え上げの天井を上げるのは
 #   これだけが理由で、書き手が増やしたぶんは**一つも入っていない**
-DASH_CEILING_JS = 155        # 窓版
+DASH_CEILING_JS = 0        # 窓版
 #   156 → 155（2026-09-12）。`vim（既定）／ メモ帳 ── …` を `notepad / vim` に
 #   書き直したときにダッシュが1本減った。**直したら天井も下げる**
 # 硬い言い方。**ここは 0 を目指す。** 数が少なく、直し方が一つに決まる。
@@ -166,24 +166,36 @@ def balanced(text: str, i: int, oc: str, cc: str) -> int:
 #
 # `cian-core` は画面を持たないので見ません。あそこの英文は `substitute.rs`
 # の使い方案内のように、端末版が `tr()` に包み直して出すか、出ないかのどちらか。
+def unescape_dashes(text: str) -> str:
+    """`\\u2014` のようなエスケープを、その文字に戻す。
+
+    **この検査には盲点があった。** 2026-11-28、画面の文言のダッシュを 0 件に
+    したあとも、`gui/renderer.js` には `\\u2014` と書かれたダッシュが 34 本
+    残っていた。日本語側だけが直り、英語側はそのままだった。ソースの字面では
+    `—` に見えないため、この検査が一度も指摘していなかった。
+    """
+    return re.sub(r"\\u(2014|2015|2500|2501)",
+                  lambda m: chr(int(m.group(1), 16)), text)
+
+
 def screen_strings():
     out = []
     for path in sorted(TUI.glob("*.rs")):
         if path.name == "tests.rs":
             continue
         rel = f"crates/cian-tui/src/{path.name}"
-        text = strip_line_comments(path.read_text(encoding="utf-8"))
+        text = strip_line_comments(unescape_dashes(path.read_text(encoding="utf-8")))
         for start, end in _outermost(_call_spans(text, r"\btr\(") + _msg_spans(text)):
             for m in RS_LIT.finditer(text[start : end + 1]):
                 out.append((rel, text[:start].count("\n") + 1, m.group(1)))
-    text = strip_line_comments(JS.read_text(encoding="utf-8"))
+    text = strip_line_comments(unescape_dashes(JS.read_text(encoding="utf-8")))
     for start, end in _outermost(_call_spans(text, r"\btr\(") + _call_spans(text, r"\bsay\(")):
         for m in JS_LIT.finditer(text[start : end + 1]):
             lit = next((g for g in m.groups() if g is not None), "")
             out.append(("gui/renderer.js", text[:start].count("\n") + 1, lit))
     for path in sorted(SRV.glob("*.rs")):
         rel = f"crates/cian-server/src/{path.name}"
-        text = strip_line_comments(path.read_text(encoding="utf-8"))
+        text = strip_line_comments(unescape_dashes(path.read_text(encoding="utf-8")))
         spans = _outermost(
             _call_spans(text, r"\bbail!\(")
             + _call_spans(text, r"\banyhow!\(")
@@ -195,7 +207,7 @@ def screen_strings():
                     out.append((rel, text[:start].count("\n") + 1, m.group(1)))
     for name in LUA_FILES:
         rel = f"crates/cian-lua/src/{name}"
-        text = strip_line_comments((LUA / name).read_text(encoding="utf-8"))
+        text = strip_line_comments(unescape_dashes((LUA / name).read_text(encoding="utf-8")))
         for m in JA_FIELD.finditer(text):
             out.append((rel, text[: m.start()].count("\n") + 1, m.group(1)))
     return out
@@ -253,7 +265,7 @@ def english_only_rs():
     for path in sorted(TUI.glob("*.rs")):
         if path.name == "tests.rs":
             continue
-        text = strip_line_comments(path.read_text(encoding="utf-8"))
+        text = strip_line_comments(unescape_dashes(path.read_text(encoding="utf-8")))
         for start, end in _msg_spans(text):
             body = text[start : end + 1]
             # 日本語が一つでもあれば、両方の言葉を持つ形（`if ja {}` など）。
@@ -270,7 +282,7 @@ def english_only_rs():
 
 
 def english_only_js():
-    text = strip_line_comments(JS.read_text(encoding="utf-8"))
+    text = strip_line_comments(unescape_dashes(JS.read_text(encoding="utf-8")))
     out = []
     for m in re.finditer(r"\bsay\(", text):
         start = m.end() - 1

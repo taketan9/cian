@@ -2673,7 +2673,7 @@ pub(crate) fn key_hints(app: &App) -> Vec<(&'static str, &'static str)> {
                 // in the other, so it only reaches the switch from a listing.
                 // The panel's own menu is what is reachable from inside it —
                 // by right-click too, which no terminal can take away.
-                ("S-Enter", d("menu — editor keys", "メニュー — キー操作切替")),
+                ("S-Enter", d("menu. editor keys", "メニュー。キー操作切替")),
             ];
         }
         // `T` on both of vim's rows. Someone who opens a file, types a
@@ -4481,9 +4481,9 @@ let height = area.height.saturating_sub(2).clamp(10, 30);
 let rect = centered_rect(width, height, area);
 clear_popup(f, rect);
 let title = match (drafted, editing) {
-    (true, true) => tr(lang, " Draft commit message — editing ", " コミットメッセージ生成 — 編集中 "),
+    (true, true) => tr(lang, " Draft commit message. editing ", " コミットメッセージ生成 — 編集中 "),
     (true, false) => tr(lang, " Draft commit message ", " コミットメッセージ生成 "),
-    (false, true) => tr(lang, " Commit message — editing ", " コミットメッセージ — 編集中 "),
+    (false, true) => tr(lang, " Commit message. editing ", " コミットメッセージ。編集中 "),
     (false, false) => tr(lang, " Commit message ", " コミットメッセージ "),
 };
 let footer = if editing {
@@ -4921,8 +4921,8 @@ fn draw_simple_dialog(
             lines.push(String::new());
             lines.push(tr(
                 lang,
-                "the zip is rewritten — there is no trash for this",
-                "zipを書き直します — ゴミ箱には行きません",
+                "the zip is rewritten. there is no trash for this",
+                "zipを書き直します。ゴミ箱には行きません",
             ).to_string());
             let foot = tr(lang, " y/Enter=delete  n/Esc=cancel ", " y/Enter=削除  n/Esc=取消 ");
             (title, lines, foot.to_string())
@@ -5522,9 +5522,9 @@ fn draw_theme_picker(f: &mut Frame, area: Rect, popup: &mut Popup, lang: Lang) {
     clear_popup(f, rect);
     f.render_widget(Block::default().style(popup_style()), rect);
     let title = match scope {
-        ThemeScope::App { .. } => tr(lang, " theme — whole app ", " テーマ — 全体 "),
-        ThemeScope::Pane { side, .. } if *side == 0 => tr(lang, " theme — left pane ", " テーマ — 左ペイン "),
-        ThemeScope::Pane { .. } => tr(lang, " theme — right pane ", " テーマ — 右ペイン "),
+        ThemeScope::App { .. } => tr(lang, " theme. whole app ", " テーマ。全体 "),
+        ThemeScope::Pane { side, .. } if *side == 0 => tr(lang, " theme. left pane ", " テーマ。左ペイン "),
+        ThemeScope::Pane { .. } => tr(lang, " theme. right pane ", " テーマ。右ペイン "),
     };
     let footer = if pane_scope {
         tr(lang, " j/k=preview  Enter=keep  x=follow app  Esc=cancel ",
@@ -6027,7 +6027,7 @@ fn draw_ssh_hosts(
     let w = 56u16.min(area.width);
     let h = (matches.len() as u16 + 5).min(area.height.saturating_sub(2)).max(6);
     let footer = tr(lang, " Enter=select  F2=type by hand  Esc ", " Enter=選択  F2=手入力  Esc ");
-    let inner = popup_frame(f, area, w, h, tr(lang, " ssh — host ", " SSH — ホスト "), footer);
+    let inner = popup_frame(f, area, w, h, tr(lang, " ssh host ", " SSH ホスト "), footer);
 
     let mut lines = filter_head(filter, matches.is_empty());
     for (i, hst) in matches.iter().enumerate() {
@@ -7689,8 +7689,8 @@ fn draw_viewer(
     );
     let footer = if *editing {
         tr(lang,
-            " EDIT — type to insert   Ctrl+S save   Esc leave   Shift+Q discard ",
-            " 編集中 — 入力で挿入   Ctrl+S 保存   Esc 終了   Shift+Q 破棄 ").to_string()
+            " EDIT. type to insert   Ctrl+S save   Esc leave   Shift+Q discard ",
+            " 編集中。入力で挿入   Ctrl+S 保存   Esc 終了   Shift+Q 破棄 ").to_string()
     } else if let Some(w) = sub_walk {
         // The decision prompt names the change and the progress, so neither
         // has to be held in the head while answering. This one is answered

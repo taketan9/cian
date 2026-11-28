@@ -245,8 +245,8 @@ impl App {
                     self.op_bar_hidden = true;
                     self.message = Some(tr(
                         self.lang,
-                        "running in the background — :queue to manage",
-                        "バックグラウンドで実行中 — :queue で管理",
+                        "running in the background. :queue to manage",
+                        "バックグラウンドで実行中。:queue で管理",
                     ).into());
                 }
                 _ => {}
@@ -2121,8 +2121,8 @@ impl App {
         self.shell_sel = Some(sel);
         self.message = Some(tr(
             self.lang,
-            "selecting — Ctrl+C copies, Esc clears",
-            "選択中 — Ctrl+C でコピー、Esc で解除",
+            "selecting. Ctrl+C copies, Esc clears",
+            "選択中。Ctrl+C でコピー、Esc で解除",
         ).into());
     }
 
@@ -2178,9 +2178,9 @@ impl App {
                 self.message = Some(if at == 0 {
                     tr(self.lang, "live output", "最新の出力").into()
                 } else if self.lang == Lang::Ja {
-                    format!("{at} 行さかのぼり中 — 何か入力すると戻ります")
+                    format!("{at} 行さかのぼり中。何か入力すると戻ります")
                 } else {
-                    format!("{at} lines back — typing returns to the end")
+                    format!("{at} lines back. typing returns to the end")
                 });
                 return Ok(());
             }

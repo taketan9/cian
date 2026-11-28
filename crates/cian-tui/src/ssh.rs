@@ -422,8 +422,8 @@ impl App {
                         self.side_tabs_mut(side).active_mut().enter_remote(label, cwd, entries);
                         self.message = Some(tr(
                             self.lang,
-                            "remote pane — Enter/l open, - up, c copy, m move, A/a/r/d write, Esc close",
-                            "リモートペイン — Enter/l 開く, - 上, c コピー, m 移動, A/a/r/d 書込, Esc 閉じる",
+                            "remote pane. Enter/l open, - up, c copy, m move, A/a/r/d write, Esc close",
+                            "リモートペイン。Enter/l 開く, - 上, c コピー, m 移動, A/a/r/d 書込, Esc 閉じる",
                         ).into());
                     }
                     Err(e) => {
@@ -933,7 +933,7 @@ impl App {
                 self.message = Some(if self.lang == crate::theme::Lang::Ja {
                     format!("{mb}MB を超えるので比べられません")
                 } else {
-                    format!("larger than {mb} MB — too big to compare")
+                    format!("larger than {mb} MB. too big to compare")
                 });
                 return true;
             }

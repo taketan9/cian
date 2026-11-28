@@ -47,8 +47,8 @@ impl App {
             self.message = Some(
                 tr(
                     self.lang,
-                    "font size is the terminal's own — see cian.font{} in init.lua",
-                    "フォントサイズは端末側の設定です — init.lua の cian.font{} を参照",
+                    "font size is the terminal's own. see cian.font{} in init.lua",
+                    "フォントサイズは端末側の設定です。init.lua の cian.font{} を参照",
                 )
                 .into(),
             );

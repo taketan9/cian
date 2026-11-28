@@ -61,8 +61,8 @@ impl App {
                 Some(e) => e.clone(),
                 None => tr(
                     self.lang,
-                    "no macros — define them in macro.lua",
-                    "マクロがありません — macro.lua で定義してください",
+                    "no macros. define them in macro.lua",
+                    "マクロがありません。macro.lua で定義してください",
                 )
                 .to_string(),
             });

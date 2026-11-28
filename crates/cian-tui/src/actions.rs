@@ -146,7 +146,7 @@ impl App {
                 self.message = Some(tr(
                     self.lang,
                     "copy adds to the zip; move is not supported",
-                    "zipへはコピー（追加）だけです — 移動はできません",
+                    "zipへはコピー（追加）だけです。移動はできません",
                 ).into());
                 return;
             }
@@ -942,8 +942,8 @@ impl App {
         if lines.is_empty() {
             self.message = Some(tr(
                 self.lang,
-                "no usable paths — a name holds \" $ ` or a line break, which the shell would read",
-                "使えるパスがありません — 名前に \" $ ` か改行があり、シェルが解釈してしまいます",
+                "no usable paths. a name holds \" $ ` or a line break, which the shell would read",
+                "使えるパスがありません。名前に \" $ ` か改行があり、シェルが解釈してしまいます",
             ).into());
             return;
         }
@@ -1362,8 +1362,8 @@ impl App {
                 if doc.is_best_effort() {
                     header.push(tr(
                         self.lang,
-                        "(legacy binary — best-effort text; re-save as the modern format for a faithful view)",
-                        "(旧バイナリ形式 — テキスト抽出は簡易です。正確な表示には新形式で保存し直してください)",
+                        "(legacy binary. best-effort text; re-save as the modern format for a faithful view)",
+                        "(旧バイナリ形式。テキスト抽出は簡易です。正確な表示には新形式で保存し直してください)",
                     ).to_string());
                 }
                 header.push(String::new());
@@ -2548,7 +2548,7 @@ impl App {
             self.message = Some(if self.lang == Lang::Ja {
                 format!("{n} 行すべて選択（y でコピー、Esc で解除）")
             } else {
-                format!("all {n} line(s) selected — y copies, Esc clears")
+                format!("all {n} line(s) selected. y copies, Esc clears")
             });
             return;
         }
@@ -2564,7 +2564,7 @@ impl App {
         self.message = Some(if self.lang == Lang::Ja {
             format!("{n} 件マーク（Space で個別解除、Esc で全解除）")
         } else {
-            format!("{n} marked — Space unmarks one, Esc clears them")
+            format!("{n} marked. Space unmarks one, Esc clears them")
         });
     }
 
@@ -3326,9 +3326,9 @@ impl App {
         if self.op_job.is_some() {
             self.op_queue.push_back(queued);
             self.message = Some(if self.lang == Lang::Ja {
-                format!("キューに追加 — {} 件待ち（:queue で一覧）", self.op_queue.len())
+                format!("キューに追加。{} 件待ち（:queue で一覧）", self.op_queue.len())
             } else {
-                format!("queued — {} waiting (:queue to manage)", self.op_queue.len())
+                format!("queued. {} waiting (:queue to manage)", self.op_queue.len())
             });
             self.popup = Popup::None;
             return;
@@ -3497,8 +3497,8 @@ impl App {
                 // switches had.
                 self.message = Some(tr(
                     self.lang,
-                    "nothing is running — x on a queued line removes it",
-                    "実行中の操作はありません — 待機行の x で取り消せます",
+                    "nothing is running. x on a queued line removes it",
+                    "実行中の操作はありません。待機行の x で取り消せます",
                 ).into());
                 return;
             }
@@ -3508,8 +3508,8 @@ impl App {
                 Some(_) => {
                     self.message = Some(tr(
                         self.lang,
-                        "stop already requested — press x again shortly to abandon",
-                        "停止を要求しました — 少し待って、もう一度 x で強制終了します",
+                        "stop already requested. press x again shortly to abandon",
+                        "停止を要求しました。少し待って、もう一度 x で強制終了します",
                     ).into());
                 }
             }
@@ -3531,8 +3531,8 @@ impl App {
             drop(job);
             self.message = Some(tr(
                 self.lang,
-                "⚠ abandoned — the stuck worker may linger until cian exits; continuing with the queue",
-                "⚠ 強制終了しました — 応答しない処理はしばらく残る場合があります。キューは続けます",
+                "⚠ abandoned. the stuck worker may linger until cian exits; continuing with the queue",
+                "⚠ 強制終了しました。応答しない処理はしばらく残る場合があります。キューは続けます",
             ).into());
         }
         self.start_next_op();

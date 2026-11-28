@@ -858,8 +858,8 @@ impl App {
             if binary {
                 self.message = Some(tr(
                     self.lang,
-                    "hex edit — 0-9a-f overwrites, Ctrl+S saves (.bak kept), Esc leaves",
-                    "hex編集 — 0-9a-f で上書き、Ctrl+S 保存（.bak を残す）、Esc で終了",
+                    "hex edit. 0-9a-f overwrites, Ctrl+S saves (.bak kept), Esc leaves",
+                    "hex編集。0-9a-f で上書き、Ctrl+S 保存（.bak を残す）、Esc で終了",
                 ).into());
             } else {
                 self.entered_editing_message();
@@ -1606,7 +1606,7 @@ impl App {
         self.message = Some(if self.lang == Lang::Ja {
             format!("差分 {n} 行（Tab / Shift+Tab で移動、= で解除）")
         } else {
-            format!("{n} line(s) differ — Tab / Shift+Tab to step, = to stop")
+            format!("{n} line(s) differ. Tab / Shift+Tab to step, = to stop")
         });
     }
 
@@ -2099,8 +2099,8 @@ impl App {
                     self.message = Some(
                         tr(
                             self.lang,
-                            "this file has no name yet — :w <name>",
-                            "まだ名前がありません — :w <名前>",
+                            "this file has no name yet. :w <name>",
+                            "まだ名前がありません。:w <名前>",
                         )
                         .into(),
                     );
@@ -2110,7 +2110,7 @@ impl App {
                     self.message = Some(
                         tr(
                             self.lang,
-                            "this one is read-only — it is shown as text, not held as it is",
+                            "this one is read-only. it is shown as text, not held as it is",
                             "これは読み取り専用です（テキストとして表示しているだけ）",
                         )
                         .into(),
@@ -2341,8 +2341,8 @@ impl App {
         if !is_substitute {
             let verb = cmd.split_whitespace().next().unwrap_or(cmd);
             self.message = Some(match self.lang {
-                Lang::En => format!("✖ no such command here: :{verb} — ? lists what this panel takes"),
-                Lang::Ja => format!("✖ ここでは使えないコマンドです: :{verb} — ? でこの画面のキー一覧"),
+                Lang::En => format!("✖ no such command here: :{verb}. ? lists what this panel takes"),
+                Lang::Ja => format!("✖ ここでは使えないコマンドです: :{verb}。? でこの画面のキー一覧"),
             });
             return;
         }
@@ -2429,16 +2429,16 @@ impl App {
         };
         self.message = Some(if untouched {
             if self.lang == Lang::Ja {
-                format!("{verb}: {scope} — 変わるものがありませんでした")
+                format!("{verb}: {scope} に変わるものがありませんでした")
             } else {
-                format!("{verb}: {scope} — nothing to change")
+                format!("{verb}: {scope}. nothing to change")
             }
         } else if before == after {
             format!("{verb}: {scope}")
         } else if self.lang == Lang::Ja {
-            format!("{verb}: {scope} — {} 行 → {} 行", before, after)
+            format!("{verb}: {scope}. {} 行 → {} 行", before, after)
         } else {
-            format!("{verb}: {scope} — {before} lines → {after}")
+            format!("{verb}: {scope}. {before} lines → {after}")
         });
     }
 
@@ -2547,8 +2547,8 @@ impl App {
     fn entered_editing_message(&mut self) {
         self.message = Some(tr(
             self.lang,
-            "editing — type to insert, Ctrl+S save, Esc leave",
-            "編集中 — 入力で挿入, Ctrl+S 保存, Esc 終了",
+            "editing. type to insert, Ctrl+S save, Esc leave",
+            "編集中。入力で挿入, Ctrl+S 保存, Esc 終了",
         ).into());
     }
 
@@ -3363,8 +3363,8 @@ impl App {
             };
             if let Some(said) = clash {
                 self.message = Some(match self.lang {
-                    Lang::Ja => format!("{said} — 上書きするなら :w!"),
-                    _ => format!("{said} — :w! to overwrite anyway"),
+                    Lang::Ja => format!("{said}。上書きするなら :w!"),
+                    _ => format!("{said}. :w! to overwrite anyway"),
                 });
                 return;
             }
@@ -3767,8 +3767,8 @@ impl App {
         }
         tr(
             self.lang,
-            "copied — the system clipboard refused it, so p pastes it from here",
-            "コピーしました — システムのクリップボードには入りませんでしたが p で貼れます",
+            "copied. the system clipboard refused it, so p pastes it from here",
+            "コピーしました。システムのクリップボードには入りませんでしたが p で貼れます",
         )
         .into()
     }
@@ -4688,10 +4688,10 @@ impl App {
         };
         self.message = Some(match hint {
             Some(fixed) if self.lang == Lang::Ja => format!(
-                "該当なし — 正規表現の * は「直前の文字の繰り返し」です。任意の文字列なら {fixed}"
+                "該当なし。正規表現の * は「直前の文字の繰り返し」です。任意の文字列なら {fixed}"
             ),
             Some(fixed) => format!(
-                "no matches — in a regex `*` repeats the character before it; for any text, {fixed}"
+                "no matches. in a regex `*` repeats the character before it; for any text, {fixed}"
             ),
             None => tr(self.lang, "no matches", "該当なし").into(),
         });
@@ -4763,7 +4763,7 @@ impl App {
         self.message = Some(if self.lang == Lang::Ja {
             format!("1 件置換（残り {left} 件、Enter で次へ）")
         } else {
-            format!("replaced one — {left} left, Enter for the next")
+            format!("replaced one. {left} left, Enter for the next")
         });
     }
 
@@ -4839,14 +4839,14 @@ impl App {
                 // A scratch file in notepad style is already taking text, so
                 // the half of this about `i` would be a lie there.
                 if self.notepad_keys() {
-                    "empty file — type away, Ctrl+S to save it somewhere"
+                    "empty file. type away, Ctrl+S to save it somewhere"
                 } else {
-                    "empty file — i to type, :w <name> to save it somewhere"
+                    "empty file. i to type, :w <name> to save it somewhere"
                 },
                 if self.notepad_keys() {
-                    "空のファイル — そのまま入力、Ctrl+S で保存"
+                    "空のファイル。そのまま入力、Ctrl+S で保存"
                 } else {
-                    "空のファイル — i で入力、:w <名前> で保存"
+                    "空のファイル。i で入力、:w <名前> で保存"
                 },
             )
             .into(),

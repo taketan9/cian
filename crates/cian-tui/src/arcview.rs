@@ -137,16 +137,16 @@ impl App {
         if size > MAX_VIEW {
             self.message = Some(tr(
                 self.lang,
-                "member too large to view — copy it out instead",
-                "大きすぎて閲覧できません — 展開してから開いてください",
+                "member too large to view. copy it out instead",
+                "大きすぎて閲覧できません。展開してから開いてください",
             ).into());
             return;
         }
         if cian_core::archive::zip_needs_password(archive) {
             self.message = Some(tr(
                 self.lang,
-                "encrypted zip — use :unzip to extract with the password",
-                "暗号化zip — :unzip でパスワード指定で展開してください",
+                "encrypted zip. use :unzip to extract with the password",
+                "暗号化zip。:unzip でパスワード指定で展開してください",
             ).into());
             return;
         }

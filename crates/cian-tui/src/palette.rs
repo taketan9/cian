@@ -259,7 +259,7 @@ impl App {
             // looked wrong rather than full.
             if capped {
                 self.message = Some(match self.lang {
-                    Lang::En => format!("first {count} files — narrow the folder to see the rest"),
+                    Lang::En => format!("first {count} files. narrow the folder to see the rest"),
                     Lang::Ja => format!("{count} 件で打ち切りました。ディレクトリを絞ると残りも見られます"),
                 });
             } else if matches!(&self.popup, Popup::Palette { items, .. } if items.is_empty()) {

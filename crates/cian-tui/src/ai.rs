@@ -174,8 +174,8 @@ impl App {
         }
         self.message = Some(tr(
             self.lang,
-            "AI not configured — add cian.ai{ endpoint = \"…\" } to init.lua",
-            "AI が未設定です — init.lua に cian.ai{ endpoint = \"…\" } を追加してください",
+            "AI not configured. add cian.ai{ endpoint = \"…\" } to init.lua",
+            "AI が未設定です。init.lua に cian.ai{ endpoint = \"…\" } を追加してください",
         )
         .into());
         false

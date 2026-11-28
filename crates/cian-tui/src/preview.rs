@@ -124,8 +124,8 @@ impl App {
         self.message = Some(if self.preview_on {
             tr(
                 self.lang,
-                "preview on — the shell panel follows the cursor (Shift+J for the shell)",
-                "プレビューON — シェル枠がカーソルに追従（シェルは Shift+J）",
+                "preview on. the shell panel follows the cursor (Shift+J for the shell)",
+                "プレビューON。シェル枠がカーソルに追従（シェルは Shift+J）",
             )
             .into()
         } else {
@@ -331,16 +331,16 @@ pub(crate) fn preview_target(app: &App) -> Result<PathBuf, String> {
     if pane.archive_view().is_some() {
         return Err(tr(
             app.lang,
-            "inside an archive — F3 views a member",
-            "アーカイブ内 — メンバーは F3 で閲覧",
+            "inside an archive. F3 views a member",
+            "アーカイブ内。メンバーは F3 で閲覧",
         )
         .into());
     }
     if pane.is_remote() {
         return Err(tr(
             app.lang,
-            "remote pane — no preview (it would download every file)",
-            "リモートペイン — プレビューなし（毎回ダウンロードになるため）",
+            "remote pane. no preview (it would download every file)",
+            "リモートペイン。プレビューなし（毎回ダウンロードになるため）",
         )
         .into());
     }
@@ -359,7 +359,7 @@ pub(crate) fn preview_target(app: &App) -> Result<PathBuf, String> {
         // panel for a file nobody wanted to look inside.
         Some(e) if skip_preview(app, &e.path) => Err(tr(
             app.lang,
-            "preview off for this kind (preview_skip) — F3 opens it",
+            "preview off for this kind (preview_skip). F3 opens it",
             "この拡張子はプレビュー対象外です（preview_skip）— F3 で開けます",
         )
         .into()),

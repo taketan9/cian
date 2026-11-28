@@ -127,8 +127,8 @@ impl App {
                     // tinguishable from the key not working at all.
                     tr(
                         self.lang,
-                        "input sync needs two or more shell panes — Shift+F8 / Shift+F9 to split one",
-                        "シンクロ入力にはシェルペインが2つ以上必要です — Shift+F8 / Shift+F9 で分割",
+                        "input sync needs two or more shell panes. Shift+F8 / Shift+F9 to split one",
+                        "シンクロ入力にはシェルペインが2つ以上必要です。Shift+F8 / Shift+F9 で分割",
                     )
                     .into()
                 } else {
@@ -145,8 +145,8 @@ impl App {
                 self.message = Some(if !cur {
                     tr(
                         self.lang,
-                        "task-done notification ON — a bell and a toast when a long job finishes",
-                        "完了通知 ON — 時間のかかる処理が終わったら知らせます",
+                        "task-done notification ON. a bell and a toast when a long job finishes",
+                        "完了通知 ON。時間のかかる処理が終わったら知らせます",
                     )
                     .into()
                 } else {
@@ -160,8 +160,8 @@ impl App {
                 self.message = Some(if !cur {
                     tr(
                         self.lang,
-                        "verify transfers ON — files are re-read and checksummed after an upload",
-                        "転送後ベリファイ ON — 転送後に読み直してチェックサムを照合します",
+                        "verify transfers ON. files are re-read and checksummed after an upload",
+                        "転送後ベリファイ ON。転送後に読み直してチェックサムを照合します",
                     )
                     .into()
                 } else {
@@ -177,8 +177,8 @@ impl App {
                     self.message = Some(
                         tr(
                             self.lang,
-                            "preview on — but it draws in the shell panel, which is not open here (Shift+J)",
-                            "プレビュー ON — ただし表示先のシェル枠が開いていません（Shift+J）",
+                            "preview on. but it draws in the shell panel, which is not open here (Shift+J)",
+                            "プレビュー ON。ただし表示先のシェル枠が開いていません（Shift+J）",
                         )
                         .into(),
                     );
@@ -253,14 +253,14 @@ impl App {
         self.message = Some(match self.edit_style {
             crate::EditStyle::Vim => tr(
                 self.lang,
-                "editor: vim keys — i to type, Esc to stop",
-                "エディタ: vim キー操作 — i で入力、Esc で抜ける",
+                "editor: vim keys. i to type, Esc to stop",
+                "エディタ: vim キー操作。i で入力、Esc で抜ける",
             )
             .into(),
             crate::EditStyle::Notepad => tr(
                 self.lang,
-                "editor: notepad keys — just type; Shift+arrows select",
-                "エディタ: notepad — そのまま入力、Shift+矢印で選択",
+                "editor: notepad keys. just type; Shift+arrows select",
+                "エディタ: notepad。そのまま入力、Shift+矢印で選択",
             )
             .into(),
         });

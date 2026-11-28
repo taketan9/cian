@@ -1023,7 +1023,7 @@ async function operate(kind) {
     if (kind !== 'delete' && dest.archive) {
         const zip = dest.archive.split(/[\\/]/).pop();
         if (kind === 'move') {
-            say(tr('zip takes copies only — move is not supported', 'zip へはコピー（追加）だけです — 移動はできません'), true);
+            say(tr('zip takes copies only. move is not supported', 'zip へはコピー（追加）だけです。移動はできません'), true);
             return;
         }
         if (!await confirm(tr(`Add ${rows.length} to ${zip}`, `${rows.length} 件を ${zip} に追加`),
@@ -1224,7 +1224,7 @@ async function offerRetry(msg, verb) {
 /// show yet, and the one on screen belongs to the job actually working.
 function beginOp(started, kind, verb) {
     if (started.queued) {
-        say(tr(`queued — ${started.queued} waiting (:queue lists them)`, `キューに追加 — ${started.queued} 件待ち（:queue で一覧）`));
+        say(tr(`queued. ${started.queued} waiting (:queue lists them)`, `キューに追加。${started.queued} 件待ち（:queue で一覧）`));
         return;
     }
     running = {
@@ -1601,7 +1601,7 @@ async function applyFilter(text) {
     draw(which);
     const n = next.entries.length;
     el.fCount.textContent = tr(`${n} items`, `${n} 件`);
-    say(text ? tr(`narrowed: ${text} — ${n}`, `絞り込み: ${text} — ${n} 件`) : tr(`${n} items`, `${n} 件`));
+    say(text ? tr(`narrowed: ${text}. ${n}`, `絞り込み: ${text}。${n} 件`) : tr(`${n} items`, `${n} 件`));
 }
 
 /// The file finder: `//` opens it, typing narrows it, Enter goes there.
@@ -2175,7 +2175,7 @@ function setLook(i, remember = true) {
 /// reads its own choice out of.
 function setPalette(name, remember = true) {
     const t = palettes.get(name);
-    if (!t) { say(tr(`${name}? — :theme lists them`, `${name}? — :theme で一覧`), true); return; }
+    if (!t) { say(tr(`${name}?. :theme lists them`, `${name}?. :theme で一覧`), true); return; }
     clearPaneSkins();
     delete document.documentElement.dataset.look;
     paintPalette(t);
@@ -2218,11 +2218,11 @@ function hintsNow() {
         // with — `drawHints()` was not called when a file opened — so an
         // inverted test sat here saying Shift+←→ 選択 under a --NORMAL-- line.
         if (style === 0) {
-            // `メニュー — キー操作切替` as cian-tui names it here: from inside
+            // `メニュー。キー操作切替` as cian-tui names it here: from inside
             // notepad style `T` is a character, so this menu is the only way
             // back to the other grammar and the bar should say so.
             return [['Ctrl+S', tr('save', '保存')], ['Shift+←→', tr('select', '選択')], ['Ctrl+C / V', tr('copy / paste', 'コピー / 貼り付け')],
-                ['Ctrl+F', tr('search', '検索')], ['Esc ×3', tr('close', '閉じる')], ['Shift+Enter', tr('menu — editor keys', 'メニュー — キー操作切替')]];
+                ['Ctrl+F', tr('search', '検索')], ['Esc ×3', tr('close', '閉じる')], ['Shift+Enter', tr('menu. editor keys', 'メニュー。キー操作切替')]];
         }
         // `Shift+Enter` is on this row now. The menu is where the encoding,
         // blame, the preview and the external editor live, and in vim style
@@ -2242,7 +2242,7 @@ function hintsNow() {
                 ['Shift+J', tr('shell', 'シェルへ')],
                 ['F12', tr('zoom', 'ズーム')],
             ] : []),
-            ['Shift+Enter', tr('menu — encoding, blame, preview', 'メニュー — 文字コード・blame・プレビュー')],
+            ['Shift+Enter', tr('menu. encoding, blame, preview', 'メニュー。文字コード・blame・プレビュー')],
             ['?', tr('keys', 'キー一覧')]];
     }
     if (term.on && term.focused) {
@@ -2381,7 +2381,7 @@ const TOGGLES = {
                     switches.notify = !switches.notify;
                     drawMenu();
                     say(switches.notify
-                        ? tr(`task-done notification on — anything longer than ${Math.round(notifyAfterMs / 1000)}s`, `完了通知 ON — ${Math.round(notifyAfterMs / 1000)} 秒より長い処理が終わったら知らせます`)
+                        ? tr(`task-done notification on. anything longer than ${Math.round(notifyAfterMs / 1000)}s`, `完了通知 ON。${Math.round(notifyAfterMs / 1000)} 秒より長い処理が終わったら知らせます`)
                         : tr('task-done notification off', '完了通知 OFF'));
                 },
             },
@@ -2394,7 +2394,7 @@ const TOGGLES = {
                     switches.verify = r.verify;
                     drawMenu();
                     say(switches.verify
-                        ? tr('verify transfers on — read back and compared after sending (twice the round trips)', '転送後ベリファイ ON — 送ったあと読み直して照合します（往復が倍になります）')
+                        ? tr('verify transfers on. read back and compared after sending (twice the round trips)', '転送後ベリファイ ON。送ったあと読み直して照合します（往復が倍になります）')
                         : tr('verify transfers off', '転送後ベリファイ OFF'));
                 },
             },
@@ -2733,7 +2733,7 @@ function contextRows() {
         // copies scattered, which is a different menu wearing the same words.
         v.push({ label: tr("Copy", 'コピー'), value: 'Ctrl+C', run: () => hold('copy') });
         v.push({ label: tr("Copy path text", 'パスをコピー'), value: 'p', run: copyPaths });
-        v.push({ label: tr("Copy file(s) \u2014 paste into Finder/Explorer", 'ファイルをコピー — Finder/エクスプローラに貼り付け'), value: 'Shift+P', run: clipFiles });
+        v.push({ label: tr("Copy file(s). paste into Finder/Explorer", 'ファイルをコピー。Finder/エクスプローラに貼り付け'), value: 'Shift+P', run: clipFiles });
         v.push({ label: tr("Cut", '切り取り'), value: 'Ctrl+X', run: () => hold('cut') });
         v.push({ label: tr("Paste", '貼り付け'), value: 'Ctrl+V', run: paste });
         v.push({ label: tr("Rename", 'リネーム'), value: 'r', run: rename });
@@ -2994,7 +2994,7 @@ function runMenuRow(row, spec) {
     if (row.back) { menuBack(); return; }
     if (row.group) {
         const rows = row.group();
-        if (!rows.length) { say(tr(`${row.label} — nothing to do here`, `${row.label} — できることがありません`), true); return; }
+        if (!rows.length) { say(tr(`${row.label}. nothing to do here`, `${row.label} にできることがありません`), true); return; }
         menuStack.push(spec);
         openMenu({
             key: spec.key,
@@ -3241,7 +3241,7 @@ function viewerHelp() {
     // 「ぐっちゃぐちゃ」で、そのとおりでした。
     const rows = (section ? section[1] : []).map(([k, what]) => ({ label: keyLabel(k), sub: what }));
     show(tr('The editor', 'エディタ'),
-        tr('the keys in here — Esc goes back to the file', 'この中のキー ── Esc でファイルに戻ります'),
+        tr('the keys in here. Esc goes back to the file', 'この中のキーです。Esc でファイルに戻ります'),
         rows, {
             align: true,
             // 読むための一覧なので、説明は折り返す。1行に詰めて `…` で
@@ -3269,14 +3269,14 @@ function helpRows() {
         ['← → / Ctrl+h / Ctrl+l', tr("focus the left / right pane", '左 / 右のペインにフォーカス')],
         ['Shift+H / Shift+L', tr("move focus between panes (Shift+J goes to the shell, Esc comes back)", 'ペイン間でフォーカス移動（Shift+J はシェルへ、Esc で戻る）')],
         ['F5', tr("reload", '読み直す')],
-        [':view', tr("how the listing is laid out \u2014 classic (two panes) / details. Also on T", '一覧の見せ方 — classic（2画面） / details（詳細一覧）。T でも')],
+        [':view', tr("how the listing is laid out. classic (two panes) / details. Also on T", '一覧の見せ方。classic（2画面） / details（詳細一覧）。T でも')],
         ['Ctrl+= / Ctrl+- / Ctrl+0', tr("bigger / smaller / back to the base size", '文字を大きく / 小さく / 元に戻す')],
     ]],
     [tr("Find", '探す'), [
         ['f  →  n / N', tr("search this listing, next, previous", 'この一覧を検索・次・前')],
         ['/', tr("narrow this listing", 'この一覧を絞り込み')],
         ['/ /  、Ctrl+P', tr("fuzzy-find a file anywhere below here", 'この下のどこかにあるファイルをあいまい検索')],
-        ['Shift+F', tr("find by name, through the whole tree \u2014 :find", '名前で探す（この下すべて）── :find')],
+        ['Shift+F', tr("find by name, through the whole tree. :find", '名前で探す（この下すべて）── :find')],
         ['Ctrl+F / Ctrl+G', tr("search inside files (:grep)", 'ファイルの中を探す（:grep）')],
         [tr('  p on the results', '  結果で p'), tr("load the hits into a pane and use the ordinary keys on them", '一覧に読み込んで、いつものキーで操作する')],
         [tr('  r on the results', '  結果で r'), tr("replace across every matched file, confirming line by line", 'マッチした全ファイルを一括置換（1行ずつ確認）')],
@@ -3286,7 +3286,7 @@ function helpRows() {
         ['Z', tr("fuzzy-jump to a recent or bookmarked directory (also :jump)", '最近 / ブックマークのディレクトリへあいまいジャンプ（:jump でも）')],
         ['s', tr("the shortcuts menu", 'ショートカットメニュー')],
         [':bookmark', tr("bookmark where you are", 'いまの場所を登録する')],
-        [tr("drop", 'ドラッグして落とす'), tr("from the desktop into a pane \u2014 it MOVES (it asks first)", 'デスクトップからペインへ ── 移動します（先に確認）')],
+        [tr("drop", 'ドラッグして落とす'), tr("from the desktop into a pane. it MOVES (it asks first)", 'デスクトップからペインへ移動します（先に確認）')],
         ['Alt+← / Alt+→', tr("back / forward through this pane\u2019s history", '前 / 先のディレクトリへ')],
         [',', tr("sort by name / size / date / extension (n s d e go straight there; the same key reverses)", 'ソート：名前／サイズ／日時／拡張子（n s d e で直接、同じキーで昇降反転）')],
         ['T', tr("the switches: dotfiles, input sync, notifications\u2026 (also :toggle)", 'トグル：隠しファイル/シンクロ入力/通知…（:toggle でも）')],
@@ -3295,11 +3295,11 @@ function helpRows() {
         [':', tr("type a command (:count :du :grep \u2026)", 'コマンドを打つ（:count :du :grep …）')],
         ['C  、Ctrl+Shift+P  、Ctrl+,', tr("the command palette: fuzzy-find any command", 'コマンドパレット：全コマンドをあいまい検索')],
         [':count', tr("count files and steps (the marks, or the whole tree)", 'ファイル・ステップ数を数える（マーク or ツリー全体）')],
-        [':du', tr("disk usage \u2014 what is big here (Enter goes in)", '容量分析 — 何が大きいか（Enter で中へ）')],
+        [':du', tr("disk usage. what is big here (Enter goes in)", '容量分析。何が大きいか（Enter で中へ）')],
         [':attr / :chmod / :readonly', tr("see and change the attributes", '属性を見る・変える')],
         [':hash', tr("checksum (sha256 by default; :hash md5 too)", 'チェックサム（既定 sha256、:hash md5 も）')],
-        ['=  /  :diff', tr("compare left and right \u2014 two files line by line, two folders recursively", '左右を比較 — ファイル同士は行差分、ディレクトリ同士は再帰')],
-        [tr('  Enter on a comparison', '  比較で Enter'), tr("open them side by side \u2014 both editable, Ctrl+S saves both", '並べて開く — 左右とも編集でき、Ctrl+S で両方保存')],
+        ['=  /  :diff', tr("compare left and right. two files line by line, two folders recursively", '左右を比較。ファイル同士は行差分、ディレクトリ同士は再帰')],
+        [tr('  Enter on a comparison', '  比較で Enter'), tr("open them side by side. both editable, Ctrl+S saves both", '並べて開く。左右とも編集でき、Ctrl+S で両方保存')],
         ['  F7 / Shift+F7', tr("next / previous difference", '次 / 前の相違へ')],
         ['  > / <', tr("folder compare: copy that entry to the other side", 'ディレクトリ比較：そのエントリを反対側へコピー')],
         ['  c / w', tr("the comparison to the clipboard / to a file", '比較結果をクリップボードへ / ファイルに保存')],
@@ -3312,7 +3312,7 @@ function helpRows() {
         [':stage / :unstage / :discard', tr("git add / reset / discard the changes", 'git add / reset / 変更の破棄')],
         [':commit', tr("commit with a message you write. git records it here, svn sends it to the server", '自分で書いたメッセージでコミット。git は手元に記録、svn はサーバに届きます')],
         [':svnupdate :svncommit :svnresolve', tr("the three svn ones", 'svn の3つ')],
-        [':dup', tr("find duplicate files \u2014 same contents (also :duplicate)", '重複ファイルを検出 — 中身が同じもの（:duplicate でも）')],
+        [':dup', tr("find duplicate files. same contents (also :duplicate)", '重複ファイルを検出。中身が同じもの（:duplicate でも）')],
         [':df / :wc / :stat', tr("free space / lines, words, bytes / attributes", '空き容量 / 行・単語・バイト / 属性')],
         [':mark *.rs  :unmark *', tr("mark by wildcard", 'ワイルドカードでマーク')],
         [':copyto / :moveto', tr("somewhere other than the opposite pane", '反対ペイン以外の場所へ')],
@@ -3323,12 +3323,12 @@ function helpRows() {
         [':office / :officelink', tr("open the cloud copy of an Office document / write a .url to it", 'Office 文書のクラウド側を開く / .url を作る')],
     ]],
     [tr("Servers (SFTP)", 'サーバ（SFTP）'), [
-        ['Shift+S', tr("the SSH picker \u2014 the hosts in init.lua\u2019s cian.ssh", 'SSHピッカー — init.lua の cian.ssh から選ぶ')],
-        [':remote  /  :ssh', tr("or type one \u2014 user@host[:port][:/path]", '手で打つなら — user@host[:port][:/path]')],
+        ['Shift+S', tr("the SSH picker. the hosts in init.lua\u2019s cian.ssh", 'SSHピッカー。init.lua の cian.ssh から選ぶ')],
+        [':remote  /  :ssh', tr("or type one. user@host[:port][:/path]", '手で打つなら。user@host[:port][:/path]')],
         ['Enter / Backspace', tr("move around on the server", 'サーバの中を移動')],
-        ['c', tr("to the other pane \u2014 which side you stand on decides upload or download", '反対ペインへ — カーソルのある側でアップロードかダウンロードかが決まる')],
-        [tr("a / A / r / d", 'a / A / r / d'), tr("the same keys on the server (a delete there has no trash \u2014 it is gone)", 'サーバ上でも同じキー（削除はゴミ箱なし＝戻せません）')],
-        ['Enter / F3', tr("open a file on the server \u2014 Ctrl+S writes it back there", 'サーバのファイルを開く — Ctrl+S でサーバへ書き戻す')],
+        ['c', tr("to the other pane. which side you stand on decides upload or download", '反対ペインへ。カーソルのある側でアップロードかダウンロードかが決まる')],
+        [tr("a / A / r / d", 'a / A / r / d'), tr("the same keys on the server (a delete there has no trash. it is gone)", 'サーバ上でも同じキー（削除はゴミ箱なし＝戻せません）')],
+        ['Enter / F3', tr("open a file on the server. Ctrl+S writes it back there", 'サーバのファイルを開く。Ctrl+S でサーバへ書き戻す')],
         [tr("Ctrl+V / a drop", 'Ctrl+V / ドロップ'), tr("upload a local file", 'ローカルのファイルをアップロード')],
         [':local', tr("close the server and come back to this disk", 'サーバを閉じてローカルへ戻る')],
         [tr("the frame changes", '枠が変わります'), tr("a pane showing a server wears a different colour of frame", 'サーバを表示しているペインは色の違う枠になります')],
@@ -3339,19 +3339,19 @@ function helpRows() {
         [':ai error', tr("explain the shell's last error", 'シェルの直近のエラーを説明')],
         [':ai diff', tr("explain the diff on screen (x on the comparison)", '表示中の差分を説明（差分画面で x）')],
         [':ai log', tr("triage the selected log (errors, likely cause, what to check next)", '選択中のログを診断（エラー・原因・次の確認）')],
-        [tr(":aicmd <description>", ':aicmd 説明'), tr("a shell command from a description \u2014 it is placed, never run", '説明からシェルコマンド生成 ── 置くだけで、実行はしません')],
+        [tr(":aicmd <description>", ':aicmd 説明'), tr("a shell command from a description. it is placed, never run", '説明からシェルコマンドを生成します。置くだけで、実行はしません')],
         [':ime', tr("switch the input method off in vim's normal mode (init.lua's cian.ime)", 'vim のノーマルモードで IME を自動オフ（init.lua の cian.ime）')],
-        [tr("  with the IME on", '  IME オンのまま'), tr("the listing keys still work \u2014 this build reads the physical key, so no helper is needed", '一覧のキーはそのまま効きます — ウィンドウ版は物理キーを読みます（ヘルパー不要）')],
+        [tr("  with the IME on", '  IME オンのまま'), tr("the listing keys still work. this build reads the physical key, so no helper is needed", '一覧のキーはそのまま効きます。ウィンドウ版は物理キーを読みます（ヘルパー不要）')],
     ]],
     [tr("Shell panel", 'シェル'), [
         ['Shift+J  /  :shell', tr("the shell panel (it lives in the lower half)", 'シェルパネル（下半分に出る）')],
         ['Esc', tr("back to the files (twice hands Esc to the shell)", 'ファイルへ戻る（Esc 2回でシェルへ渡る）')],
         ['Shift+PgUp / PgDn', tr("back through the output that scrolled past", '流れた出力を遡る')],
         ['Ctrl+Q', tr("interrupt what is running (the same \u005cx03 as Ctrl+C)", '走っているものを中断（Ctrl+C と同じものを送る）')],
-        [tr(":!command", ':!コマンド'), tr("run in the shell \u2014 % the selection, %f the file, %d the folder", 'シェルで実行 — % 選択、%f ファイル、%d ディレクトリ')],
+        [tr(":!command", ':!コマンド'), tr("run in the shell. % the selection, %f the file, %d the folder", 'シェルで実行。% 選択、%f ファイル、%d ディレクトリ')],
         ['Ctrl+Shift+Enter / :snip', tr("a saved command, sent to the shell (cian.snippets)", '保存したコマンドを選んでシェルへ（cian.snippets）')],
         [':vi / :vim / :nvim', tr("open the file in that editor, in a shell tab of its own", 'そのエディタを新しいシェルタブで開く')],
-        [tr(":each command", ':each コマンド'), tr("run once per marked file \u2014 {} is the path", 'マーク各ファイルに実行 — {} がパス')],
+        [tr(":each command", ':each コマンド'), tr("run once per marked file. {} is the path", 'マーク各ファイルに実行。{} がパス')],
         ['F9 / F10', tr("open / close a shell tab (while the panel has the keys)", 'シェルのタブを開く / 閉じる（パネルにいるとき）')],
         ['F1 / F2', tr("previous / next shell tab", '前 / 次のシェルタブ')],
         ['Shift+F8 / Shift+F9', tr("split left-right / top-bottom", '左右 / 上下に分割')],
@@ -3365,7 +3365,7 @@ function helpRows() {
         [':sessionlog', tr("record the shell to a file (again stops it)", 'シェルの記録をファイルに保存する（もう一度で止める）')],
         [tr("drag to select", 'ドラッグで選択'), tr("it is on the clipboard the moment you let go", '放した瞬間にクリップボードへ')],
         [':preview', tr("follow the cursor and show what it is on (again stops)", 'カーソルのファイルを追って表示（もう一度で止める）')],
-        ['@  /  :macro', tr("run a macro \u2014 it splits and opens the layout it describes", 'マクロを実行 ── レイアウトどおりに分割して開きます')],
+        ['@  /  :macro', tr("run a macro. it splits and opens the layout it describes", 'マクロを実行します。レイアウトどおりに分割して開きます')],
     ]],
     [tr("Reading and writing (F3 / Enter)", '読み書き（F3・Enter）'), [
         [tr("where it opens", '開く場所'), tr("in the pane you opened it from. the other listing and the shell stay where they are", '開いたペインの中に開きます。反対の一覧も下のシェルもそのまま残ります')],
@@ -3374,10 +3374,10 @@ function helpRows() {
         ['Shift+J', tr("to the shell below", '下のシェルへ')],
         ['Tab', tr("to the listing beside it", '隣の一覧へ')],
         [tr("images, PDFs", '画像・PDF'), tr("F3 or Enter shows it as it is (with its dimensions)", 'F3 か Enter でそのまま表示（寸法も出ます）')],
-        [tr("a binary", 'バイナリ'), tr("shown in hex; i edits \u2014 0-9 a-f overwrite, Ctrl+S saves (keeping a .bak)", '16進で表示。i で編集 — 0-9 a-f で上書き、Ctrl+S 保存（.bak を残す）')],
+        [tr("a binary", 'バイナリ'), tr("shown in hex; i edits. 0-9 a-f overwrite, Ctrl+S saves (keeping a .bak)", '16進で表示。i で編集。0-9 a-f で上書き、Ctrl+S 保存（.bak を残す）')],
         [tr("  overwrite only", '  上書きのみ'), tr("nothing shifts, so the file cannot change size", 'ずれないので、ファイルの大きさは変わりません')],
         ['Ctrl+S', tr("save (same encoding, same line endings, same BOM)", '保存（元の文字コード・改行・BOM のまま）')],
-        ['Esc ×3', tr("close \u2014 three in a row (unsaved, the third asks)", '閉じる。3回連続（未保存なら3回目で確認）')],
+        ['Esc ×3', tr("close. three in a row (unsaved, the third asks)", '閉じる。3回連続（未保存なら3回目で確認）')],
         ['Backspace ×3', tr("the same, in vim style and only in normal mode", '同じ。vim でノーマルモードのときだけ')],
         ['F3', tr("closes on one press", '1回で閉じる')],
         [tr("F3 with marks", 'F3（マーク中）'), tr("opens every marked file", 'マークした全部を開く')],
@@ -3394,7 +3394,7 @@ function helpRows() {
         [tr("  the bytes", '  渡すもの'), tr("the file's own encoding, both ways. a command that fails changes nothing", 'ファイルの文字コードのまま渡して読み戻します。失敗したときは何も変えません')],
         // cian-tui's words for this pair, and its default: vim is what cian
         // was built around, notepad is the one you hand to a colleague.
-        [tr("Editor keys", 'エディタのキー操作'), tr("vim (the default) / notepad \u2014 back in the listing, inside T\u2019s menu (:editstyle vim / :notepad too)", 'notepad / vim（既定）── 一覧に戻って T のメニューの中（:editstyle vim / :notepad でも）')],
+        [tr("Editor keys", 'エディタのキー操作'), tr("vim (the default) / notepad. back in the listing, inside T\u2019s menu (:editstyle vim / :notepad too)", 'notepad / vim（既定）── 一覧に戻って T のメニューの中（:editstyle vim / :notepad でも）')],
         [tr("  in vim style", '  vim のとき'), tr("opens in normal mode. :w saves, :q closes, :wq both", 'ノーマルモードで開く。:w 保存 :q 閉じる :wq 両方')],
         ['  % ', tr("to the matching bracket (monaco-vim's)", '対応する括弧へ（monaco-vim のもの）')],
         ['  ]] / [[', tr("next / previous heading", '次 / 前の見出しへ')],
@@ -3415,7 +3415,7 @@ function helpRows() {
         ['  Ctrl+A', tr("add 1 to the number under the cursor (Ctrl+X is cut, so there is no key to subtract)", 'カーソルの数に1を足す（Ctrl+X は切り取りなので、引くキーはありません）')],
         ['Ctrl+] / Ctrl+[', tr("move by heading (works in notepad style too)", '見出し移動（notepad のキー操作でも使えます）')],
         [tr("  in notepad style", '  notepad のとき'), tr("Ctrl+C/V/Z/F and the rest of the Windows hand", 'Ctrl+C/V/Z/F など Windows の手が効く')],
-        ['jj  /  ｊｊ  /  っｊ', tr("leave insert mode — the last two are what a Japanese IME makes of pressing j twice", '挿入モードを抜ける。後ろ2つは、IME オンで j を2回押したときに出るもの')],
+        ['jj  /  ｊｊ  /  っｊ', tr("leave insert mode. the last two are what a Japanese IME makes of pressing j twice", '挿入モードを抜ける。後ろ2つは、IME オンで j を2回押したときに出るもの')],
         ['ZZ  /  ZQ', tr("save and close / close without saving", '保存して閉じる ／ 保存せずに閉じる')],
     ]],
     [tr("Marks and file operations", 'マークと操作'), [
@@ -3423,7 +3423,7 @@ function helpRows() {
         ['Shift+Space', tr("toggle the mark and step up", 'マーク切替して上へ')],
         ['v', tr("visual selection (Enter confirms, Esc cancels)", 'ビジュアル選択（Enter 確定・Esc 取消）')],
         [':nobom', tr("strip UTF-8 BOMs (UTF-16 is left alone)", 'UTF-8 BOM を除去（UTF-16 は触らない）')],
-        ['Ctrl+A  、:markall', tr("mark everything here \u2014 in the viewer, select the whole file", 'ここにある全部をマーク — ビューアではファイル全体を選択')],
+        ['Ctrl+A  、:markall', tr("mark everything here. in the viewer, select the whole file", 'ここにある全部をマーク。ビューアではファイル全体を選択')],
         ['V', tr("invert the marks", '全マークを反転')],
         ['c / m / d', tr("copy / move to the other pane / delete (to the trash)", '反対ペインへコピー / 移動 / 削除（ゴミ箱へ）')],
         ['Ctrl+C / Ctrl+X', tr("hold the files (copy / cut)", 'ファイルを保持（コピー / 切り取り）')],
@@ -3432,7 +3432,7 @@ function helpRows() {
         ['a / A', tr("new file / new folder", '新規ファイル / 新規ディレクトリ')],
         ['p', tr("the path, as text, to the clipboard", 'パス文字列をクリップボードへ')],
         ['Shift+P', tr("the file itself to the clipboard (Finder and Explorer can paste it)", 'ファイルそのものをクリップボードへ（Finder/エクスプローラで貼れます）')],
-        [tr("drag a row", '行をドラッグ'), tr("to the desktop or another application \u2014 the file itself (the terminal build cannot do this)", 'デスクトップや他のアプリへ、ファイルそのものを渡します（端末版にはできません）')],
+        [tr("drag a row", '行をドラッグ'), tr("to the desktop or another application. the file itself (the terminal build cannot do this)", 'デスクトップや他のアプリへ、ファイルそのものを渡します（端末版にはできません）')],
         // **Both halves were the wrong way round.** `o` brings the *other*
         // pane's directory here and `O` sends this one across (keys.rs:2604,
         // and cian-tui's own help says so in as many words) — the window's
@@ -3446,20 +3446,20 @@ function helpRows() {
         ['Ctrl+r / Ctrl+Shift+z', tr("redo it", 'やり直す')],
         [tr("M / Shift+Enter / right-click", 'M / Shift+Enter / 右クリック'), tr("what can be done to this entry", 'このエントリにできること')],
         ['Esc', tr("clear marks and filter \u2192 then stop what is running", 'マーク・フィルタ解除 → 実行中の操作を中止')],
-        [':queue', tr("what is running \u2014 x stops one of them", '実行中の操作を見る — x で1つだけ止める')],
+        [':queue', tr("what is running. x stops one of them", '実行中の操作を見る。x で1つだけ止める')],
     ]],
     // The window and how it looks. Absent until 2026-08-31, which is why the
     // first person to run this asked whether themes could be chosen at all —
     // twenty-one of them, and `?` did not say the word once.
     [tr("The window and how it looks", 'ウィンドウと見た目'), [
-        [tr(":theme  /  \u201cTheme\u201d in T\u2019s menu", ':theme  /  T のメニューの「配色」'), tr("twenty-one palettes \u2014 \u2191\u2193 dresses the window as you pass", '配色 21 種 ── ↑↓ で選ぶとその場で変わります')],
+        [tr(":theme  /  \u201cTheme\u201d in T\u2019s menu", ':theme  /  T のメニューの「配色」'), tr("twenty-one palettes. \u2191\u2193 dresses the window as you pass", '配色は 21 種です。↑↓ で選ぶとその場で変わります')],
         [tr(":theme <name>", ':theme 名前'), tr("straight to one by name (dracula, nord, solarized-light \u2026)", '名前で直に（dracula, nord, solarized-light …）')],
         ['F11', tr("full screen, and back", '全画面／戻す')],
         ['F12', tr("zoom whichever surface has the keys (files or shell)", 'キーのある枠を広げる／戻す（ファイルでもシェルでも）')],
         ['Ctrl+= / Ctrl+- / Ctrl+0', tr("bigger / smaller / back", '文字を大きく / 小さく / 戻す')],
         [tr("Ctrl+Shift+arrows", 'Ctrl+Shift+矢印'), tr("move the pane divider (dragging it works too)", 'ペインの境界を動かす（境界のドラッグでも）')],
         [':where', tr("where the config files being read actually are", 'いま読んでいる設定ファイルの場所')],
-        [':version', tr("which build this is \u2014 the first thing to ask when a fix seems not to have landed", 'いま動いている版 ── 直らないときは、まずこれ')],
+        [':version', tr("which build this is. the first thing to ask when a fix seems not to have landed", 'いま動いている版です。直らないときは、まずこれを確認してください')],
     ]],
   ];
 }
@@ -3470,7 +3470,7 @@ function openHelp() {
     help.on = true;
     el.find.hidden = false;
     el.find.classList.add('help');
-    el.findFoot.textContent = tr('Esc or ? closes  ── the same keys as cian in a terminal', 'Esc か ? で閉じる。端末版の cian と同じキーです');
+    el.findFoot.textContent = tr('Esc or ? closes. the same keys as cian in a terminal', 'Esc か ? で閉じる。端末版の cian と同じキーです');
     const frag = document.createDocumentFragment();
     for (const [group, rows] of helpRows()) {
         const h = document.createElement('div');
@@ -3559,7 +3559,7 @@ async function syncPane(pullToHere) {
 async function goToPath(given) {
     const path = given || await askFor(tr('where to', '移動先'), state[state.focus].cwd, {
         wide: true,
-        hint: tr('a path — ~ and environment variables are expanded', 'パス — ~ や環境変数も展開します'),
+        hint: tr('a path. ~ and environment variables are expanded', 'パス。~ や環境変数も展開します'),
     });
     if (!path) return;
     const which = state.focus;
@@ -3699,7 +3699,7 @@ document.addEventListener('keydown', (e) => {
         e.stopPropagation();
         e.preventDefault();
         hideProg();
-        say(tr('running in the background — :queue manages it', 'バックグラウンドで実行中 — :queue で管理'));
+        say(tr('running in the background. :queue manages it', 'バックグラウンドで実行中。:queue で管理'));
         return;
     }
     // Everything else is swallowed rather than passed on. A `d` typed at a
@@ -3871,7 +3871,7 @@ document.addEventListener('keydown', (e) => {
         where = tr('listing', '一覧');
     }
     say(`[${where}] ${[...bits, e.key].join('+')}   code=${e.code}   keyCode=${e.keyCode}`
-        + tr('   — Esc stops it', '   — Esc で止める'));
+        + tr('. Esc stops it', '。Esc で止める'));
 }, true);
 
 /// Take what init.lua bound. Names that are not actions and keys that are not
@@ -4017,7 +4017,7 @@ document.addEventListener('keydown', (e) => {
         // Moving across the network is a download that then deletes the
         // original, and nothing here does the second half yet. `c` copies;
         // saying so beats an error per file from a move that never could.
-        if (state[state.focus].remote) say(tr('moving to or from a server is not built yet — use c to copy', 'サーバとの移動はまだです — c でコピーしてください'), true);
+        if (state[state.focus].remote) say(tr('moving to or from a server is not built yet. use c to copy', 'サーバとの移動はまだです。c でコピーしてください'), true);
         else operate('move');
     }
     else if (k === 'd' && bare) {
@@ -4102,7 +4102,7 @@ document.addEventListener('keydown', (e) => {
     // place on the server, and holding it would paste a path that exists
     // nowhere on this disk — quietly, later, somewhere else.
     else if ((k === 'c' || k === 'x') && mod(e) && state[state.focus].remote) {
-        say(tr('a file on a server cannot be held on the clipboard — use c', 'サーバ上のファイルはクリップボードに持てません — c で転送してください'), true);
+        say(tr('a file on a server cannot be held on the clipboard. use c', 'サーバ上のファイルはクリップボードに持てません。c で転送してください'), true);
     }
     // Pasting into a server pane uploads what the register holds. The
     // register's paths never travel to the window — the engine owns both
@@ -4951,8 +4951,8 @@ function openChat(title, seed = null, sent = null) {
     chat.images = [];
     setChatOn(true);
     el.cName.textContent = title;
-    el.cAbout.textContent = tr("the AI's answers — check them before you use them",
-                               'AI の答え — 確かめてから使ってください');
+    el.cAbout.textContent = tr("the AI's answers. check them before you use them",
+                               'AI の答え。確かめてから使ってください');
     drawChatHint();
     el.cIn.value = '';
     drawChat();
@@ -5221,7 +5221,7 @@ function resolvedFace() {
         const name = raw.trim().replace(/^["\']|["\']$/g, '');
         if (faceIsHere(name)) return name;
     }
-    return tr('(none of them — the browser chose)', '(どれも入っていないので、ブラウザが選びました)');
+    return tr('(none of them. the browser chose)', '(どれも入っていないので、ブラウザが選びました)');
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -5509,7 +5509,7 @@ function loadMonaco() {
         const s = document.createElement('script');
         s.src = 'vendor/monaco/vs/loader.js';
         s.onerror = () => no(new Error(
-            tr('gui/vendor is missing — run `node vendor.js` in gui/', 'gui/vendor がありません — gui/ で `node vendor.js` を実行してください')));
+            tr('gui/vendor is missing. run `node vendor.js` in gui/', 'gui/vendor がありません。gui/ で `node vendor.js` を実行してください')));
         s.onload = () => {
             // Absolute, because the editor starts a worker and a worker has
             // no idea what this page's directory was. A relative path sent it
@@ -6512,9 +6512,9 @@ function drawViewFoot() {
     }
     if (viewer.readOnly) {
         el.vFoot.textContent = hex.editing
-            ? tr(`hex edit — 0-9 a-f overwrite   ·   offset ${hex.at.toString(16).padStart(8, '0')}`, `16進編集 — 0-9 a-f で上書き   ·   ${hex.at.toString(16).padStart(8, '0')} 番地`)
+            ? tr(`hex edit. 0-9 a-f overwrite   ·   offset ${hex.at.toString(16).padStart(8, '0')}`, `16進編集。0-9 a-f で上書き   ·   ${hex.at.toString(16).padStart(8, '0')} 番地`)
               + tr(`${hex.half ? ' (waiting for the low digit)' : ''}   ·   Ctrl+S saves (keeping a .bak)   Esc back`, `${hex.half ? '（あと1けた）' : ''}   ·   Ctrl+S 保存（.bak を残します）   Esc 戻る`)
-            : tr('hex — i edits   ·   Esc ×3 closes', '16進表示 — i で編集   ·   Esc ×3 閉じる');
+            : tr('hex. i edits   ·   Esc ×3 closes', '16進表示。i で編集   ·   Esc ×3 閉じる');
         return;
     }
     // In vim style the footer is vim's own — its mode line and its `:` prompt
@@ -6589,7 +6589,7 @@ async function saveFile() {
                     { key: 'a', label: tr('save as…', '別名で保存…') },
                 ],
             });
-        if (!pick) { say(tr('stopped — nothing was written', 'やめました。何も書いていません')); return false; }
+        if (!pick) { say(tr('stopped. nothing was written', 'やめました。何も書いていません')); return false; }
         if (pick === 'a') return saveAsPrompt();
         if (pick !== 'o') { await showDiskDiff(); return false; }
         r = await ask('save', { lines, force: true });
@@ -6614,7 +6614,7 @@ async function showDiskDiff() {
     const fresh = await ask('viewpath', { path: viewer.path });
     if (!fresh) return;
     show(tr('What is on disk now', 'いまディスクにあるもの'),
-        tr('yours is still in the editor — nothing has been written', 'あなたの編集はエディタに残っています。まだ何も書いていません'),
+        tr('yours is still in the editor. nothing has been written', 'あなたの編集はエディタに残っています。まだ何も書いていません'),
         (fresh.lines || []).map((t, i) => ({ n: String(i + 1), label: t })),
         { foot: tr('Esc back to your copy', 'Esc 自分の編集に戻る') });
 }
@@ -6699,7 +6699,7 @@ function startHex() {
     viewer.ed.updateOptions({ readOnly: true });
     markHexByte();
     drawViewFoot();
-    say(tr('hex edit — 0-9 a-f overwrite, Ctrl+S saves', '16進編集 — 0-9 a-f で上書き、Ctrl+S で保存'));
+    say(tr('hex edit. 0-9 a-f overwrite, Ctrl+S saves', '16進編集。0-9 a-f で上書き、Ctrl+S で保存'));
 }
 
 function stopHex() {
@@ -7111,7 +7111,7 @@ function commands() {
 function buildCommands() {
   return [
     { name: 'count', alias: ['step'], about: tr("count files, lines and steps", 'ファイル・ステップ数を数える'), run: cmdCount },
-    { name: 'du', alias: ['diskusage'], about: tr("disk usage \u2014 what's biggest here", '容量分析 — 何が大きいか'), run: cmdDu },
+    { name: 'du', alias: ['diskusage'], about: tr("disk usage. what's biggest here", '容量分析。何が大きいか'), run: cmdDu },
     { name: 'attr', alias: ['stat'], about: tr("permissions & owner", '属性を見る'), run: cmdAttr },
     { name: 'chmod', about: tr("change the mode (e.g. :chmod 644)", 'モードを変える（例 :chmod 644）'), arg: tr('Mode', 'モード'), run: cmdChmod },
     { name: 'readonly', about: tr("set / clear read-only (on by default)", '読み取り専用にする / 解除（既定 on）'), run: cmdReadonly },
@@ -7140,12 +7140,12 @@ function buildCommands() {
     { name: 'discard', alias: ['revert', 'svnrevert'], about: tr("discard worktree changes", '作業ツリーの変更を破棄'), run: () => cmdVcs('discard') },
     { name: 'duplicate', alias: ['dup', 'dedup'], about: tr("find files with identical contents", '中身が同じファイルを探す'), run: cmdDedup },
     { name: 'redo', about: tr("redo what u undid", 'u で取り消した操作をやり直す'), run: redo },
-    { name: 'image', about: tr("how images are drawn (a window always draws them)", '画像の表示方式（ウィンドウ版では常に描画されます）'), run: () => say(tr('a window always draws images — just press F3', 'ウィンドウ版では画像は常に表示されます — F3 でどうぞ')) },
+    { name: 'image', about: tr("how images are drawn (a window always draws them)", '画像の表示方式（ウィンドウ版では常に描画されます）'), run: () => say(tr('a window always draws images. just press F3', 'ウィンドウ版では画像は常に表示されます。F3 でどうぞ')) },
     // `finder` is NOT an alias here: it is `:files`'s, and a spelling that
     // lives on two commands reaches only the first — the fuzzy finder its own
     // about-text promised could never open. `:view finder` still works as an
     // argument (cmdView maps it to details).
-    { name: 'view', alias: ['classic', 'details'], about: tr("which mode the window is in \u2014 :view classic | details", 'モード — :view classic | details'), arg: 'classic / details', optional: true, run: cmdView },
+    { name: 'view', alias: ['classic', 'details'], about: tr("which mode the window is in. :view classic | details", 'モード。:view classic | details'), arg: 'classic / details', optional: true, run: cmdView },
     { name: 'shell', about: tr("open the shell panel (also Shift+J)", 'シェルパネルを開く（Shift+J でも）'), run: openShell },
     { name: 'remote', alias: ['sftp'], about: tr("open a server in this pane (SFTP)", 'このペインでサーバを開く（SFTP）'), run: cmdSftpPicker },
 
@@ -7205,13 +7205,13 @@ function buildCommands() {
     { name: 'vi', alias: ['vim', 'nvim'], about: tr("open the file in that editor, in a shell tab of its own", 'そのエディタを新しいシェルタブで開く'), run: cmdEditorTab },
     { name: 'notepad', alias: ['editstyle', 'vimkey'], about: tr("editor keys: :notepad vim / notepad", 'エディタのキー操作: :notepad vim / notepad'), arg: 'vim / notepad', optional: true, run: cmdEditStyle },
     { name: 'new', alias: ['scratch'], about: tr("a scratch buffer (:w gives it a name)", '下書きを開く（:w で名前を付けて保存）'), run: cmdScratch },
-    { name: 'limit', alias: ['speed', 'ratelimit'], about: tr("cap the transfer rate \u2014 :limit 2m / 500k / off", '転送の速さの上限 — :limit 2m / 500k / off'), arg: '2m / 500k / off', optional: true, run: cmdLimit },
+    { name: 'limit', alias: ['speed', 'ratelimit'], about: tr("cap the transfer rate. :limit 2m / 500k / off", '転送の速さの上限。:limit 2m / 500k / off'), arg: '2m / 500k / off', optional: true, run: cmdLimit },
     { name: 'summary', alias: ['summarize', 'summarise'], about: tr("AI: summarise the open file", 'AI: 開いているファイルを要約'), run: cmdSummary },
     { name: 'aicommit', alias: ['commitmsg'], hidden: true, about: tr("AI: a commit message from the staged diff (:ai commit)", 'AI: ステージ済みの差分からコミットメッセージを作る（:ai commit）'), run: cmdAiCommit },
     // 一語で両方（2026-09-20）。どちらのリポジトリかはディレクトリが知っている。
     { name: 'commit', alias: ['svncommit'], about: tr("commit. git records it here, svn sends it to the server", 'コミット。git は手元に、svn はサーバに届きます'), run: cmdCommit },
     { name: 'aierror', alias: ['explain'], hidden: true, about: tr("AI: explain the shell's last error (:ai error)", 'AI: シェルの直近のエラーを説明する（:ai error）'), run: cmdAiError },
-    { name: 'ime', alias: ['inputmethod'], about: tr("input method \u2014 off in vim's normal mode (cian.ime)", 'IME 連携 — vim のノーマルモードで自動オフ（cian.ime）'), run: cmdIme },
+    { name: 'ime', alias: ['inputmethod'], about: tr("input method. off in vim's normal mode (cian.ime)", 'IME 連携。vim のノーマルモードで自動オフ（cian.ime）'), run: cmdIme },
     { name: 'blame', about: tr("who last changed each line of the open file", '各行を最後に変えた人（開いているファイル）'), run: cmdBlame },
     { name: 'enc', alias: ['encoding'], about: tr("re-read the open file under another encoding", '開いているファイルの文字コードを変えて読み直す'), arg: 'utf8 / sjis / utf16le / utf16be', optional: true, run: cmdEncoding },
     { name: 'ws', about: tr("show or hide tabs, trailing spaces and the rest", 'タブ・行末の空白などを見せる／隠す'), run: toggleWs },
@@ -7220,7 +7220,7 @@ function buildCommands() {
     { name: 'g', about: tr("delete the matching lines (:g/re/d)", '一致した行を削除（:g/re/d）'), arg: tr('regex', '正規表現'), run: (a) => cmdLineFilter(a, false) },
     { name: 'v', about: tr("keep only the matching lines (:v/re/d)", '一致した行だけ残す（:v/re/d）'), arg: tr('regex', '正規表現'), run: (a) => cmdLineFilter(a, true) },
     { name: 'combine', alias: ['join'], about: tr("join the next line (:combine 3 for three; :combine! without a space)", '次の行を連結（:combine 3 で3行、:combine! は空白なし）'), arg: tr('how many lines', '行数'), optional: true, run: cmdCombine },
-    { name: 'theme', alias: ['colorscheme', 'colourscheme'], about: tr("twenty-one palettes \u2014 choosing one dresses the window (also in T\u2019s menu)", '配色 21 種 — 選ぶとその場で変わります（T のメニューにも）'), arg: tr('name', '名前'), optional: true, run: cmdTheme },
+    { name: 'theme', alias: ['colorscheme', 'colourscheme'], about: tr("twenty-one palettes. choosing one dresses the window (also in T\u2019s menu)", '配色 21 種。選ぶとその場で変わります（T のメニューにも）'), arg: tr('name', '名前'), optional: true, run: cmdTheme },
     { name: 'redraw', alias: ['refresh!'], about: tr("redraw the screen", '画面を描き直す'), run: () => { draw('left'); draw('right'); say(tr('redrawn', '描き直しました')); } },
     { name: 'preview', about: tr("follow the cursor and show what it is on (again stops)", 'カーソルのファイルを追って表示（もう一度で止める）'), run: togglePreview },
     // cian-tui's `:mermaid` opens the file's diagrams in a browser. The window
@@ -7239,13 +7239,13 @@ function buildCommands() {
     // knows `:mkdir -p` should not have to find out that this one is different.
     { name: 'mkdir', alias: ['md'], about: tr("make a folder (:mkdir -p a/b/c)", 'ディレクトリを作る（:mkdir -p a/b/c）'), arg: tr('name', '名前'), run: cmdMkdir },
     { name: 'touch', about: tr("no name: stamp the selection with now. a name: make that file", '名前なし: 選択の日時をいまに。名前あり: そのファイルを作る'), arg: tr('name (leave it out to stamp the selection)', '名前（省略すると選択の日時を更新）'), optional: true, run: cmdTouch },
-    { name: 'cp', alias: ['copy'], about: tr("copy \u2014 to the other pane with no argument, or :cp <where>", 'コピー — 引数なしで反対ペインへ、:cp <行き先> でそこへ'), arg: tr('where to', '行き先'), optional: true, run: (a) => a ? cmdTo('copyto', a) : operate('copy') },
-    { name: 'mv', alias: ['move'], about: tr("move \u2014 to the other pane with no argument, or :mv <where>", '移動 — 引数なしで反対ペインへ、:mv <行き先> でそこへ'), arg: tr('where to', '行き先'), optional: true, run: (a) => a ? cmdTo('moveto', a) : operate('move') },
+    { name: 'cp', alias: ['copy'], about: tr("copy. to the other pane with no argument, or :cp <where>", 'コピー。引数なしで反対ペインへ、:cp <行き先> でそこへ'), arg: tr('where to', '行き先'), optional: true, run: (a) => a ? cmdTo('copyto', a) : operate('copy') },
+    { name: 'mv', alias: ['move'], about: tr("move. to the other pane with no argument, or :mv <where>", '移動。引数なしで反対ペインへ、:mv <行き先> でそこへ'), arg: tr('where to', '行き先'), optional: true, run: (a) => a ? cmdTo('moveto', a) : operate('move') },
     { name: 'rm', alias: ['del', 'delete'], about: tr("delete (to the trash)", '削除（ゴミ箱へ）'), run: () => operate('delete') },
     { name: 'pwd', about: tr("show this folder and put it on the clipboard", 'いまの場所を表示してクリップボードへ'), run: cmdPwd },
     { name: 'ls', alias: ['dir'], about: tr("reload (:ls -a toggles the dotfiles)", '読み直す（:ls -a で隠しファイル切替）'), run: cmdLs },
     { name: 'q', alias: ['quit'], about: tr("quit (it asks)", '閉じる（確認します）'), run: cmdQuit },
-    { name: 'each', about: tr("a command per marked file \u2014 {} is the path", 'マーク各ファイルにコマンド — {} がパス'), arg: tr('command', 'コマンド'), run: cmdEach },
+    { name: 'each', about: tr("a command per marked file. {} is the path", 'マーク各ファイルにコマンド。{} がパス'), arg: tr('command', 'コマンド'), run: cmdEach },
     { name: 'nobom', alias: ['stripbom'], about: tr("strip UTF-8 BOMs (UTF-16 is left alone)", 'UTF-8 BOM を除去（UTF-16 は触らない）'), run: cmdNoBom },
     { name: 'renamelist', about: tr("rename by editing the list of names", '名前の一覧を編集してリネーム'), run: cmdRenameList },
     { name: 'outline', about: tr("the headings of the open file", '開いているファイルの見出し一覧'), run: cmdOutline },
@@ -7386,7 +7386,7 @@ async function cmdTouch(name) {
 async function cmdPwd() {
     const cwd = state[state.focus].cwd;
     await navigator.clipboard.writeText(cwd);
-    say(tr(`${cwd} — on the clipboard`, `${cwd} — クリップボードへ`));
+    say(tr(`${cwd}. on the clipboard`, `${cwd} をクリップボードへ`));
 }
 
 async function cmdLs(arg) {
@@ -7474,7 +7474,7 @@ async function cmdMacros() {
         n: m.script ? tr('script', 'スクリプト') : tr(`${m.panes} panes`, `${m.panes}枚`),
         label: m.name,
         sub: m.script
-            ? tr('Lua — it moves files and says what it did', 'Lua ── ファイルを操作して、結果を表示します')
+            ? tr('Lua. it moves files and says what it did', 'Lua です。ファイルを操作して、結果を表示します')
             : tr('opened as tabs', 'タブとして開きます'),
         name: m.name,
         script: m.script,
@@ -7500,7 +7500,7 @@ async function cmdMacros() {
                 if (done.error) {
                     // The error *and* whatever it managed to say first: a
                     // macro that stopped halfway has still done what it did.
-                    show(tr(`${row.name} — stopped`, `${row.name} ── 途中で止まりました`),
+                    show(tr(`${row.name}. stopped`, `${row.name} は途中で止まりました`),
                         done.error, lines.map((t) => ({ label: t })),
                         { foot: tr('Esc close', 'Esc 閉じる') });
                 } else if (lines.length > 1) {
@@ -7514,7 +7514,7 @@ async function cmdMacros() {
             }
             takeShell(done);
             setShellFocus(true);
-            say(tr(`${done.name} — ${done.opened} panes opened as tabs`, `${done.name} — ${done.opened} 枚をタブで開きました`));
+            say(tr(`${done.name}. ${done.opened} panes opened as tabs`, `${done.name}. ${done.opened} 枚をタブで開きました`));
         },
     });
 }
@@ -7757,7 +7757,7 @@ async function cmdAiCmd(want) {
         if (!term.on) await openShell();
         await ask('shellinput', { text: line });
         setShellFocus(true);
-        say(tr('Enter runs it, Ctrl+C throws it away — nothing has run', 'Enter で実行、Ctrl+C で捨てる — 実行はしていません'));
+        say(tr('Enter runs it, Ctrl+C throws it away. nothing has run', 'Enter で実行、Ctrl+C で捨てる。実行はしていません'));
     };
 }
 
@@ -7856,7 +7856,7 @@ async function cmdMermaid() {
     el.vBody.hidden = true;
     reading = true;
     await drawDiagrams();
-    say(tr(`${r.blocks.length} mermaid — Ctrl+E or Esc for the source, :mermaid! for a browser`, `mermaid ${r.blocks.length} 件 — Ctrl+E か Esc でソースへ、:mermaid! でブラウザ`));
+    say(tr(`${r.blocks.length} mermaid. Ctrl+E or Esc for the source, :mermaid! for a browser`, `mermaid ${r.blocks.length} 件。Ctrl+E か Esc でソースへ、:mermaid! でブラウザ`));
 }
 
 /// `:mermaid!` — the same diagrams, in a browser.
@@ -7969,7 +7969,7 @@ async function cmdReload() {
     // Said plainly rather than "reloaded": some of init.lua is read once, at
     // startup, and claiming otherwise sends people looking for a bug.
     say(tr(`init.lua re-read (AI ${r.ai ? 'yes' : 'no'}, `, `init.lua を読み直しました（AI ${r.ai ? 'あり' : 'なし'}、`)
-        + tr(`${r.sync_maps} sync maps, ${r.ssh_hosts} hosts) — borders and the like need a restart`, `同期 ${r.sync_maps} 件、SSH ${r.ssh_hosts} 件）— 枠線などは再起動が要ります`));
+        + tr(`${r.sync_maps} sync maps, ${r.ssh_hosts} hosts). borders and the like need a restart`, `同期 ${r.sync_maps} 件、SSH ${r.ssh_hosts} 件）— 枠線などは再起動が要ります`));
 }
 
 /// `:key` — show what the window actually received.
@@ -8037,7 +8037,7 @@ async function cmdSshPicker() {
         return;
     }
     const rows = sshRows(r.hosts);
-    show('SSH', tr(`${rows.length} hosts (init.lua’s cian.ssh) — opens a shell`, `${rows.length} 件（init.lua の cian.ssh）── シェルで開きます`), rows, {
+    show('SSH', tr(`${rows.length} hosts (init.lua’s cian.ssh). opens a shell`, `${rows.length} 件（init.lua の cian.ssh）── シェルで開きます`), rows, {
         filter: true,
         hint: tr('type to narrow (host or user)', 'フィルタ（ホスト名・ユーザー）'),
         foot: tr('type to narrow   Enter connect   Esc close', 'フィルタ   Enter 接続   Esc 閉じる'),
@@ -8130,8 +8130,8 @@ async function connectPreset(pane, row) {
     if (c && c.need_password) {
         // An empty box, twice. Say what the state is rather than leaving the
         // pane where it was with nothing said.
-        say(tr(`no password given — ${row.who} is not connected`,
-            `パスワードが空です — ${row.who} には繋いでいません`), true);
+        say(tr(`no password given. ${row.who} is not connected`,
+            `パスワードが空です。${row.who} には繋いでいません`), true);
         return null;
     }
     return c;
@@ -8191,12 +8191,12 @@ async function cmdSend(dir) {
     const r = await ask('sshhosts', {});
     if (!r) return;
     if (!r.hosts.length) {
-        say(tr('no hosts in init.lua’s cian.ssh — :sftp takes one by hand', 'init.lua の cian.ssh にサーバがありません — :sftp で手入力できます'), true);
+        say(tr('no hosts in init.lua’s cian.ssh. :sftp takes one by hand', 'init.lua の cian.ssh にサーバがありません。:sftp で手入力できます'), true);
         return;
     }
     const rows = sshRows(r.hosts);
     show(dir === 'up' ? tr('Upload → server', 'アップロード → サーバ') : tr('Download ← server', 'ダウンロード ← サーバ'),
-        tr(`${rows.length} hosts (init.lua’s cian.ssh) — opening in the ${other === 'left' ? 'left' : 'right'} pane`, `${rows.length} 件（init.lua の cian.ssh）— ${other === 'left' ? '左' : '右'}のペインに開きます`),
+        tr(`${rows.length} hosts (init.lua’s cian.ssh). opening in the ${other === 'left' ? 'left' : 'right'} pane`, `${rows.length} 件（init.lua の cian.ssh）— ${other === 'left' ? '左' : '右'}のペインに開きます`),
         rows, {
             filter: true,
             hint: tr('type to narrow (host or user)', 'フィルタ（ホスト名・ユーザー）'),
@@ -8210,8 +8210,8 @@ async function cmdSend(dir) {
                 // Back to the key that already means "across". The far side is
                 // a listing now, so the folder is chosen by walking to it.
                 say(dir === 'up'
-                    ? tr(`${c.host}  ${c.path} — walk to where it goes, then c`, `${c.host}  ${c.path} — 送り先まで移動して c`)
-                    : tr(`${c.host}  ${c.path} — mark what to fetch and press c there`, `${c.host}  ${c.path} — 取ってくるものをマークして、そちらで c`));
+                    ? tr(`${c.host}  ${c.path}. walk to where it goes, then c`, `${c.host}  ${c.path}。送り先まで移動して c`)
+                    : tr(`${c.host}  ${c.path}. mark what to fetch and press c there`, `${c.host}  ${c.path}。取ってくるものをマークして、そちらで c`));
             },
         });
 }
@@ -8276,7 +8276,7 @@ async function remoteOp(what) {
         if (!rows.length) { say(tr('nothing to work on', '対象がありません'), true); return; }
         if (!await confirm(
             tr(`Delete ${rows.length} from the server`, `${rows.length} 件をサーバから削除します`),
-            tr('there is no trash there — this cannot be undone\n\n', 'ゴミ箱はありません — 元に戻せません\n\n') + rows.map((x) => x.name).join('\n'),
+            tr('there is no trash there. this cannot be undone\n\n', 'ゴミ箱はありません。元に戻せません\n\n') + rows.map((x) => x.name).join('\n'),
         )) { say(tr('stopped', 'やめました')); return; }
     }
     const r = await ask('remoteop', { pane: which, what, name });
@@ -8958,7 +8958,7 @@ async function runTypedCommand(line) {
     if (!cmd) {
         // Named, not "unknown command": the name typed is the one thing the
         // person can compare against the list.
-        say(tr(`:${name}? — C lists every command`, `:${name} は知りません — C でコマンド一覧`), true);
+        say(tr(`:${name}?. C lists every command`, `:${name} は知りません。C でコマンド一覧`), true);
         return;
     }
     await runCommand(cmd, arg);
@@ -9282,7 +9282,7 @@ async function startVisual() {
     visual.from = pane.cursor;
     visual.was = pane.entries.filter((x) => x.marked).map((x) => x.path);
     await paintVisual();
-    say(tr('visual selection — Enter confirms, Esc cancels', 'ビジュアル選択 — Enter で確定、Esc で取消'));
+    say(tr('visual selection. Enter confirms, Esc cancels', 'ビジュアル選択。Enter で確定、Esc で取消'));
 }
 
 async function paintVisual() {
@@ -9347,7 +9347,7 @@ function hopHere(step) {
     pane.entries.forEach((x, i) => {
         if (!x.parent && x.name.toLowerCase().includes(q)) hits.push(i);
     });
-    if (!hits.length) { say(tr(`${here.needle} — not found`, `${here.needle} — 見つかりません`), true); return; }
+    if (!hits.length) { say(tr(`${here.needle}. not found`, `${here.needle} は見つかりません`), true); return; }
     if (here.at < 0) {
         // The first hop starts from where the eye is, not from the top.
         const ahead = hits.findIndex((n) => n > pane.cursor);
@@ -9577,7 +9577,7 @@ function diffHop(step) {
             return;
         }
     }
-    say(tr(`${diffNeedle} — not found`, `${diffNeedle} — 見つかりません`), true);
+    say(tr(`${diffNeedle}. not found`, `${diffNeedle} は見つかりません`), true);
 }
 
 /// `>` / `<` in a directory comparison — put this entry on the other side.
@@ -9694,7 +9694,7 @@ async function cmdDiffEdit(agreed = false) {
     el.vBody.hidden = false;
     el.vPic.hidden = true;
     el.vName.textContent = viewer.name;
-    el.vAbout.textContent = tr('both sides are editable — Ctrl+S saves both', '左右とも編集できます — Ctrl+S でどちらも保存');
+    el.vAbout.textContent = tr('both sides are editable. Ctrl+S saves both', '左右とも編集できます。Ctrl+S でどちらも保存');
     // **Esc は1回で閉じる**（下の keydown の註）。ここはずっと「×3」と
     // 言っていて、crmaine の紹介動画で3回押されていた。
     el.vFoot.textContent = tr('F7 / Shift+F7 next / previous difference   ·   L as a list   ·   Ctrl+S saves   ·   Esc closes', 'F7 / Shift+F7 次 / 前の相違   ·   L 一覧で見る   ·   Ctrl+S 保存   ·   Esc 閉じる');
@@ -9788,7 +9788,7 @@ async function cmdRenamePattern(pattern) {
         })),
         {
             foot: clashes.length
-                ? tr('★ names already exist — Enter does the rest   Esc cancels', '★ の名前は既にあります — Enter で残りだけ実行   Esc 取消')
+                ? tr('★ names already exist. Enter does the rest   Esc cancels', '★ の名前は既にあります。Enter で残りだけ実行   Esc 取消')
                 : tr('Enter run   Esc cancel', 'Enter 実行   Esc 取消'),
             pick: async () => {
                 closeReport();
@@ -9935,7 +9935,7 @@ async function cmdDedup() {
             n: j === 0 ? `${i + 1}` : '', label: p, path: p, on: j !== 0,
         }));
     });
-    show(tr('Files with identical contents', '中身が同じファイル'), tr(`${r.groups.length} groups — the first of each is the one kept`, `${r.groups.length} 組 — 各組の1つ目は残す側`), rows, {
+    show(tr('Files with identical contents', '中身が同じファイル'), tr(`${r.groups.length} groups. the first of each is the one kept`, `${r.groups.length} 組。各組の1つ目は残す側`), rows, {
         checks: true,
         foot: tr('Space off/on   a all   n none   Enter delete the chosen   Esc cancel', 'Space 外す／戻す   a 全部   n 全部外す   Enter 選んだ分を削除   Esc 取消'),
         pick: async (chosen) => {
@@ -10085,7 +10085,7 @@ async function openShell(opts = {}) {
     const r = await ask('shellopen', { pane: state.focus, ...size });
     if (!r) { closeShell(); return; }
     takeShell(r);
-    if (takeKeys) say(tr('shell — Esc goes back to the files', 'シェル — Esc でファイルへ戻る'));
+    if (takeKeys) say(tr('shell. Esc goes back to the files', 'シェル。Esc でファイルへ戻る'));
     else draw('left');
 }
 
@@ -10282,14 +10282,14 @@ async function cmdTheme(name) {
         // person knows about, so the near misses are worth more than the
         // refusal.
         const near = [...palettes.keys()].filter((k) => k.includes(want)).slice(0, 4);
-        say(near.length ? `${name}? — ${near.join('  ')}` : tr(`there is no theme called ${name}`, `${name} という配色はありません`), true);
+        say(near.length ? `${name}?. ${near.join('  ')}` : tr(`there is no theme called ${name}`, `${name} という配色はありません`), true);
         return;
     }
     // What was on before the gallery opened, so Esc can put it back. The
     // foot says "Esc 戻す" and a promise on the screen has to be kept.
     const was = palette ? { palette } : { look };
     const rows = themeRows();
-    show(tr('Themes', '配色'), tr(`${rows.length} — the top ${LOOKS.length} are this window's, the rest are cian-tui's`, `${rows.length} 種 — 上の ${LOOKS.length} つはウィンドウ版のもの、あとは cian-tui のもの`),
+    show(tr('Themes', '配色'), tr(`${rows.length}. the top ${LOOKS.length} are this window's, the rest are cian-tui's`, `${rows.length} 種。上の ${LOOKS.length} つはウィンドウ版のもの、あとは cian-tui のもの`),
         rows, {
             filter: true,
             // いま着ているものの上で開く。`●` と同じ行。
@@ -10573,7 +10573,7 @@ function loadMermaid() {
         };
         sc.onerror = () => {
             window.define = savedDefine;
-            no(new Error(tr('vendor/mermaid.js is missing — run node gui/vendor.js', 'vendor/mermaid.js がありません — node gui/vendor.js')));
+            no(new Error(tr('vendor/mermaid.js is missing. run node gui/vendor.js', 'vendor/mermaid.js がありません。node gui/vendor.js')));
         };
         document.head.append(sc);
     });
@@ -10835,7 +10835,7 @@ async function togglePreview2() {
         // editing the text.
         const n = await drawDiagramZones();
         zones.on = !!n;
-        say(n ? tr(`back to the source — the ${n} diagram(s) stay on screen`, `ソースに戻りました — 図 ${n} 件はそのまま出しています`) : tr('back to the source', 'ソースに戻りました'));
+        say(n ? tr(`back to the source. the ${n} diagram(s) stay on screen`, `ソースに戻りました。図 ${n} 件はそのまま出しています`) : tr('back to the source', 'ソースに戻りました'));
         return;
     }
     const r = await ask('markdown', { lines: viewer.ed.getValue().split(/\r?\n/) });
@@ -10885,7 +10885,7 @@ async function togglePreview2() {
     el.vRead.hidden = false;
     el.vRead.scrollTop = 0;
     drawDiagrams();
-    say(tr('preview — Ctrl+E goes back to the source', 'プレビュー — Ctrl+E でソースに戻ります'));
+    say(tr('preview. Ctrl+E goes back to the source', 'プレビュー。Ctrl+E でソースに戻ります'));
 }
 
 /// `:ws` — the characters you cannot see but a compiler can.
@@ -10970,7 +10970,7 @@ function showReplacePlan(spec, plan) {
                     if (!going.length) { say(tr('no row is chosen', '選ばれている行がありません'), true); return; }
                     closeReport();
                     if (!await confirm(tr(`Replace ${going.length} lines`, `${going.length} 行を置換します`),
-                        tr(`${new Set(going.map((c) => c.path)).size} files — u cannot undo this`, `${new Set(going.map((c) => c.path)).size} ファイル — u では戻せません`))) {
+                        tr(`${new Set(going.map((c) => c.path)).size} files. u cannot undo this`, `${new Set(going.map((c) => c.path)).size} ファイル。u では戻せません`))) {
                         say(tr('stopped', 'やめました'));
                         return;
                     }
@@ -11105,7 +11105,7 @@ async function cmdVersion() {
         ? new Date(w.built_at * 1000).toLocaleString('ja-JP',
             { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
         : tr('(unknown)', '(不明)');
-    show('cian', tr(`${w.version || '1.1.10'} — a window on cian-core`, `${w.version || '1.1.10'} — cian-core の上のウィンドウ版`), [
+    show('cian', tr(`${w.version || '1.1.10'}. a window on cian-core`, `${w.version || '1.1.10'}. cian-core の上のウィンドウ版`), [
         { label: tr('Built', 'ビルド日時'), sub: built + (w.commit ? `   ${w.commit}` : '') },
         { label: tr('Typeface', '書体'), sub: `${resolvedFace()}   ${FONT.at}px` },
         { label: tr('Config', '設定'), sub: w.config || tr('(none)', '(なし)') },
@@ -11466,7 +11466,7 @@ function scanShortfall(partial) {
         bits.push(tr(`${partial.unopened} directories were too deep`, `${partial.unopened} 個のディレクトリは深すぎて開いていません`));
     }
     if (!bits.length) return '';
-    return tr(` — but ${bits.join('; ')}`, ` ── ただし${bits.join('・')}`);
+    return tr(`. but ${bits.join('; ')}`, `。ただし${bits.join('・')}`);
 }
 
 
@@ -11518,7 +11518,7 @@ async function cmdIme() {
     ime.want = null;
     ime.broken = false;
     say(ime.on
-        ? tr(`input method: on (now ${r.current || '?'}) — it comes back only where text is typed`, `IME 連携: オン（いま ${r.current || '?'}）— 文字を打つ所だけ IME が戻ります`)
+        ? tr(`input method: on (now ${r.current || '?'}). it comes back only where text is typed`, `IME 連携: オン（いま ${r.current || '?'}）— 文字を打つ所だけ IME が戻ります`)
         : tr('input method: off', 'IME 連携: オフ'));
     if (ime.on) syncIme();
 }
@@ -11631,7 +11631,7 @@ function syncIme() {
         // on every switch, and a message per keystroke would bury the one
         // that matters.
         ime.broken = true;
-        say(tr(`input-method handling stopped — ${e.message}`, `IME 連携を止めました — ${e.message}`), true);
+        say(tr(`input-method handling stopped. ${e.message}`, `IME 連携を止めました。${e.message}`), true);
     });
 }
 
@@ -11880,7 +11880,7 @@ function togglePreview() {
         // untouched underneath — Shift+J gives it the keys and the pixels back.
         if (!term.on) openShell().then(() => { blurShell(); showPreview(); });
         else showPreview();
-        say(tr('preview on — the shell panel follows the cursor (Shift+J for the shell)',
+        say(tr('preview on. the shell panel follows the cursor (Shift+J for the shell)',
                'プレビュー: シェルパネルがカーソルを追います（Shift+J でシェルに戻る）'));
     } else {
         preview.at = null;
@@ -11926,7 +11926,7 @@ function showPreview() {
         if (!row || row.parent) { paintPreview(null); return; }
         // A server pane would download every file the cursor passed over,
         // which is the terminal build's reason for declining it too.
-        if (pane.remote) { paintPreview(previewNote(tr('a server pane — no preview (it would download every file)', 'サーバのペイン ── プレビューしません（毎回ダウンロードになります）'))); return; }
+        if (pane.remote) { paintPreview(previewNote(tr('a server pane. no preview (it would download every file)', 'サーバのペインです。プレビューしません（毎回ダウンロードになります）'))); return; }
         if (preview.at === row.path) return;
         preview.at = row.path;
         if (row.is_dir) {
@@ -12053,7 +12053,7 @@ async function cmdSnippets() {
             if (!term.on) await openShell();
             await ask('shellinput', { text: row.cmd + (row.enter ? '\n' : '') });
             setShellFocus(true);
-            say(row.enter ? tr(`ran ${row.label}`, `${row.label} を実行`) : tr(`${row.label} is at the prompt — Enter runs it`, `${row.label} を置きました — Enter で実行`));
+            say(row.enter ? tr(`ran ${row.label}`, `${row.label} を実行`) : tr(`${row.label} is at the prompt. Enter runs it`, `${row.label} を置きました。Enter で実行`));
         },
     });
 }
@@ -12359,14 +12359,14 @@ function extendShellSelection(forward) {
     // panel is not editable, so it has to be asked for by name. It handles the
     // line wrapping itself.
     sel.modify('extend', forward ? 'forward' : 'backward', 'character');
-    say(tr('selecting — Ctrl+C copies, Esc clears', '選択中 — Ctrl+C でコピー、Esc で解除'));
+    say(tr('selecting. Ctrl+C copies, Esc clears', '選択中。Ctrl+C でコピー、Esc で解除'));
 }
 
 /// The selection in the shell, onto the clipboard.
 function shellCopy() {
     const text = shellSelectionText();
     if (!text) {
-        say(tr('nothing selected — drag to select, or use the menu to interrupt',
+        say(tr('nothing selected. drag to select, or use the menu to interrupt',
                '選択がありません。ドラッグで選ぶか、メニューから中断できます'), true);
         return;
     }
@@ -12605,7 +12605,7 @@ async function scrollShell(lines) {
     // has stopped.
     const back = r.panes && r.panes.find((p) => p.focused);
     const at = back && back.screen ? back.screen.scrollback : 0;
-    say(at ? tr(`${at} lines back — typing returns to the end`, `${at} 行さかのぼり中 — 何か入力すると戻ります`) : tr('at the newest output', '最新の出力'));
+    say(at ? tr(`${at} lines back. typing returns to the end`, `${at} 行さかのぼり中。何か入力すると戻ります`) : tr('at the newest output', '最新の出力'));
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -12848,7 +12848,7 @@ window.cian.onEvent(async (msg) => {
             // "（まだ探しています）" over this line forever.
             finder.walking = false;
             el.findFoot.textContent = msg.capped
-                ? tr(`stopped at ${msg.total} — narrow it down`, `${msg.total} 件で打ち切り — 絞り込んでください`)
+                ? tr(`stopped at ${msg.total}. narrow it down`, `${msg.total} 件で打ち切り。絞り込んでください`)
                 : tr(`${msg.total}`, `${msg.total} 件`);
             rankNow();
             return;
@@ -13121,8 +13121,8 @@ function greet() {
     // notice that the letters are not the ones that were asked for.
     if (cfg.faceAsked && !faceIsHere(cfg.faceAsked)) {
         say(tr(
-            `${cfg.faceAsked} is not installed — drawing in ${face} ${size}`,
-            `${cfg.faceAsked} は入っていません — ${face} ${size} で描いています`,
+            `${cfg.faceAsked} is not installed. drawing in ${face} ${size}`,
+            `${cfg.faceAsked} は入っていません。${face} ${size} で描いています`,
         ), true);
         return;
     }

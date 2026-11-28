@@ -162,8 +162,8 @@ impl App {
                     self.message = Some(
                         tr(
                             self.lang,
-                            "unsaved changes — :w to save, :q! to discard",
-                            "未保存の変更があります — :w で保存、:q! で破棄",
+                            "unsaved changes. :w to save, :q! to discard",
+                            "未保存の変更があります。:w で保存、:q! で破棄",
                         )
                         .into(),
                     );
