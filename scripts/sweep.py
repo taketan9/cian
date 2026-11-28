@@ -102,12 +102,32 @@ BACK_OK = {
     "sync": "同上（シェル枠を開いてから同時入力を切り替える）",
     "broadcast": "同上",
     "preview": "トグル。もう一度 :preview で消える",
+    "branch": "トグル（`toggle_branch_view`）。もう一度 :branch で戻る",
+    "zoom": "トグル（`toggle_zoom`）。もう一度 :zoom で戻る",
+    # **この道具の見立ての方が間違っていた。** `:touch` は選んだものの日時を
+    # 更新するので、一覧の日時が変わる ── **変わるのが仕事**で、起動時の画面に
+    # 戻れないのは当たり前。単体では「選択されていません」で終わるため通り、
+    # 長い走行で前のマークが残っているときだけ落ちていた（順番に依存する
+    # 見かけの不具合）。
+    "touch": "日時を更新する。一覧の日時が変わるので、起動時の画面には戻らない",
     "paste": "貼り付け。一覧が増えるのが仕事（`Ctrl+V` と同じ）",
     # **Esc では閉じない。** 一括リネームは編集画面で、既定の文法は vim ──
     # Esc は挿入をやめるだけで、閉じるのは `:q`。エディタとしては筋が通って
     # いるが、**画面にその案内が無い**（下端に出るのは桁と `text` だけ）。
     # 素人が開いたら出られない。**直すなら案内で、挙動ではない。**
     "renamelist": "編集画面。vim 文法なので閉じるのは :q（案内が無いのは別途）",
+}
+
+# ── `unknown command` と言われるのが正しいもの ────────────────────────
+#
+# **面を開いていないと答えない名前。** 閲覧パネルの中でだけ生きるので、
+# 一覧の上で叩けば「そんなコマンドはありません」が正しい答えです。
+# この道具は閲覧パネルを開かないので、**見られないものとして外します**
+# （中で壊れたときは、この掃引では捕まりません）。
+UNKNOWN_OK = {
+    "g": "閲覧パネルの中だけ（行の絞り込み）。`Popup::Viewer` のときだけ答える",
+    "v": "同上（除外する側の絞り込み）",
+    "s": "同上（置換の入力欄を開く）",
 }
 
 # ── 何も起きないのが正しいもの ────────────────────────────────────────
@@ -121,6 +141,8 @@ QUIET_OK = {
     "redo": "やり直すものが無い",
     "stage": "git の作業ツリーではない砂場なので、足すものが無い",
     "svnadd": "同上（svn でもない）",
+    "local": "リモートペインでなければ、戻る先が無い（`leave_remote_pane`）",
+    "tabclose": "タブが1つだけなら閉じない（`close_active` が `len() > 1` で守っている）",
     "refresh": "同じ中身を読み直すので、画面は同じ",
     "refresh!": "同上",
     "rescan": "同上",
@@ -746,7 +768,7 @@ def main() -> int:
 
     quiet = [r["verb"] for r in rows if not r["moved"] and r["verb"] not in QUIET_OK]
     short = [(r["verb"], r["short"]) for r in rows if r["short"]]
-    unknown = [r["verb"] for r in rows if r["unknown"]]
+    unknown = [r["verb"] for r in rows if r["unknown"] and r["verb"] not in UNKNOWN_OK]
     died = [r["verb"] for r in rows if not r["alive"]]
     stuck = [r["verb"] for r in rows if r["alive"] and not r["back"] and r["verb"] not in BACK_OK]
     unopened = [r["verb"] for r in rows if not r["opened"]]
@@ -760,6 +782,7 @@ def main() -> int:
     for v, s in short:
         print(f"      :{v}  {s}")
     print(f"  ㋓ 迷子     : {len(unknown)} 個"
+          f"（面を開いていないと答えないもの {len(UNKNOWN_OK)} 個は除く）"
           + (f"  {' '.join(unknown)}" if unknown else ""))
     print(f"  ㋔ Esc で戻らない : {len(stuck)} 個"
           f"（戻らないのが正しいもの {len(BACK_OK)} 個は除く）"

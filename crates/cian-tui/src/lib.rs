@@ -5147,7 +5147,21 @@ impl App {
 
 fn run_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
     let mut needs_redraw = true;
+    // 起動の表示が前の frame に出ていたか。**時計で消える絵は、誰かが塗り
+    // 直さないと消えません。**
+    let mut splash_was_on = false;
     loop {
+        // **起動の表示は時計で出ています。** 塗り直しは入力・大きさの変化・
+        // シェルの出力でしか起きないので、何も触らずにいると**6秒で消える
+        // はずの表示が、最初の打鍵まで画面に残り続けました**（2026-11-28、
+        // 仮想環境の Windows で確認）。起動したばかりに見えるのではなく、
+        // **固まっているように見えます。**
+        let splash_now = app.is_starting_up();
+        if splash_now || splash_was_on {
+            needs_redraw = true;
+        }
+        splash_was_on = splash_now;
+
         if needs_redraw {
             // A picture just stopped being shown: terminal graphics live
             // outside the cell buffer, so only a real clear removes them.

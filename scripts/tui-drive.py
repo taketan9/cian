@@ -499,6 +499,28 @@ def half_cells(t) -> list:
     return out
 
 
+def check_splash_goes(d, bad):
+    """⑩ 起動の表示は、何も押さなくても消える。
+
+    **時計で消える絵は、誰かが塗り直さないと消えません。** 起動の表示
+    （「starting up… / checking AI helper」）は 6 秒で終わる約束ですが、
+    塗り直しは入力・大きさの変化・シェルの出力でしか起きないため、
+    **何も触らずにいると最初の打鍵まで画面に残っていました**
+    （2026-11-28、仮想環境の本物の Windows で見つけました）。
+    起動したばかりに見えるのではなく、**固まっているように見えます。**
+
+    だから**何も送らずに**待って、消えていることを見ます。
+    """
+    t = start(d)
+    t.pump(9.0)  # 約束の 6 秒より長く。打鍵は1つも送りません
+    text = t.text()
+    gone = "starting up" not in text and "checking AI helper" not in text
+    print(f"⑩ 起動の表示    : 9 秒、何も押さずに待つ → {'消えた ✓' if gone else '残っている ✗'}")
+    if not gone:
+        bad.append("起動の表示が、何も押さないと消えない（固まって見える）")
+    t.close()
+
+
 def check_columns(d, bad):
     """⑥ どの行も端末の桁数ちょうどか ── **全角の片割れが残っていないか。**
 
@@ -677,6 +699,7 @@ def main() -> int:
         check_resize(d, bad)
         check_denied(d, bad)
         check_pending_line(d, bad)
+        check_splash_goes(d, bad)
     finally:
         shutil.rmtree(d, ignore_errors=True)
     print("=" * 72)
