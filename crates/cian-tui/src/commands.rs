@@ -341,10 +341,15 @@ impl App {
             "sync" | "broadcast" => {
                 self.focus(FocusedPane::Shell);
                 let on = self.shell.toggle_broadcast();
-                self.message = Some(if on {
-                    "⇄ synchronize ON — input goes to all panes in this tab".into()
-                } else {
-                    "synchronize off".into()
+                self.message = Some(match (on, self.lang == Lang::Ja) {
+                    (true, true) => {
+                        "⇄ シンクロ入力 ON。このタブの全ペインに入力が届きます".to_string()
+                    }
+                    (true, false) => {
+                        "⇄ synchronize ON. input goes to all panes in this tab".to_string()
+                    }
+                    (false, true) => "シンクロ入力 OFF".to_string(),
+                    (false, false) => "synchronize off".to_string(),
                 });
             }
             "count" | "step" => self.start_count(),

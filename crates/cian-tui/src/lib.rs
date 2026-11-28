@@ -3234,11 +3234,19 @@ impl App {
             other.active_mut().jump_to(target.clone())?;
         }
         // focus stays on the active pane
-        self.message = Some(format!(
-            "{} other pane → {}",
-            if new_tab { "new tab in" } else { "opened in" },
-            target.display()
-        ));
+        self.message = Some(if self.lang == Lang::Ja {
+            format!(
+                "{}: 反対のペイン → {}",
+                if new_tab { "新しいタブ" } else { "開きました" },
+                target.display()
+            )
+        } else {
+            format!(
+                "{} other pane → {}",
+                if new_tab { "new tab in" } else { "opened in" },
+                target.display()
+            )
+        });
         Ok(())
     }
 
@@ -3257,7 +3265,11 @@ impl App {
             }
             p.jump_to(other_cwd.clone())?;
         }
-        self.message = Some(format!("this pane → {}", other_cwd.display()));
+        self.message = Some(if self.lang == Lang::Ja {
+            format!("このペイン → {}", other_cwd.display())
+        } else {
+            format!("this pane → {}", other_cwd.display())
+        });
         Ok(())
     }
 
@@ -3279,7 +3291,11 @@ impl App {
         }
         other.active_mut().jump_to(cwd.clone())?;
         // Focus stays on the active pane.
-        self.message = Some(format!("other pane → {}", cwd.display()));
+        self.message = Some(if self.lang == Lang::Ja {
+            format!("反対のペイン → {}", cwd.display())
+        } else {
+            format!("other pane → {}", cwd.display())
+        });
         Ok(())
     }
 
@@ -3297,11 +3313,19 @@ impl App {
         if !ext.is_empty() && self.config.has_ext_open(&ext) {
             match self.config.run_ext_open(&ext, &path) {
                 Some(Ok(())) => {
-                    self.message = Some(format!("opened via lua: {}", path.display()));
+                    self.message = Some(if self.lang == Lang::Ja {
+                        format!("lua の設定で開きました: {}", path.display())
+                    } else {
+                        format!("opened via lua: {}", path.display())
+                    });
                     return;
                 }
                 Some(Err(e)) => {
-                    self.message = Some(format!("on_open({}) error: {}", ext, e));
+                    self.message = Some(if self.lang == Lang::Ja {
+                        format!("on_open({}) でエラーが起きました: {}", ext, e)
+                    } else {
+                        format!("on_open({}) error: {}", ext, e)
+                    });
                     return;
                 }
                 None => {}
@@ -3309,7 +3333,11 @@ impl App {
         }
         match os_open(&path) {
             Ok(()) => self.message = Some(format!("opened: {}", path.display())),
-            Err(e) => self.message = Some(format!("open failed: {}", e)),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("開けません: {}", e)
+            } else {
+                format!("open failed: {}", e)
+            }),
         }
     }
 
@@ -3327,7 +3355,11 @@ impl App {
         };
         match cian_core::os::reveal(&path) {
             Ok(()) => self.message = Some(format!("revealed: {}", path.display())),
-            Err(e) => self.message = Some(format!("reveal failed: {e}")),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("場所を表示できません: {e}")
+            } else {
+                format!("reveal failed: {e}")
+            }),
         }
     }
 
@@ -3338,7 +3370,13 @@ impl App {
             return;
         };
         match cian_core::os::open_with(&path) {
-            Ok(()) => self.message = Some(format!("open with…: {}", path.display())),
+            Ok(()) => {
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("アプリを選んで開きます: {}", path.display())
+                } else {
+                    format!("open with…: {}", path.display())
+                })
+            }
             Err(e) => self.message = Some(e.to_string()),
         }
     }
@@ -3428,7 +3466,11 @@ impl App {
     fn start_session_log(&mut self, dir: &str) {
         let dir = expand_path(dir.trim());
         if !dir.is_dir() {
-            self.message = Some(format!("not a directory: {}", dir.display()));
+            self.message = Some(if self.lang == Lang::Ja {
+                format!("ディレクトリではありません: {}", dir.display())
+            } else {
+                format!("not a directory: {}", dir.display())
+            });
             return;
         }
         // Host from the pane's title (`user@host: cwd`), sanitized; a plain
@@ -3442,8 +3484,20 @@ impl App {
         let path = dir.join(&name);
         match self.shell.active_session() {
             Some(s) => match s.start_log(&path) {
-                Ok(()) => self.message = Some(format!("● logging to {}", path.display())),
-                Err(e) => self.message = Some(format!("log failed: {}", e)),
+                Ok(()) => {
+                    self.message = Some(if self.lang == Lang::Ja {
+                        format!("● {} に記録しています", path.display())
+                    } else {
+                        format!("● logging to {}", path.display())
+                    })
+                }
+                Err(e) => {
+                    self.message = Some(if self.lang == Lang::Ja {
+                        format!("記録を開始できません: {}", e)
+                    } else {
+                        format!("log failed: {}", e)
+                    })
+                }
             },
             None => self.message = Some(tr(self.lang, "no shell here to log", "記録するシェルがここにありません").into()),
         }
@@ -3454,7 +3508,11 @@ impl App {
             Some(s) if s.is_logging() => {
                 let where_ = s.log_path().map(|p| p.display().to_string()).unwrap_or_default();
                 s.stop_log();
-                self.message = Some(format!("log saved: {}", where_));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("記録を保存しました: {}", where_)
+                } else {
+                    format!("log saved: {}", where_)
+                });
             }
             _ => self.message = Some(tr(self.lang, "this pane is not logging", "このペインは記録していません").into()),
         }
@@ -4809,12 +4867,22 @@ fn prepare_app(
         StartupMacro::None => {}
         StartupMacro::Named(name) => {
             if !app.start_macro_by_name(&name) {
-                app.message = Some(format!("no macro named {:?} (check macro.lua / macro/)", name));
+                app.message = Some(if app.lang == Lang::Ja {
+                    format!("{:?} というマクロはありません。macro.lua と macro/ を確認してください", name)
+                } else {
+                    format!("no macro named {:?} (check macro.lua / macro/)", name)
+                });
             }
         }
         StartupMacro::File(path) => match cian_lua::macros::load(&path) {
             Ok(ms) if !ms.is_empty() => app.begin_macro(&ms[0]),
-            Ok(_) => app.message = Some(format!("{}: no macro found in file", path.display())),
+            Ok(_) => {
+                app.message = Some(if app.lang == Lang::Ja {
+                    format!("{}: ファイルにマクロがありません", path.display())
+                } else {
+                    format!("{}: no macro found in file", path.display())
+                })
+            }
             Err(e) => app.message = Some(format!("macro {}: {}", path.display(), e)),
         },
     }
@@ -4923,8 +4991,18 @@ fn suspend_and_edit<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Re
 
     match &status {
         Ok(s) if s.success() || s.code().is_some() => {}
-        Ok(_) => app.message = Some("editor exited abnormally".into()),
-        Err(e) => app.message = Some(format!("could not launch editor: {}", e)),
+        Ok(_) => {
+            app.message = Some(
+                tr(app.lang, "editor exited abnormally", "エディタが異常終了しました").into(),
+            )
+        }
+        Err(e) => {
+            app.message = Some(if app.lang == Lang::Ja {
+                format!("エディタを起動できません: {}", e)
+            } else {
+                format!("could not launch editor: {}", e)
+            })
+        }
     }
 
     match &edit.kind {
@@ -5137,7 +5215,8 @@ impl App {
             // its sibling back in, the same as Shift+F10 does.
             if exited && self.anim_then.is_none() {
                 self.close_shell_pane_animated();
-                self.message = Some("shell exited".into());
+                self.message =
+                    Some(tr(self.lang, "shell exited", "シェルが終了しました").into());
                 redraw = true;
             }
         }

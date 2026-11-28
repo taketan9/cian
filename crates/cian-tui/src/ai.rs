@@ -209,8 +209,14 @@ impl App {
             return false;
         }
         if !self.ai_ready() {
-            self.message =
-                Some("AI unavailable (python, packages, or sign-in) — feature hidden".into());
+            self.message = Some(
+                tr(
+                    self.lang,
+                    "AI unavailable (python, packages, or sign-in). the feature is hidden",
+                    "AI を利用できません（python・パッケージ・サインインのいずれか）。機能は表示されません",
+                )
+                .into(),
+            );
             return false;
         }
         true
@@ -947,7 +953,11 @@ impl App {
             }
         }
         let dupes = groups.len();
-        self.message = Some(format!("{} duplicate group(s) — review and delete", dupes));
+        self.message = Some(if self.lang == Lang::Ja {
+            format!("重複の候補が {} 組あります。確認して削除してください", dupes)
+        } else {
+            format!("{} duplicate group(s). review and delete", dupes)
+        });
         self.open_popup(Popup::DupeReview { items, cursor: 0, scroll: 0 });
         true
     }
@@ -989,7 +999,11 @@ impl App {
             }
             Err(e) => {
                 self.open_popup(Popup::Notice {
-                    lines: vec!["commit failed:".into(), String::new(), e.to_string()],
+                    lines: vec![
+                        tr(self.lang, "commit failed:", "コミットに失敗しました:").into(),
+                        String::new(),
+                        e.to_string(),
+                    ],
                 });
             }
         }
@@ -1087,7 +1101,11 @@ impl App {
             return;
         }
         self.chat_attachments.push(path);
-        self.message = Some(format!("▣ image attached ({w}×{h})"));
+        self.message = Some(if self.lang == Lang::Ja {
+            format!("▣ 画像を添付しました（{w}×{h}）")
+        } else {
+            format!("▣ image attached ({w}×{h})")
+        });
     }
 
     /// Drain the AI worker and route the reply by its purpose.

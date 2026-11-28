@@ -1152,10 +1152,17 @@ impl App {
             let shown = marked.len().min(MAX_TABS);
             self.open_viewer_tabs(&marked[..shown]);
             if marked.len() > shown {
-                self.message = Some(format!(
-                    "{shown} of {} opened — the viewer holds {MAX_TABS}",
-                    marked.len()
-                ));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!(
+                        "{} 件のうち {shown} 件を開きました。閲覧できるのは {MAX_TABS} 件までです",
+                        marked.len()
+                    )
+                } else {
+                    format!(
+                        "{shown} of {} opened. the viewer holds {MAX_TABS}",
+                        marked.len()
+                    )
+                });
             }
             return;
         }
@@ -2424,7 +2431,11 @@ impl App {
         };
         match crate::os_open(std::path::Path::new(&uri)) {
             Ok(()) => self.message = Some(format!("{}: {}", doc.label(), url)),
-            Err(e) => self.message = Some(format!("could not open: {e}")),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("開けません: {e}")
+            } else {
+                format!("could not open: {e}")
+            }),
         }
     }
 
@@ -2452,7 +2463,11 @@ impl App {
                 self.message = Some(format!("{}", dest.display()));
                 self.reload_both();
             }
-            Err(e) => self.message = Some(format!("could not write the shortcut: {e}")),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("ショートカットを作成できません: {e}")
+            } else {
+                format!("could not write the shortcut: {e}")
+            }),
         }
     }
 
@@ -2553,7 +2568,11 @@ impl App {
         let matcher = match cian_core::search::Matcher::parse(pattern) {
             Ok(m) => m,
             Err(e) => {
-                self.message = Some(format!("bad pattern: {e}"));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("検索の書き方が読めません: {e}")
+                } else {
+                    format!("bad pattern: {e}")
+                });
                 return;
             }
         };
@@ -2568,9 +2587,11 @@ impl App {
         let (changes, skipped) = cian_core::grepedit::plan(&paths, &sub);
         if changes.is_empty() {
             self.popup = Popup::None;
-            self.message = Some(match skipped.len() {
-                0 => format!("nothing to change: no line becomes different from {pattern:?}"),
-                n => format!("nothing to change ({n} file(s) unreadable)"),
+            self.message = Some(match (skipped.len(), self.lang == Lang::Ja) {
+                (0, true) => format!("変わる行がありません。{pattern:?} に一致する行は同じままです"),
+                (0, false) => format!("nothing to change: no line becomes different from {pattern:?}"),
+                (n, true) => format!("変わる行がありません（{n} 件は読めませんでした）"),
+                (n, false) => format!("nothing to change ({n} file(s) unreadable)"),
             });
             return;
         }
@@ -3061,7 +3082,11 @@ impl App {
                     let s = *side;
                     self.pane_theme[s] = Some(name.to_string());
                     let which = if s == 0 { "left" } else { "right" };
-                    self.message = Some(format!("{which} pane theme: {name}"));
+                    self.message = Some(if self.lang == Lang::Ja {
+                        format!("{which} ペインの配色: {name}")
+                    } else {
+                        format!("{which} pane theme: {name}")
+                    });
                 }
             }
         }
@@ -3114,7 +3139,11 @@ impl App {
             let s = *side;
             self.pane_theme[s] = None;
             let which = if s == 0 { "left" } else { "right" };
-            self.message = Some(format!("{which} pane follows the app theme"));
+            self.message = Some(if self.lang == Lang::Ja {
+                format!("{which} ペインは全体の配色に従います")
+            } else {
+                format!("{which} pane follows the app theme")
+            });
             self.popup = Popup::None;
         }
     }
@@ -3131,7 +3160,11 @@ impl App {
             }
             None => {
                 self.message =
-                    Some(format!("unknown theme {name:?} — :theme with no argument lists them"));
+                    Some(if self.lang == Lang::Ja {
+                        format!("{name:?} という配色はありません。:theme だけを実行すると一覧が出ます")
+                    } else {
+                        format!("unknown theme {name:?}. :theme with no argument lists them")
+                    });
             }
         }
     }
@@ -3566,10 +3599,11 @@ impl App {
             }
             if cancelled == Some(true) {
                 self.pending_elevation = None;
-                self.message = Some(format!(
-                    "cancelled — {} done before stopping",
-                    report.ok
-                ));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("中止しました。止めるまでに {} 件が終わっています", report.ok)
+                } else {
+                    format!("cancelled. {} done before stopping", report.ok)
+                });
             } else if retry {
                 let (op, targets, dest, conflict) = self.pending_elevation.take().unwrap();
                 // The second offer only exists because the first was tried.
@@ -4088,7 +4122,13 @@ impl App {
         });
                             self.reload_active();
                         }
-                        Err(e) => self.message = Some(format!("save failed: {}", e)),
+                        Err(e) => {
+                            self.message = Some(if self.lang == Lang::Ja {
+                                format!("保存できません: {}", e)
+                            } else {
+                                format!("save failed: {}", e)
+                            })
+                        }
                     }
                 }
                 return Ok(());

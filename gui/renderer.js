@@ -1815,7 +1815,11 @@ const ONE_PANE = ['details'];
 let viewMode = 'classic';
 
 function setView(mode, remember = true) {
-    if (!VIEWS.includes(mode)) { say(`${mode}? — :view classic | details`, true); return; }
+    if (!VIEWS.includes(mode)) {
+        say(tr(`${mode}? use :view classic | details`,
+               `${mode} は読めません。:view classic | details の形で指定してください`), true);
+        return;
+    }
     viewMode = mode;
     el.panes.classList.toggle('one', ONE_PANE.includes(mode));
     // `draw` already paints `active` on the focused pane, which is what
