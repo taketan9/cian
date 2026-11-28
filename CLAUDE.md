@@ -37,6 +37,7 @@ cian-core` の片方向依存を保つ**。対応は macOS と Windows の2つ�
 | **窓版の文言は、両方の言葉で言える** | `scripts/i18n.py` |
 | **マニュアルが名前を挙げるキーは、一度は押されている** | `scripts/keycover.py` |
 | **辿り着けないコマンド・メニュー項目を残さない**（関数が生きていても、押す道が無ければ死んでいる） | `scripts/audit.py` |
+| **開いているものは、別のものを開いても黙って消えない**（`self.popup` は1枠しかなく、未保存ごと消えた） | `scripts/states.py` ── 8軸を2つずつ掛け合わせる。**覆われただけの組と、本当に消えた組を分ける**（B を閉じて A が戻るか） |
 | **テストは全部通す**（本数は走らせれば出る） | `cargo test --workspace` |
 | **警告を1つも出さない** | `cargo clippy --workspace --all-targets -- -D warnings`（CI と同じ物差し） |
 | **資材は、自分がどのビルドかを名乗る** ── `--version` の `<版> (<SHA>)` が `Cargo.toml` といまの HEAD と一致し、`-dirty` でも `unknown` でもない | `scripts/buildstamp.py` ── CI が staging の直後、上げる前に当てる。**走らせずに読むので、落とした Windows の exe にも当てられる** |

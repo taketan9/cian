@@ -86,6 +86,7 @@ HARNESS = {
     "tui-drive.py": "端末版を本物の pty で動かします",
     "sweep.py": "端末版の verb を一つずつ叩きます",
     "inject.py": "わざと詰まらせて、固まらないことを見ます",
+    "states.py": "状態を2つ掛け合わせ、黙って消えるものを探します",
     "remote.py": "自分専用の sshd を立て、本物の SFTP で通します",
 }
 
@@ -313,6 +314,8 @@ def plan() -> list[tuple[str, list[Step]]]:
              [py, "scripts/tui-drive.py"], timeout=900),
         Step("端末版 総ざらい", "verb を一つずつ（反応・桁・迷子・生存）",
              [py, "scripts/sweep.py"], timeout=1800),
+        Step("状態の掛け合わせ", "開いているものが、別のものを開いて消えないか",
+             [py, "scripts/states.py"], timeout=1800),
         Step("詰まらせる", "固まらないか・断る理由が本当か",
              [sys.executable, "scripts/inject.py"], timeout=900),
         Step("リモート", "自分専用の sshd を立てて本物の SFTP で通す",
