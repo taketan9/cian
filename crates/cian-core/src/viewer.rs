@@ -300,7 +300,7 @@ pub fn view_file(path: &Path) -> Result<View> {
             total_bytes,
             truncated,
             encoding: TextEncoding::Utf8,
-            // 16進は**生のバイトをそのまま書き戻す**道なので、この旗は読まれない。
+            // 16進は**生のバイトをそのまま書き戻す**道なので、この値は読まれない。
             bom: false, eol, trailing_eol: false, bytes: buf,
         });
     }

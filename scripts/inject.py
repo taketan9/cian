@@ -6,12 +6,12 @@ Electron 版の画面は全体が応答しなくなります。待ちに上限�
 `crates/cian-core/src/proc.rs` の `quiet()`・SFTP の通信・`read_to_string()` の
 3種類で、どれも要求の処理から呼びます（詳しくは `docs/sweep-plan.ja.md`）。
 
-この道具は窓を介しません。エンジンに要求を1件流し、**5秒で切って**何が返った
+このツールは窓を介しません。エンジンに要求を1件流し、**5秒で切って**何が返った
 かを見ます。5秒は本人が答えた上限です（2026-11-28）。
 
     python3 scripts/inject.py              全部
     python3 scripts/inject.py fifo zero    名前を指定して
-    python3 scripts/inject.py --keep       砂場を消さない
+    python3 scripts/inject.py --keep       作業用ディレクトリを消さない
 
 ## 合格の条件は4つだけです
 
@@ -24,7 +24,7 @@ Electron 版の画面は全体が応答しなくなります。待ちに上限�
 3 を機械で見られる場合は `wrong` に正規表現を書きます。見られない場合は
 所見として出すだけにします。
 
-**4 が無いと、この道具は何もしない実装に合格を出します。** 要求をすぐ返す
+**4 が無いと、このツールは何もしない実装に合格を出します。** 要求をすぐ返す
 だけなら 1 は必ず通るためです。`background` を書いた項目は、計算している間に
 別の要求へ答えるかと、終わりの知らせの中身（`want_row`）まで見ます。
 """
@@ -48,11 +48,11 @@ ROOT = Path(__file__).resolve().parent.parent
 DEADLINE = 5.0
 BUILT: list[Path] = []
 
-# 「存在しない」と嘘をついている断り方。
+# 「存在しない」と誤って伝えている断り方。
 #
-# **「読み終わりがありません」は嘘ではありません。** デバイスについての本当の
+# **「読み終わりがありません」は誤りではありません。** デバイスについての本当の
 # ことなのに、素朴に「がありません」で探すとこれに当たります ── 最初に書いた
-# ときは当たって、正しい断りを「嘘です」と報告しました。直前の4文字で分けます。
+# ときは当たって、正しい断りを「誤りです」と報告しました。直前の4文字で分けます。
 WRONG_GONE = r"\bnot found\b|(?<!読み終わり)がありません|not an ordinary file"
 
 
@@ -60,7 +60,7 @@ def engine() -> Path:
     """測るエンジンを自分で建ててから返します（release 版）。
 
     **建てずに「いちばん新しい実行ファイル」を選んでいました。** 2026-11-28、
-    `viewer.rs` を直した直後に2回続けて、直す前のコードを測りました ── 道具は
+    `viewer.rs` を直した直後に2回続けて、直す前のコードを測りました ── ツールは
     「2.9 秒」と緑で答え続けていて、どちらも観測ではありませんでした。
     測るものは自分で建てます。
 
@@ -186,7 +186,7 @@ class Engine:
 
 
 def sandbox() -> Path:
-    """詰まりそうなものを並べた砂場を作ります。"""
+    """詰まりそうなものを並べた作業用ディレクトリを作ります。"""
     d = Path(tempfile.mkdtemp(prefix="cian-inject-"))
     (d / "ok.txt").write_text("ordinary\n", encoding="utf-8")
 
@@ -251,7 +251,7 @@ def dead_port() -> int:
 
 
 def cases(d: Path, port: int) -> list[dict]:
-    """名前・要求・期待。`wrong` に当たる返事は、理由が嘘だという所見です。"""
+    """名前・要求・期待。`wrong` に当たる返事は、理由が誤りだという所見です。"""
     return [
         {"name": "fifo", "what": "名前付きパイプを読む",
          "method": "viewpath", "params": {"path": str(d / "fifo.txt")},
@@ -378,7 +378,7 @@ def stopped_halfway(eng: Engine, c: dict, op: int, busy: float) -> tuple[str, st
     2. `:queue` にその番号が「実行中」で出ること（止める道があること）
     3. `cancel` のあと、終わりの知らせが `cancelled` で届くこと
     """
-    # **バイトが動いた知らせを待ちます。** 最初の1件は 0 バイト（帯に全体の
+    # **バイトが動いた知らせを待ちます。** 最初の1件は 0 バイト（進捗バーに全体の
     # 大きさを渡すためのもの）なので、それで合格にすると「読み始めてすぐ
     # 止まった」を見逃します。
     _, prog = eng.wait_event("progress", DEADLINE, lambda e: (e.get("bytes") or 0) > 0)
@@ -423,7 +423,7 @@ def main() -> int:
         for c in cases(d, port):
             if pick and c["name"] not in pick:
                 continue
-            # 設定から引く項目だけ、`init.lua` のある砂場を見せます。
+            # 設定から引く項目だけ、`init.lua` のある作業用ディレクトリを見せます。
             eng = Engine(d, {"CIAN_CONFIG_DIR": str(d / "slow-config")} if c.get("config") else None)
             try:
                 params = dict(c["params"])
@@ -451,7 +451,7 @@ def main() -> int:
                     slowly.append(f"{c['name']}: {took:.1f} 秒かかります（5秒を超えています）")
                 if err and c.get("wrong") and re.search(c["wrong"], err):
                     mark = "✗"
-                    note = f"理由が嘘です: {err}"
+                    note = f"理由が誤りです: {err}"
                     bad.append(f"{c['name']}: 存在するものを「ありません」と断っています")
                 # 裏に回した仕事は、返事の速さでは測れません。
                 if c.get("background") and not err and mark == "✓":
@@ -462,7 +462,7 @@ def main() -> int:
             print(f"  {mark} {c['name']:<12} {c['what']:<28} {took:5.2f}s  {note[:60]}")
     finally:
         if keep:
-            print(f"\n  砂場: {d}")
+            print(f"\n  作業用ディレクトリ: {d}")
         else:
             os.chmod(d / "denied.txt", 0o644)
             shutil.rmtree(d, ignore_errors=True)

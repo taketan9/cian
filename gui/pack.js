@@ -51,12 +51,12 @@ const version = (() => {
 /// `gui/` から**持っていかない**もの。
 ///
 /// `node_modules` は 508MB あり、その中で実際に要るものは `vendor.js` が
-/// `gui/vendor/` に写し終えている。残りは道具と読み物 ── 動くのに要らない
+/// `gui/vendor/` にコピーし終えている。残りはツールと読み物 ── 動くのに要らない
 /// ものをアプリの中に入れると、次に中を開けた人が「これは何のために
 /// 要るのか」を考えることになる。
 const SKIP_IN_GUI = new Set([
     'node_modules', 'package-lock.json',
-    'drive.js', 'pack.js', 'vendor.js',       // 道具（開発のときだけ）
+    'drive.js', 'pack.js', 'vendor.js',       // ツール（開発のときだけ）
     'run.bat', 'run.sh',                      // 同梱版には入口が既にある
     'REQUESTS.ja.md', 'ROADMAP.ja.md',        // 読み物
 ]);
@@ -120,7 +120,7 @@ function dirSize(dir) {
 const mb = (n) => `${(n / 1048576).toFixed(0)} MB`;
 
 /// Electron の展開先を探す。**run.bat / run.sh と同じ順**にする ── 探す順が
-/// 道具ごとに違うと、「どの Electron で動いたのか」が答えられなくなる。
+/// ツールごとに違うと、「どの Electron で動いたのか」が答えられなくなる。
 function findElectron(platform) {
     const given = arg('electron');
     const cand = [];
@@ -173,7 +173,7 @@ function checkEngine(platform) {
     // **在るものを言う。** 実機で起きたのはこれだった（2026-10-06）── 落とした
     // ものが `cian-server-win-x64.exe.zip` のままで、`.exe` はまだ中に居た。
     // 「無い」とだけ言われた人は道を疑うが、答えは「隣に在る」だった。
-    // 機械が知っていることを黙っているのがいちばん高くつく。
+    // 機械が知っていることを報告しないのがいちばん高くつく。
     if (fs.existsSync(`${at}.zip`)) {
         console.error(`  ${path.basename(at)}.zip は在ります ── まだ展開していませんか`);
         console.error('  展開してできた .exe を渡してください。');
@@ -182,11 +182,11 @@ function checkEngine(platform) {
     console.error('  --engine に渡した道を確かめてください。よくある原因:');
     // 日本語 Windows ＋ OneDrive では、エクスプローラが「デスクトップ」と
     // 見せていても実体が `Desktop` のことがある（desktop.ini が表示名を
-    // 差し替える）。アドレスバーから写した道は、その表示名のほうだ。
+    // 差し替える）。アドレスバーからコピーしたパスは、その表示名のほうだ。
     console.error('  ・エクスプローラの表示名と実体名が違う（デスクトップ / Desktop）');
     console.error('  ・OneDrive の「オンラインのみ」で、実体がまだ降りていない');
     console.error('  ・zip の中の道をそのまま渡している（先に展開してください）');
-    console.error('  手元へ一度写してから、相対の名前で渡すのがいちばん確かです。');
+    console.error('  手元へ一度コピーしてから、相対の名前で渡すのがいちばん確かです。');
     process.exit(1);
 }
 
@@ -241,7 +241,7 @@ function checkOut(target, appDir, platform) {
     if (!fs.existsSync(launcher)) bad.push(`${path.basename(launcher)} が無い`);
     // **Windows は vim も検証する。** 一式（`cian-src-win.zip`）には必ず
     // 入っている ── 入っていなければ、`:vim` の効かない cian ができて、
-    // それは黙って出る。無い理由は「一式ではなく git の作業ツリーから
+    // それは気づかれないまま出る。無い理由は「一式ではなく git の作業ツリーから
     // 叩いた」がほとんどなので、取り方をそのまま言う。
     if (platform === 'win32' && !fs.existsSync(path.join(target, 'vim'))) {
         bad.push('vim/ が無い ── python3 scripts/fetch-vim.py で落とすか、cian-src-win.zip から組み立てる');
@@ -255,7 +255,7 @@ function checkOut(target, appDir, platform) {
     //
     // 数え方を Rust と揃えて書き写すと、片方を直したときに割れる。ここでは
     // **構造のほう**を見る ── vim は `cian.exe` の隣、エンジンはその2階下。
-    // どちらかが動いたらここが鳴るので、そのとき Rust の上限を見直せばいい。
+    // どちらかが動いたらここが失敗するので、そのとき Rust の上限を見直せばいい。
     if (platform === 'win32' && fs.existsSync(path.join(target, 'vim'))) {
         const rel = path.relative(target, appDir).split(path.sep).length;
         if (rel !== 2) {
@@ -330,7 +330,7 @@ function dirSize(dir) {
 }
 
 /// exe のアイコンは PE リソースなので、差し替えに `rcedit` が要る（GitHub の
-/// electron/rcedit のリリース資産、1MB ほどの単体 exe）。crmaine も同じ道具で
+/// electron/rcedit のリリース資産、1MB ほどの単体 exe）。crmaine も同じツールで
 /// 焼いている。**無くても配布はできる** ── 窓とタスクバーは `main.js` の
 /// `BrowserWindow` の icon で cian になり、エクスプローラ上の exe の絵だけが
 /// Electron のままになる。
@@ -432,7 +432,7 @@ function installMac(target, to) {
     console.log(`  + ${to}`);
     if (!has('dock')) return;
     // **`killall Dock` は Dock がまだ書いていない分を捨てる。** 書くのは
-    // `defaults`、読むのは起動時の Dock で、間に cfprefsd の写しが挟まる。
+    // `defaults`、読むのは起動時の Dock で、間に cfprefsd のキャッシュが挟まる。
     // だから入れたあとに読み直して、入っているかを確かめる（2026-09-10）。
     const inDock = () => {
         try {
@@ -505,7 +505,7 @@ function main() {
     console.log(`Electron: ${dist}`);
     // `force` は「無いときに怒らない」だけで、掴まれているものには効かない。
     // Windows では前に組んだ `cian.exe` が走っていると、その実体ファイルが
-    // ロックされていて消せない（EBUSY）── 実機で踏んだ（2026-10-06）。
+    // ロックされていて消せない（EBUSY）── 実機で発生した（2026-10-06）。
     // 数回待てば解けることが多いので待ち、それでも駄目なら**誰が掴んで
     // いそうか**を言う。node の生のスタックには、それが書いていない。
     try {

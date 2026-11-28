@@ -8774,7 +8774,7 @@ use crate::ai::StoredChatExt;
                         "{which}／{lang:?}: 続きの行の説明が桁 {desc} から始まっていない\n  {follow}",
                     );
                 }
-                // 数えるものには下限を書く ── 拾えなくなったときに黙らないように。
+                // 数えるものには下限を書く ── 拾えなくなったときに取りこぼしを報告するように。
                 assert!(normal > 80, "{which}／{lang:?}: ふつうの行が {normal} 行しか無い");
                 assert!(wrapped > 0, "{which}／{lang:?}: 溢れた鍵が1行も無い ── 形が変わったか、数え損ねている");
             }
@@ -9047,7 +9047,7 @@ use crate::ai::StoredChatExt;
     /// いなければ『clipboard has no files』と言う」で見ていて、それは
     /// **この機械のペーストボードに何が載っているか**で通ったり落ちたり
     /// する。`drive.js` を一周させるとコピーが走って実際にファイルが載るので、
-    /// `cargo test` → `drive.js` → `cargo test` の順に踏むと「さっきまで
+    /// `cargo test` → `drive.js` → `cargo test` の順に実行すると「さっきまで
     /// 緑だったテストが落ちた」に見える（2026-09-16 に実際にそうなった）。
     ///
     /// 自前の register を埋めておけば OS 側は**引かれない**（`plan` は
@@ -12504,11 +12504,11 @@ use crate::ai::StoredChatExt;
         assert_eq!(widths, vec![10, 10], "字数(7)ではなく桁数(10)で測ること");
     }
 
-    /// シェルのタブ帯のクリック範囲も**桁**。
+    /// シェルのタブ行のクリック範囲も**桁**。
     ///
     /// 実測（120桁の pty）: 「日本語」のタブは 3..10 桁に描かれるのに、字数で
     /// 測った当たり判定は 1..6 桁しかなく、**8・9・10 桁を叩くと隣のタブへ
-    /// 飛んだ**。ファイルのペインの帯は既に `width_of` で測っていて、ここだけ
+    /// 飛んだ**。ファイルのペインの見出し行は既に `width_of` で測っていて、ここだけ
     /// 取り残されていた。
     #[test]
     fn a_japanese_shell_tab_is_clickable_where_it_is_drawn() {
@@ -13559,16 +13559,16 @@ use crate::ai::StoredChatExt;
     /// **正しいことを、正しいと書いておく。**
     /// **窓版で打てるものは、端末版でも打てる**（2026-09-21、依頼221）。
     ///
-    /// 窓版の `:` は面が一つなので `:sort` も `:blame` も一覧から通る。端末版は
+    /// 窓版の `:` はパネルが一つなので `:sort` も `:blame` も一覧から通る。端末版は
     /// ビューアの中の `:` にしか無く、43語が「窓では打てるのに端末では打てない」
     /// 状態だった。機能はどちらにもあるので、打つ場所のほうを揃える。
     #[test]
     fn the_listing_colon_reaches_the_viewers_verbs_too() {
         // ビューアの表と、ビューアが実際に答える語が食い違っていないこと。
-        // 表は一覧の `:` を回す先を決めるので、嘘があると「受けたのに何も
+        // 表は一覧の `:` を回す先を決めるので、誤りがあると「受けたのに何も
         // 起きない」になる。
         // **表そのものを除いてから探す。** viewer.rs の中で viewer.rs を
-        // 探すと、表に嘘の語を足してもその表自身に当たって緑のままになる
+        // 探すと、表に誤った語を足してもその表自身に当たって緑のままになる
         // （2026-09-21 に変異テストで見た ── `cellWidth` が自分を測って
         // いた件と同じ形）。
         let whole = include_str!("viewer.rs");
@@ -13606,7 +13606,7 @@ use crate::ai::StoredChatExt;
         let said = app.message.clone().unwrap_or_default();
         assert!(!said.contains("unknown"), "名前は通る: {said:?}");
 
-        // 端末版に無い面は、無いと言う。
+        // 端末版に無いパネルは、無いと言う。
         run_cmd(&mut app, "settings");
         let said = app.message.clone().unwrap_or_default();
         assert!(said.contains("init.lua"), "どこで直すかを言う: {said:?}");
@@ -16950,7 +16950,7 @@ mod ctrl_r_redoes {
 /// （空白でしか折らない）に任せていたので、**測ったものと描くものが違った** ──
 /// 折れない一語は、どこにも置けずに消える。
 ///
-/// 2026-09-11、意地の悪い名前の掃引（`sweep.py --names`）で出た。
+/// 2026-09-11、意地の悪い名前の全件検査（`sweep.py --names`）で出た。
 #[test]
 fn a_notice_with_one_very_long_word_still_shows_the_rest() {
     let (_d, mut app) = app_with(&["a.txt"]);

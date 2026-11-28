@@ -32,7 +32,7 @@ cian — ソース一式（社内で組み立てる） Windows x64
        node gui\pack.js --out dist --platform win32 ^
          --electron C:\electron\electron-v38.0.0-win32-x64 ^
          --engine C:\落とした場所\cian-server-win-x64.exe ^
-         --rcedit C:\道具\rcedit.exe --zip
+         --rcedit C:\ツール\rcedit.exe --zip
 
   dist\cian\cian.exe ができます。--zip を付けると
   dist\cian-win-x64.zip も並びます。配るのはそちらです。

@@ -325,7 +325,7 @@ impl Jobs {
                     })),
                 }
             }
-            // 席を空けてから知らせる。理由は上の経路と同じ ── `hash` を受けて
+            // 実行枠を空けてから通知する。理由は上の経路と同じ ── `hash` を受けて
             // `:queue` を読み直した前端に、終わった仕事が「実行中」で見える。
             inner.side.lock().unwrap().retain(|j| j.op != op);
             out.event(
@@ -440,13 +440,13 @@ fn run(inner: Arc<Inner>, job: Pending) {
                 crate::did_step(&undo, &redo, step);
             }
         }
-        // **席を空けてから `done` を言う。** 逆だと、`done` を受けて `:queue` を
+        // **実行枠を空けてから `done` を言う。** 逆だと、`done` を受けて `:queue` を
         // 読み直した前端に、終わった仕事がまだ「実行中」で見える ── 次の描画で
         // 消えるので画面では一瞬だが、`done` が「もう並んでいない」の保証に
         // なっていない、ということでもある。`jobs::tests::
         // a_second_operation_waits_its_turn_and_then_runs` が CI の macOS で
         // ときどき落ちていたのはこれで（2026-09-10）、負荷が高いと `done` と
-        // 席を空ける間で thread が降ろされる。
+        // 実行枠を空ける間に thread が降ろされる。
         //
         // `Drop` ではなくここに書くのは、次の仕事がこの thread の持つ lock の
         // 上で始まってはいけないから ── その理由は前と同じ。
@@ -732,7 +732,7 @@ impl Jobs {
             }
             let stopped = cancel.load(Ordering::Relaxed);
             report(ok, total, "", 0, 0, true);
-            // 席を空けてから `done`。理由は上の経路と同じ。
+            // 実行枠を空けてから `done`。理由は上の経路と同じ。
             {
                 let mut running = inner.running.lock().unwrap();
                 if running.as_ref().map(|j| j.op) == Some(op) {

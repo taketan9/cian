@@ -315,7 +315,7 @@ fn draw_zoomed(f: &mut Frame, area: Rect, app: &mut App, ov: AnimOverride) {
 pub(crate) fn draw(f: &mut Frame, app: &mut App) {
     draw_frame(f, app);
     // ポップアップが開いた・閉じた・形が変わったフレームは**画面ぜんぶ**を
-    // 送り直す。面の下は丸ごと入れ替わるので、桁ごとに繕うより確実で、
+    // 送り直す。パネルの下は丸ごと入れ替わるので、桁ごとに繕うより確実で、
     // 繕いが「まだ端末に残っている全角」の右半分だけ空白にしてしまう事故も
     // 起きない（一度そうやって、マニュアルの「キー一覧」が半分だけ残った）。
     mend_wide_leftovers(f, app.full_repaint);
@@ -328,7 +328,7 @@ thread_local! {
 }
 
 /// 前の画面で全角だった桁を失った**行**を、送り直させる。`whole` のときは
-/// 画面ぜんぶ ── ポップアップの開け閉めは面の下が丸ごと入れ替わるので、
+/// 画面ぜんぶ ── ポップアップの開け閉めはパネルの下が丸ごと入れ替わるので、
 /// 行ごとに繕うより確実。
 fn mend_wide_leftovers(f: &mut Frame, whole: bool) {
     let buf = f.buffer_mut();
@@ -1493,12 +1493,12 @@ fn shell_tabs_title<'a>(
             // drawn, clickable, and invisible.
             Style::default().fg(muted_on(surface()))
         };
-        // **桁で測る、字で測らない。** `offsets` はこの帯のクリックの当たり
+        // **桁で測る、字で測らない。** `offsets` はこの見出し行のクリックの当たり
         // 判定になる（`tab_rects`）。`:shellname` に日本語を付けると1文字が
-        // 2桁で描かれるので、字数で測った箱は描かれた帯より短くなり、**その
+        // 2桁で描かれるので、字数で測った箱は描かれた幅より短くなり、**その
         // タブ自身の右半分が隣のタブの当たり判定になる** ── 実測では 3..10 桁に
         // 「日本語」が描かれているのに、8・9・10 桁を叩くと隣のタブへ飛んだ。
-        // ファイルのペインの帯（`tabs_title`）は既に `width_of` で測っている。
+        // ファイルのペインの見出し行（`tabs_title`）は既に `width_of` で測っている。
         let w = width(&label) as u16;
         offsets.push((i, col, w));
         col += w;
@@ -2240,7 +2240,7 @@ fn draw_shell_inner(
             // 既定で切にしたので、起動して最初に目に入る枠がこれになった）。
             // 周りが全部日本語で、この一行だけ英語だった。**`tr()` の外に
             // あったので、句点の検査（`nothing_cian_says_ends_in_a_full_stop`）
-            // にも掛かっていなかった** ── 包んだ瞬間に英語のほうも鳴った。
+            // にも掛かっていなかった** ── 包んだ瞬間に英語のほうも検知された。
             tr(
                 lang,
                 "shell pane — focus here (Shift+J / click / :shell) to start a shell. \
@@ -2530,7 +2530,7 @@ pub(crate) fn prompt_style() -> Style {
 fn draw_prompt_line(f: &mut Frame, area: Rect, left: &str, right: &str) {
     let style = prompt_style();
     f.render_widget(Paragraph::new(left).style(style), area);
-    // 桁で。いまの `right` は英数字だけだが、物差しを字数にしておくと
+    // 桁で。いまの `right` は英数字だけだが、測定方法を字数にしておくと
     // 日本語を1語入れた瞬間に右端がずれる（2026-09-06 に4か所やっている）。
     let w = crate::util::width(right) as u16 + 1;
     if area.width > w {
@@ -5436,7 +5436,7 @@ fn draw_simple_dialog(
     // 空白の無い長い一語 ── 300 文字の名前を付けたときの
     // `touch /長い/パス/xxxxx…` ── は、どこにも折れずに消えた。お知らせに
     // 出るのは `touch` の4文字だけで、断られた理由も対象も見えない
-    // （2026-09-11、意地の悪い名前の掃引で出た）。
+    // （2026-09-11、意地の悪い名前の全件検査で出た）。
     //
     // 測る関数と描く関数を同じにすれば、食い違いようが無い。
     // **入力欄は除く。** あちらは `caret_lines` が自分で折っていて、

@@ -120,7 +120,7 @@ pub fn keymap_head() -> String {
 /// 書いてある `cian.set_keymap("k", "action")` を、書いてある順に。
 ///
 /// コメントアウトされた行は数えない ── 同梱の見本は 40 行ぜんぶ
-/// コメントアウトされていて、それを「割り当て済み」と読むと画面が嘘をつく。
+/// コメントアウトされていて、それを「割り当て済み」と読むと画面が誤った表示になる。
 pub fn keymaps_in(text: &str) -> Vec<(String, String)> {
     text.lines().filter_map(binding_on).collect()
 }

@@ -49,9 +49,9 @@ pub(crate) fn field_of(lines: &[String], from: usize, to: usize, key: &str) -> S
         // コメントの中は数えない。
         //
         // **`entries` の同じ判定と二重になっている。** 片方を外しても検査は
-        // 黙る（もう片方が拾う）ので、変異テストで確かめるときは**両方**を
+        // 何も報告しない（もう片方が拾う）ので、変異テストで確かめるときは**両方**を
         // 外すこと ── 片方だけ外して「検査が効いていない」と読みかけた。
-        // 片方だけ消すのも駄目で、そのときは黙って通る。
+        // 片方だけ消すのも駄目で、そのときは報告されないまま通る。
         let line_start = body[..i].rfind('\n').map(|b| b + 1).unwrap_or(0);
         if body[line_start..i].trim_start().starts_with("--") {
             at = i + head.len();

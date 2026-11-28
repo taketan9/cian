@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """init.lua に書いた設定のうち、窓版が実際に読んでいるのはどれか。
 
-**cian でいちばんよく出るバグに、物差しだけが無かった。**
+**cian でいちばんよく出るバグに、測定方法だけが無かった。**
 
 「設定を直したのに効かない」は cian の最頻のバグで、renderer.js には
 その顛末が書いてある ── *the window was ignoring seventeen of the twenty
@@ -10,7 +10,7 @@ settings cian-tui reads — silently, which is the worst way to ignore a config*
 （`tab_width` `editor` `home`）。エンジンは送っていて、窓版は一度も読んで
 いなかった。
 
-黙って落ちるので、動かして気づくことはない ── `cargo test` も `drive.js` も
+メッセージを出さずに失敗するので、動かして気づくことはない ── `cargo test` も `drive.js` も
 `audit.py` も、**送られてきた値を誰も読まないこと**は見ていない。だから数える。
 
     python3 scripts/configcover.py          # 被覆
@@ -158,7 +158,7 @@ def main() -> int:
     if missing:
         print()
         print("  **送られているのに、窓版が一度も読んでいないもの**"
-              " ── 黙って落ちるので、動かしても気づけません:")
+              " ── メッセージを出さずに失敗するので、動かしても気づけません:")
         for name in missing:
             print(f"    ✗ {name}")
         if not listing:

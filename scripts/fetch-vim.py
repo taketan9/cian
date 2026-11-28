@@ -4,7 +4,7 @@
 **会社の Windows には vim が無く、入れることもできない。** `:vim` が
 「PATH にありません」としか言えなかったのがそこで、cian の隣に置いた vim を
 使えるようにした（`cian-core::editor::beside_exe`）。これはその vim を
-資材に積むための道具だ。
+資材に積むためのツールだ。
 
 `cian-src-win.zip` と `cian-source-offline.zip` の両方がこれを呼ぶ。
 **pwsh と bash で二度書かない** ── 片方を直したときに割れる。
@@ -16,9 +16,9 @@ vim** だけで、GUI 版も右クリック拡張も要らない。`:help` と�
 綴り辞書も落とす ── 3つで 25MB あり、**無くても vim は動く**（`:help` が
 「見つかりません」と言うだけ）。残るのは 8.3MB。
 
-落としたものが要るとわかったら、ここに足して数字を言い直す。**黙って重く
-するのも、黙って軽くするのも、同じだけ悪い**（フォントが抜けた 6MB 軽い zip
-が黙って出たことがある）。
+落としたものが要るとわかったら、ここに足して数字を言い直す。**気づかれずに重く
+するのも、気づかれずに軽くするのも、同じだけ悪い**（フォントが抜けた 6MB 軽い zip
+が気づかれないまま出たことがある）。
 
 ## 版を上げるとき
 
@@ -34,7 +34,7 @@ import sys
 import urllib.request
 import zipfile
 
-# **Windows の runner は stdout が cp1252 で、この道具の日本語が落ちる。**
+# **Windows の runner は stdout が cp1252 で、このツールの日本語が落ちる。**
 # 実際に v3.4.3 の梱包が1行目の print で転けた ── 落とす前に、言葉で。
 # 呼び出し側に `PYTHONIOENCODING` を立てさせない ── 次に別の場所から呼んだ
 # ときに同じことが起きる。決めるのはここだ。
@@ -43,7 +43,7 @@ for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="replace")
 
 # 配布元 https://github.com/vim/vim-win32-installer/releases
-# **上げるのは意図してやること。** 黙って追従すると、社内に配った vim が
+# **上げるのは意図してやること。** 通知せずに追従すると、社内に配った vim が
 # ある日入れ替わる。
 VERSION = "9.2.1122"
 URL = (
@@ -130,7 +130,7 @@ def main() -> int:
             total += info.file_size
 
     # **出口で検証する。** 落とし損ねても続くと、vim の入っていない zip が
-    # 黙って出る ── 気づくのは向こうの机の上になる。
+    # 気づかれないまま出る ── 気づくのは向こうの机の上になる。
     exe = None
     for root, _, files in os.walk(out):
         if "vim.exe" in files:

@@ -589,7 +589,7 @@ fn code_block(lang: &str, lines: &[String], width: usize) -> Vec<Line<'static>> 
         format!(" {} ", lang)
     };
     out.push(Line::from(Span::styled(
-        // 見出しの帯。`lang` は英字がふつうだが、囲いに何を書くかは書き手
+        // 見出し行。`lang` は英字がふつうだが、囲いに何を書くかは書き手
         // 次第なので、桁で詰める（`pad_to` は溢れたものを切らないので、
         // いまの見え方は変わらない）。
         pad_to(&label, width),
@@ -601,7 +601,7 @@ fn code_block(lang: &str, lines: &[String], width: usize) -> Vec<Line<'static>> 
     let code_fg = readable_on(code_bg);
     for l in lines {
         // **コードの行は日本語を含む。** `{:<w$}` は字で詰めるので、
-        // 日本語のコメントや文字列がある行だけ帯が足りなかった。
+        // 日本語のコメントや文字列がある行だけ罫線の幅が足りなかった。
         let shown = format!("  {}", pad_to(l, width.saturating_sub(2)));
         out.push(Line::from(Span::styled(shown, bg.fg(code_fg))));
     }

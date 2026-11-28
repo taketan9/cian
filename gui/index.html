@@ -200,8 +200,8 @@ html, body {
    on an 800px window left thirteen rows for a listing and three hundred
    pixels of empty terminal. */
 :root { --main-pct: 75%; --panes-pct: 50%; }
-/* キーの無い面の濃さ。ファイル一覧もシェルも同じ数を使う ── 「いまどこに
-   いるか」は1つの問いで、答えが面ごとに違う必要はない。 */
+/* キーの無いパネルの濃さ。ファイル一覧もシェルも同じ数を使う ── 「いまどこに
+   いるか」は1つの問いで、答えがパネルごとに違う必要はない。 */
 :root { --off-tone: .45; }
 /* One hairline down the middle and nothing else. The listing is the window;
    every pixel spent on a frame around it is a row not shown. */
@@ -366,21 +366,21 @@ html, body {
 #work[data-mode="cmd"]     { --mode-accent: var(--m-command); }
 #work[data-mode="visual"]  { --mode-accent: var(--m-visual); }
 /* **シェルは金をやめた**（2026-09-06 の依頼 154）。「アクティブなパネルは
-   シアン」で、シェルパネルも面の1つ ── どちらに鍵があるかを言う色が面ごとに
+   シアン」で、シェルパネルもパネルの1つ ── どちらに鍵があるかを言う色がパネルごとに
    違うと、覚えることが1つ増えるだけになる。シェル用の上書きを1行まるごと
    落として、既定（`--cian`）に落ちるようにした。緑（検索）と紫（コマンド）は**何を
    しているか**を言う色なので、そちらは残す。 */
 /* And the pane that is not current steps back rather than merely being a
    shade darker — the eye should land on the live one without being asked.
 
-   **濃さは1か所で決める**（`--off-tone`）。面ごとに数を書くと、片方だけ
+   **濃さは1か所で決める**（`--off-tone`）。パネルごとに数を書くと、片方だけ
    直した日に「一覧は退くのにシェルは退かない」が生まれる ── 実際それが
    起きていて、シェルは焦点があってもなくても同じ色だった（本人、
    2026-10-06「アクティブパネルがどこか誤ってしまう」）。
    **0.62 → 0.45。** 一段落とした。これ以上暗くすると、反対の一覧を
    読みながら作業する2画面ファイラの本分が削れる ── 退くのであって、
    消えるのではない。 */
-/* **満額は、キーのある面だけ。**
+/* **満額は、キーのあるパネルだけ。**
    最初はここが `.pane:not(.active)` だけで、シェルに移ったとき直前まで
    操作していた一覧が満額のまま残った ── 枠はシェルを指しているのに、
    濃さは一覧を指す。実機で見つかった（本人、2026-10-06）。`.active` は
@@ -401,7 +401,7 @@ html, body {
    carmine border for exactly this: the rows look like files, and mistaking
    somebody's server for your own disk is the one confusion worth spending a
    colour on. */
-/* `-3px`。焦点枠（3px）の帯をちょうど外す ── `-2px` だと重なって、上に描かれる
+/* `-3px`。焦点枠（3px）の枠線をちょうど外す ── `-2px` だと重なって、上に描かれる
    ほうに負ける（それが 2026-09-20 に「サーバの枠がシアン」になっていた正体だ）。
    色は `.pane.active.remote::after` でも直してあるので、これは二重の備え:
    どちらか片方が消えても、カーマインは残る。`.dropping` が最初から `-3px` な
@@ -632,8 +632,8 @@ html, body {
    the editor should hide a list opened from inside it. */
 #view   { z-index: 10; }   /* a surface: it replaces the listing */
 #report { z-index: 11; }   /* a sheet: it is raised over whatever is beneath */
-/* 設定は、開いたら**それだけを見る**面。エディタの上に出る ── エディタから
-   右クリックで開くことがあり、その回だけ裏に回るのでは面が二つあるのと同じ。
+/* 設定は、開いたら**それだけを表示する**パネル。エディタの上に出る ── エディタから
+   右クリックで開くことがあり、その回だけ裏に回るのではパネルが二つあるのと同じ。
    `#ask`（30）より下なのは、設定画面が出す確認に答える必要があるから。 */
 #settings { z-index: 13; }
 
@@ -788,7 +788,7 @@ html, body {
    own scrollbars and grids cannot paint over it. */
 /* **3px。ファイル枠と同じ太さ。** ここだけ 2px で、実機で「シェルの枠が
    若干細く見える」と指摘された（2026-09-14）。枠が「キーがどちらにあるか」
-   を言う道具である以上、面ごとに太さが違うと、太い方が強く見える ──
+   を言うツールである以上、パネルごとに太さが違うと、太い方が強く見える ──
    言っていることは同じなのに。上の `.pane.active::after` と同じ値にする。 */
 #work[data-focus="shell"] #shell::after {
   content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none;
@@ -930,12 +930,12 @@ html, body {
    implementation of the same arithmetic. */
 .spanes { flex: 1 1 auto; position: relative; overflow: hidden; }
 /* **シェルもキーが無ければ退く。** 一覧は前から退いていたのに、ここだけ
-   焦点のあるなしで色が変わらず、三面のうち一つだけ「いつも手前」に見えて
+   焦点のあるなしで色が変わらず、3つのパネルのうち一つだけ「いつも手前」に見えて
    いた ── どのパネルが生きているかを数秒考える羽目になる（本人、
    2026-10-06）。退き方も一覧と同じ（同じ `--off-tone`、文字と中身だけ。
    枠は `#work[data-focus]` が別に言う）。
-   **`.spreview` は退かせない** ── カーソルを追って中身を見せている面は、
-   キーが一覧にあるときにこそ読むものだ。退かせたら、見るために作った面が
+   **`.spreview` は退かせない** ── カーソルを追って中身を表示しているパネルは、
+   キーが一覧にあるときにこそ読むものだ。退かせたら、表示のために作ったパネルが
    いちばん読みにくくなる。 */
 #shell:not(.on) .vhead,
 #shell:not(.on) .spanes { opacity: var(--off-tone); }
@@ -1108,17 +1108,17 @@ html, body {
 }
 #view[hidden], #report[hidden], #chat[hidden], #settings[hidden] { display: none; }
 
-/* 嵌まったパネル ── 面ではなく、ペインの中身になる。
+/* 嵌まったパネル ── 独立した枠ではなく、ペインの中身になる。
    **端末版はこれが正で**（`viewer_dock`、render.rs:542）、ファイルを Enter で
    開いたら、その一覧のあった場所にパネルが嵌まる。左に一覧・右に本文・下に
-   シェルの三面がそのまま残り、キーは行ったり来たりできる。窓版はここだけ
+   一覧・本文・シェルの3つのパネルがそのまま残り、キーは行ったり来たりできる。窓版はここだけ
    ずっと違っていて、txt を開くと窓全部が本文になった ── 一覧もシェルも
    覆われ、戻るには閉じるしかなかった（本人、2026-10-02）。
    **最大化は F12 のほう。** こちらも端末版と同じ鍵で、`data-zoom` の既定の
    規則がそのまま効く（下の `:not(.active)` ひとつを足すだけ）。
    `position: fixed` をやめて `#panes` の子になるので、幅も高さも区切りの
    パーセントが決める ── 測って置くと、境界を掴んで動かしたときに付いて
-   こない面がひとつ出る。測らないのがいちばん確かだ。 */
+   こないパネルがひとつ出る。測らないのがいちばん確かだ。 */
 #work[data-dock="left"] #panes > #view,
 #work[data-dock="right"] #panes > #view {
   /* `relative` ── 下の焦点枠（`::after`）がこれにぶら下がる。 */
@@ -1135,9 +1135,9 @@ html, body {
    先に書いたほうが負ける（型③）。 */
 #work[data-dock="left"]  #panes .pane[data-pane="left"],
 #work[data-dock="right"] #panes .pane[data-pane="right"] { display: none; }
-/* F12 で広げたとき、埋めるのはキーのある面だけ。一覧に焦点があるまま広げたら
+/* F12 で広げたとき、埋めるのはキーのあるパネルだけ。一覧に焦点があるまま広げたら
    パネルは引っ込む ── 既定の `.pane:not(.active)` と同じことを、ペインでは
-   ないこの面にも言う。 */
+   ないこのパネルにも言う。 */
 #work[data-zoom="files"] #panes > #view:not(.active) { display: none; }
 /* そして、キーのあるパネルは**窓を埋める**。
    `.pane.active` の `flex: 1 1 100%` と対になる1行で、これが無いと左に
@@ -1153,7 +1153,7 @@ html, body {
 #work[data-dock="right"] #panes.one > #view { flex: 1 1 100%; }
 /* キーがここにあることは、ペインとシェルとまったく同じ形で言う ── 3px の枠、
    `::after`、`inset: 0`（上の `.pane.active::after` と `#shell::after` の値を
-   そのまま）。面ごとに言い方が違うと、同じ問いに3つの答えが並ぶ。 */
+   そのまま）。パネルごとに言い方が違うと、同じ問いに3つの答えが並ぶ。 */
 #work[data-focus="files"] #panes > #view.active::after {
   content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
   border: 3px solid var(--mode-accent);

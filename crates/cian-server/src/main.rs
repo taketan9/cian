@@ -275,7 +275,7 @@ struct Session {
     ///
     /// **窓が固まったという報告は、何が返らなかったのかが分からないまま届きます。**
     /// エンジンは要求を1本ずつ処理するので、固まっている間に走っている1件が
-    /// そのまま答えです。診断ログを事前に入れていなくても `:log` で読めるよう、
+    /// そのまま診断結果である。診断ログを事前に入れていなくても `:log` で読めるよう、
     /// しきい値を超えたものだけをここに持ちます。
     slow: Vec<(String, u128)>,
     pair: Option<(std::path::PathBuf, cian_core::grepedit::TextFile)>,
@@ -458,7 +458,7 @@ impl Session {
     ///
     /// サーバのペインなら**一時ファイルへ落として**その道を返し、どこから来たかを
     /// `fetched` に覚える（保存は上げ直し、閉じたら消す）。`ok` が立っていない
-    /// うちは、大きいものを黙って落とさない ── 先に訊くために `needs_ok` を返す。
+    /// うちは、大きいものを通知なしに落とさない ── 先に訊くために `needs_ok` を返す。
     fn here_or_fetched(&mut self, which: &str, ok: bool, ceiling: Option<u64>)
         -> anyhow::Result<Result<std::path::PathBuf, u64>> {
         let (path, name, is_dir) = self.selected(which)?;
@@ -517,7 +517,7 @@ impl Session {
             let _ = std::fs::remove_file(at);
         }
         self.fetched.clear();
-        // 空になった置き場も畳む。**残るのは中身ではなく殻**だが、サーバから
+        // 空になった置き場も畳む。**残るのは中身ではなく空のディレクトリ**だが、サーバから
         // 落としたものの入れ物が溜まり続けるのは気持ちのいい話ではない。
         let _ = std::fs::remove_dir(Self::fetch_dir());
     }
@@ -1749,7 +1749,7 @@ impl Session {
                 //
                 // ここは1件ずつ `rename_in_place` を呼んでいて、`a → b` の
                 // 時点で `b` がまだ在るので断られた ── 断るのは正しい（以前は
-                // 黙って上書きして片方が消えていた）が、一括では巡回を解く道が
+                // 通知なしに上書きして片方が消えていた）が、一括では巡回を解く道が
                 // 要る。端末版は前から二段でやっていて、窓版だけ素朴な繰り返し
                 // だった（2026-10-30）。`ops::rename_batch` に出して両方から呼ぶ。
                 let mut by_dir: std::collections::BTreeMap<std::path::PathBuf, Vec<(String, String)>> =
@@ -2552,7 +2552,7 @@ impl Session {
                 };
                 // **`cr` も受ける。** 端末版のビューアは3つとも持っていて
                 // （Eol::Cr は古い Mac の改行）、窓版だけ無かった。_ が LF に
-                // 落ちるので、`:cr` と打った人は黙って LF にされていた。
+                // 落ちるので、`:cr` と打った人は通知なしに LF にされていた。
                 file.eol = match req.params["kind"].as_str() {
                     Some("crlf") => cian_core::viewer::Eol::Crlf,
                     Some("cr") => cian_core::viewer::Eol::Cr,
@@ -3180,7 +3180,7 @@ impl Session {
             // engine remembers where the copy came from so Ctrl+S can put it
             // back. A temporary that has forgotten its origin can only be lost.
             // 比べるために落とした複製を片付ける。**閉じたら消す** ── 窓が
-            // 並べた画面を閉じるとき、単体のリモート表示を閉じるときに呼ぶ。
+            // 並べた画パネルを閉じるとき、単体のリモート表示を閉じるときに呼ぶ。
             "dropfetched" => {
                 self.drop_fetched();
                 if let Some((_, _, at)) = self.remote_member.take() {
@@ -3430,7 +3430,7 @@ impl Session {
                 {
                     anyhow::bail!("覚えられない項目です: {key}");
                 }
-                // **書けなかったら、そう言う。** 黙って捨てていたので、
+                // **書けなかったら、そう言う。** 通知なしに捨てていたので、
                 // 「配色を選んでも次の起動で戻る」を実機で出したとき、
                 // 書けていないのか読めていないのかが分からなかった
                 // （2026-09-14）。`ask()` は失敗をそのまま状態行に出す。
@@ -4124,7 +4124,7 @@ impl Session {
                             "choices": choices,
                             // 既定が**一つの値に決まる**なら、その値。決まる
                             // ものに「（既定）」と書くのはやめた（本人の指示）──
-                            // 答えを持っているのに黙っているのと同じ。
+                            // 答えを持っているのに何も表示しないのと同じ。
                             "default_value": f.default_value,
                             "applies": match f.applies {
                                 Applies::Both => "both",
@@ -4587,7 +4587,7 @@ impl Session {
                         if f["present"].as_bool().unwrap_or(false) { "" } else { "  (not present)" },
                     ));
                 }
-                // 遅かった要求 ── 送ってもらう写しにも入れます。固まったという
+                // 遅かった要求 ── 送ってもらう診断ログにも入れます。固まったという
                 // 報告に、何が遅かったかが付いてくるようにするためです。
                 let slow: Vec<serde_json::Value> = self
                     .slow
@@ -5129,7 +5129,7 @@ impl Session {
             }
             "viewpath" => {
                 let path = std::path::PathBuf::from(arg(req, "path"));
-                // **「ありません」は嘘でした。** 名前付きパイプも `/dev/zero` も
+                // **「ありません」は誤りでした。** 名前付きパイプも `/dev/zero` も
                 // 実在します。読むと返らないだけで、消えているわけではない
                 // （2026-11-28、所見 S5・S6）。何であるかを言います。
                 if let Some(what) = cian_core::attrs::special(&path) {
@@ -6260,7 +6260,7 @@ fn main() -> anyhow::Result<()> {
     // 開く場所。**引数が無いときは init.lua の `home`** ── 端末版の
     // `default_home` と同じ順で、書いてあるものが先。窓版は場所を渡さずに
     // 起こすことがあり（`main.js` がフォルダを与えられなかったとき）、
-    // そこで `home` が黙って落ちていた。無ければホーム、それも無ければ
+    // そこで `home` が通知なしに落ちていた。無ければホーム、それも無ければ
     // いま居るところ。
     let start = match std::env::args().nth(1) {
         Some(p) => std::path::PathBuf::from(p),
@@ -6567,7 +6567,7 @@ fn paths_of(req: &Request) -> Vec<std::path::PathBuf> {
 
 /// Why this path is not going to be read, in the reader's own language.
 ///
-/// **「ありません」は嘘でした。** 名前付きパイプも `/dev/zero` も実在します。
+/// **「ありません」は誤りでした。** 名前付きパイプも `/dev/zero` も実在します。
 /// 読むと返らないだけで、消えているわけではありません（所見 S5・S6）。
 ///
 /// One function because there are now four doors onto the same room — the

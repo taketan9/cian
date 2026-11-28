@@ -1366,11 +1366,11 @@ pub fn state_get_in(text: &str, key: &str) -> Option<String> {
 
 /// Set one value, keeping the others. Returns where it was written.
 ///
-/// **黙って捨てない。** ここは長いあいだ「best-effort、書けなければ選択が
+/// **通知なしに捨てない。** ここは長いあいだ「best-effort、書けなければ選択が
 /// 残らないだけ」だった ── そして実機で「`:theme` が次の起動で戻る」が出た
 /// とき、**書けなかったのか、読めていないのか、誰にも分からなかった**
 /// （2026-09-14）。書けなかったことは、書けなかったと言えるようにする。
-/// 呼ぶ側が黙るのは自由だが、黙ると決められるのは呼ぶ側だけだ。
+/// 呼ぶ側が何も報告しないのは自由だが、何も報告しないと決められるのは呼ぶ側だけだ。
 pub fn state_set(key: &str, value: &str) -> Result<PathBuf, String> {
     let Some(path) = config_write_path(STATE_FILE) else {
         return Err("設定の保存場所が分かりません（HOME も USERPROFILE も無い）".into());
@@ -1396,7 +1396,7 @@ pub fn state_set(key: &str, value: &str) -> Result<PathBuf, String> {
     // 機械ではウイルス対策や索引がファイルを一瞬マップする。`fs::write` は
     // **切り詰めてから書く**ので、その一瞬に当たると弾かれる。
     //
-    // マップはすぐ放されるので、待てば通る。**それでも駄目なら黙らない** ──
+    // マップはすぐ放されるので、待てば通る。**それでも駄目なら取りこぼしを報告する** ──
     // 書けなかったことは書けなかったと言う（2026-09-14 の約束）。
     let mut last = String::new();
     let mut held = false;

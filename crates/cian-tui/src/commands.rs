@@ -34,7 +34,7 @@ impl App {
         // an empty directory.
         let spec = rest.trim().to_string();
         if cian_core::mask_matcher(&spec).is_none() {
-            // 読めないパターンは断る。黙って0件にすると、空のディレクトリと
+            // 読めないパターンは断る。通知なしに0件にすると、空のディレクトリと
             // 見分けがつかない。
             self.message = Some(format!(
                 "{}: {spec}",
@@ -205,7 +205,7 @@ impl App {
             // **AFXW のマスク。** `/` の絞り込みはディレクトリを移ると消える
             // （それが `/` の仕事）。こちらは付けたまま歩くもので、
             // 「今日はログを見ている」を画面に固定する。引数なしで解除し、
-            // 何が外れたかを言う ── 黙って全部出ると、直前に何を見ていたのか
+            // 何が外れたかを言う ── 通知なしに全部出ると、直前に何を見ていたのか
             // が分からなくなる。
             "mask" => self.cmd_mask(rest),
             // 二画面の同期移動。名前は本人が選んだ（`:sync` はシェルの
@@ -220,7 +220,7 @@ impl App {
             // words that did nothing. The window has its own `:view` and keeps
             // both looks; the terminal has one look and says so.
             // `classic` / `details` は窓版で `:view` の別名（表示モード）。
-            // 端末版は見た目が一つなので、**その面が無いことを言う** ── 名前が
+            // 端末版は見た目が一つなので、**そのパネルが無いことを言う** ── 名前が
             // 通らないのと、この端末には無いのとは別のことだ。
             "view" | "classic" | "details" => match (verb, rest) {
                 ("view", "") => self.look_inside(),
@@ -419,7 +419,7 @@ impl App {
                 "error" => self.explain_shell_error(),
                 "diff" => self.explain_diff(),
                 "log" => self.triage_log(),
-                // 一語の合言葉でなければ質問。`:ai commit` と打って「commit とは
+                // 一語のキーワードでなければ質問。`:ai commit` と打って「commit とは
                 // 何か」を訊きたい人は想定していない。**打ち込むだけで送らない**
                 // ── 何が機械から出ていくかを最後に見るのは本人。
                 q => {
@@ -601,7 +601,7 @@ impl App {
             // **窓版で打てるものは、端末版でも打てる**（2026-09-21、本人）。
             //
             // ここから下は「機能は両方にあるが、端末版では打つ場所が違った」
-            // ものたち。窓版の `:` は面が一つなので一覧からでもエディタの語が
+            // ものたち。窓版の `:` はパネルが一つなので一覧からでもエディタの語が
             // 通るが、端末版はビューアの中の `:` にしか無かった。
             //
             // ビューアが答える語は、開いていればそのまま渡す。開いていなければ
@@ -612,7 +612,7 @@ impl App {
             // だけ残す。ビューアの中では `s/…/…/` `g/…/d` の形でも打てる。
             "s" if matches!(self.popup, Popup::Viewer { .. }) => self.start_replace_bar(),
             // 二つに分ける ── 一つの腕に並べると「同じ機能の別名」になり、
-            // 実際は逆のことをする二つなので、機械にも人にも嘘になる。
+            // 実際は逆のことをする二つなので、機械にも人にも誤った表示になる。
             "g" if matches!(self.popup, Popup::Viewer { .. }) => self.viewer_line_filter(rest, false),
             "v" if matches!(self.popup, Popup::Viewer { .. }) => self.viewer_line_filter(rest, true),
             v if crate::viewer::viewer_answers(v)
@@ -650,8 +650,8 @@ impl App {
             "diffedit" => self.open_diff(),
             "lsar" => self.look_inside(),
             "filelog" => self.start_git_log(),
-            // **端末版には無いもの。** 名前が通らないのではなく、その面が無い。
-            // 黙って unknown command と言うより、どこで同じことができるかを言う。
+            // **端末版には無いもの。** 名前が通らないのではなく、そのパネルが無い。
+            // 通知なしに unknown command と言うより、どこで同じことができるかを言う。
             "settings" | "prefs" => {
                 self.message = Some(
                     tr(

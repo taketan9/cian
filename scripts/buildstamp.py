@@ -11,7 +11,7 @@
   * いまの `git rev-parse --short HEAD` と一致するか
   * **`-dirty` でも `unknown` でもないか**
 
-を確かめます。CI の、資材を staging した直後に置く関門です。
+を確かめます。CI の、資材を staging した直後に置く検査です。
 
 ## なぜ要るか
 
@@ -41,7 +41,7 @@ Mac から `grep -a` で exe の中の文字列を読んだからで、Windows �
 ## 手元で走らせると落ちることがある（それが正しい）
 
 編集中の作業ツリーで建てたバイナリは `-dirty` と名乗り、この検査は落ちます。
-**それは誤検出ではありません。** これは「配るもの」に当てる物差しで、
+**それは誤検出ではありません。** これは「配るもの」に当てる測定方法で、
 手元で試すなら commit 済みの状態で建ててから。
 """
 
@@ -53,9 +53,9 @@ import sys
 from pathlib import Path
 
 # **Windows の runner の標準出力は cp1252。** 日本語を1行出した瞬間に
-# `UnicodeEncodeError` で落ち、関門が「資材が悪い」のではなく「関門が壊れた」で
+# `UnicodeEncodeError` で落ち、検査が「資材が悪い」のではなく「検査が壊れた」で
 # ジョブを赤くする（2026-10-31、実際にそうなった）。環境変数で直すと、次に
-# 誰かが別のジョブから呼んだときにまた踏むので、ここで直す。
+# 誰かが別のジョブから呼んだときに再発するので、ここで直す。
 for stream in (sys.stdout, sys.stderr):
     try:
         stream.reconfigure(encoding="utf-8", errors="replace")
@@ -109,7 +109,7 @@ def baked(path: str) -> list[str]:
 def said(exe: str) -> str | None:
     """`--version` の1行目。持っていなければ None（`cian-server` がそれ）。"""
     # **止まることがある。** `--version` は端末を要らないはずだが、runner の上で
-    # 何かを待ったら関門が8分のジョブを道連れにする ── 待たない。中の文字列は
+    # 何かを待ったら検査が8分のジョブを道連れにする ── 待たない。中の文字列は
     # どちらにしても読めるので、ここで読めないことは落ちる理由にはしない。
     # **裸のファイル名を渡すと PATH を探しにいく。** CI は `cian-tui-macos.bin`
     # のように cwd のものを渡すので、絶対パスにしないと `--version` の側は
@@ -167,7 +167,7 @@ def main() -> int:
         line = said(exe)
         if line and line not in stamps:
             # 焼かれた文字列と、走らせて聞いた答えが違うことはない ── 違ったら
-            # どちらかの読み方を間違えているので、黙って通さない。
+            # どちらかの読み方を間違えているので、報告せずに通さない。
             stamps.append(line)
         if not stamps:
             bad.append(f"{exe}: `cian <版> (<SHA>)` がどこにもありません")

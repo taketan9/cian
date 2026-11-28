@@ -3681,7 +3681,7 @@ fn load_saved_theme() -> Option<String> {
 
 /// Persist the chosen whole-app theme so the next launch keeps it.
 ///
-/// **書けなかったら言う。** 前は黙っていて、「選んだのに次の起動で戻る」が
+/// **書けなかったら言う。** 以前は何も表示せず、「選んだのに次の起動で戻る」が
 /// 出たときに、書けていないのか読めていないのかが誰にも分からなかった
 /// （2026-09-14）。返すのは知らせの一行で、呼ぶ側が状態行に混ぜる。
 pub(crate) fn save_theme_pref(name: &str) -> Option<String> {
@@ -4436,7 +4436,7 @@ pub(crate) fn viewer_manual_lines(lang: Lang) -> Vec<String> {
         ("✕", "the button in the corner closes it too — Esc does not", "右上の ✕ でも閉じる — Esc では閉じません"),
     ];
     const VIEW: &[Row] = &[
-        ("Space  za  zA", "fold this section, toggle every fold", "この節を折りたたむ・全体を切替"),
+        ("Space  za  zA", "fold this section, toggle every fold", "このセクションを折りたたむ・全体を切替"),
         (":outline  :ruler", "the shape column, the column scale", "アウトライン列・ルーラー"),
         (":version", "which build this is, and what pictures use", "このビルドと画像の描画方式"),
         (":image", "pictures: the terminal's protocol ↔ half-blocks", "画像: 端末のプロトコル ↔ 半角ブロック"),
@@ -5254,7 +5254,7 @@ fn run_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>
                 // 「The cursor position could not be read within a normal
                 // duration」を返し、それを `?` で上げると **cian が落ちる**。
                 // 答えない端末は珍しくないし、細い回線の向こうならなお遅い ──
-                // **cian はサーバ相手に使う道具**なので、画面を消せないことが
+                // **cian はサーバ相手に使うツール**なので、画面を消せないことが
                 // 終了の理由になってはいけない。消せなければ塗り直す。
                 //
                 // 2026-09-11、151 個の verb を一つずつ叩いていて `:redraw` で

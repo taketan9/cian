@@ -29,7 +29,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Where to connect and who as. The password is resolved by the caller (from
 /// the configured value or `password_cmd`) before we get here.
-/// 黙って落としてよい大きさの上限。
+/// 通知なしに落としてよい大きさの上限。
 ///
 /// **比べるために落とすのは、頼まれていない転送だ。** サーバのファイルを
 /// 手元へ複製するので、回線が細ければ待たされる ── どこから「待たされる」かの
@@ -37,7 +37,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 ///
 /// **8MB より下に置いてある。** 比べるために落としたものはエディタが読むが、
 /// そちらの天井が 8MB（grep と同じ線）なので、それより上で訊いても「落として
-/// から断る」になる ── 20MB では一度も効かない。0〜4MB は黙って落とし、
+/// から断る」になる ── 20MB では一度も効かない。0〜4MB は通知なしに落とし、
 /// 4〜8MB は訊き、8MB を超えるものは落とさずに断る。
 ///
 /// 設定にはしていない。増やしたくなったら設定に出す ── 先に設定を増やすと、

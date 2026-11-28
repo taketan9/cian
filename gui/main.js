@@ -239,7 +239,7 @@ function seedConfig() {
             fs.copyFileSync(path.join(seeds[0], name), to);
         }
     } catch (e) {
-        // 設定が配れなかっただけで、cian は開ける。黙らせはしない。
+        // 既定の設定を配置できなくても cian は起動する。起動を中止せず、原因をログに残す。
         console.error(`default-config を配れませんでした: ${e.message}`);
     }
 }

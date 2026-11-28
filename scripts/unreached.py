@@ -32,7 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOC = ROOT / "UNREACHED.ja.md"
 
-# 下限 ── 節がまるごと読めなくなったら、黙って通さずに落ちる
+# 下限 ── 章がまるごと読めなくなったら、通さずに失敗する
 LEAST_SECTIONS = 2
 
 NONE_MARKS = ("無し", "なし")
@@ -68,9 +68,9 @@ def sections(text: str) -> dict[str, str]:
 
 
 def judge(body: str) -> tuple[bool, str]:
-    """節が答えになっているか。
+    """各版の章が答えになっているか。
 
-    空の節は「届かなかったものは無い」と読めてしまうのに、実際は誰も
+    空の章は「届かなかったものは無い」と読めてしまうのに、実際は誰も
     考えていない ── **読めてしまう空白**がこの検査の相手。
     """
     rows = [
@@ -78,7 +78,14 @@ def judge(body: str) -> tuple[bool, str]:
         for l in body.splitlines()
         if l.startswith("|") and not set(l) <= set("| -:") and not l.startswith("| 何が")
     ]
-    said_none = any(any(w in l for w in NONE_MARKS) for l in body.splitlines() if l.strip())
+    # **その章自身の宣言だけを見る。** 以前は本文のどこかに「なし」の3文字があれば
+    # 「無しと書いてある」と読んでいたため、「通知なしに壊れる」のような普通の
+    # 文で誤検知した。宣言は、強調と記号を外すと「無し」そのものになる1行である。
+    said_none = any(
+        l.strip().lstrip("*#- 　").startswith(NONE_MARKS)
+        for l in body.splitlines()
+        if l.strip()
+    )
     if rows and said_none:
         return False, "行が並んでいるのに「無し」とも書いてある（どちらか）"
     if rows:
@@ -111,23 +118,23 @@ def main() -> int:
 
     if ver not in secs:
         bad.append(
-            f"いまの版 v{ver} の節が無い ── 届かなかったものを書くか、"
+            f"いまの版 v{ver} の章が無い ── 届かなかったものを書くか、"
             "`## v{v}` に `**無し**` の1行を書くこと".replace("{v}", ver)
         )
     if len(secs) < LEAST_SECTIONS:
         bad.append(
-            f"節が {len(secs)} しか読めていない（下限 {LEAST_SECTIONS}）"
-            " ── 見出しの形が変わって、この検査が黙っている"
+            f"章が {len(secs)} しか読めていない（下限 {LEAST_SECTIONS}）"
+            " ── 見出しの形が変わって、この検査が何も報告しない"
         )
 
     if bad:
         print(f"\n  {len(bad)} 件あります。\n")
         for b in bad:
             print(f"  ✗ {b}")
-        print("\n  「確かめた」と言える範囲は、物差しが届く範囲だけです。")
+        print("\n  「確かめた」と言える範囲は、基準が届く範囲だけです。")
         print("=" * 72)
         return 1
-    print(f"  版 {len(secs)} 節、いまの v{ver} も答えています")
+    print(f"  版 {len(secs)} 章、いまの v{ver} も答えています")
     print("=" * 72)
     return 0
 

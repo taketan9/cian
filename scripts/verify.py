@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """動作検証を、1つのコマンドで走らせる。
 
-**この道具は新しい検査ではありません。** 既にある検査と道具を、順番と準備つきで
+**このツールは新しい検査ではありません。** 既にある検査とツールを、順番と準備つきで
 まとめて走らせ、**走らせられなかったものを最後に名前で出します**。
 
     python3 scripts/verify.py              準備してから全部
@@ -10,14 +10,14 @@
     python3 scripts/verify.py kotoba 窓版  名前の一部を指定して
     python3 scripts/verify.py --self-test  わざと失敗する段を混ぜ、赤を赤と報告するか
 
-## 分類していない検査があると、この道具は失敗します
+## 分類していない検査があると、このツールは失敗します
 
-`scripts/*.py` を全部拾い、**どの節で走らせるか分類済みかを確かめます**。
+`scripts/*.py` を全部拾い、**どの段階で走らせるか分類済みかを確かめます**。
 分類していないものが1つでもあると、走る前に失敗します ── 足した検査が
 一覧から落ちて「所見なし」になるのを防ぐためです（実際に `settingscover.py` が
 片方の一覧から落ちていました）。
 
-**勝手に拾って走らせることはしません。** `scripts/` には資材を公開する道具も
+**勝手に拾って走らせることはしません。** `scripts/` には資材を公開するツールも
 あり（`release-asset.py`）、「見つけたから走らせる」は危険です。
 
 ## 終了コードをパイプ越しに読みません
@@ -28,7 +28,7 @@
 
 ## 記録の置き場は `~/.cache/cian-verify`
 
-`/tmp` は macOS の掃除で消えます（2回踏んでいます）。
+`/tmp` は macOS の掃除で消えます（2回発生しています）。
 """
 
 from __future__ import annotations
@@ -47,10 +47,10 @@ VENV = Path.home() / ".cache" / "cian-tui-env"
 MOCK = Path.home() / ".cache" / "cian-mock"
 LOGS = Path.home() / ".cache" / "cian-verify"
 
-# ── 機械の物差し（②で走らせます。引数は要りません）────────────────────
+# ── 機械による検査（②で走らせます。引数は要りません）────────────────────
 GATES = {
     "audit.py": "死にコード・重複・名前の割れ（辿り着けない道を含みます）",
-    "claudemd.py": "CLAUDE.md が名乗る関門が実在するか",
+    "claudemd.py": "CLAUDE.md が名乗る検査が実在するか",
     "configcover.py": "init.lua の設定を、窓版がいくつ読んでいるか",
     "deadline.py": "上限の無い待ちが増えていないか",
     "designdoc.py": "設計書が名乗る関数・パス・リンクが実在するか",
@@ -59,7 +59,7 @@ GATES = {
     "kotoba.py": "画面に出る言葉がハウススタイルに従っているか",
     "names.py": "両前端が、同じ機能を同じ名前で打たせているか",
     "parity.py": "両前端が、同じものを同じ言葉で呼んでいるか",
-    "requests.py": "依頼の台帳の約束が、いまも守られているか",
+    "requests.py": "依頼の記録ファイルの約束が、いまも守られているか",
     "settingscover.py": "設定画面が init.lua のどこまでを触れているか",
     "unreached.py": "いまの版が、届かなかったところを言っているか",
     "widths.py": "画面の幅を字数で測っているところ（日本語でずれます）",
@@ -67,10 +67,10 @@ GATES = {
 
 # ── 検査でないもの（理由つきで外します）────────────────────────────────
 NOT_A_CHECK = {
-    "append_before_tests.py": "テストの手前に書き足す道具です",
-    "fetch-vim.py": "同梱する vim を落としてくる道具です",
-    "release-asset.py": "公開済みの Release に資材を足す道具です",
-    "verify.py": "この道具そのものです",
+    "append_before_tests.py": "テストの手前に書き足すツールです",
+    "fetch-vim.py": "同梱する vim を落としてくるツールです",
+    "release-asset.py": "公開済みの Release に資材を足すツールです",
+    "verify.py": "このツールそのものです",
 }
 
 # ── 引数が要るもの（別に扱います）──────────────────────────────────────
@@ -86,7 +86,7 @@ HARNESS = {
     "tui-drive.py": "端末版を本物の pty で動かします",
     "sweep.py": "端末版の verb を一つずつ叩きます",
     "inject.py": "わざと詰まらせて、固まらないことを見ます",
-    "states.py": "状態を2つ掛け合わせ、黙って消えるものを探します",
+    "states.py": "状態を2つ掛け合わせ、通知なしに消えるものを探します",
     "remote.py": "自分専用の sshd を立て、本物の SFTP で通します",
 }
 
@@ -105,7 +105,7 @@ def w(s: str) -> int:
     """その文字列が端末で占める桁数。
 
     **字数で測ると日本語でずれます。** cian 自身で6回出たバグと同じ形なので、
-    この道具の出力も桁で揃えます（`scripts/widths.py` が見ているのと同じ話です）。
+    このツールの出力も桁で揃えます（`scripts/widths.py` が見ているのと同じ話です）。
     """
     return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in s)
 
@@ -120,7 +120,7 @@ class Step:
         self.name, self.what, self.cmd = name, what, cmd
         self.timeout, self.env, self.note = timeout, env or {}, note
         # `when` は「走らせられるか」を返す関数。走らせられない理由を文字列で
-        # 返すと、その段は**理由つきで飛ばします** ── 黙って抜けると、
+        # 返すと、その段は**理由つきで飛ばします** ── 報告せずに抜けると、
         # 走ったのか走らなかったのか後から分かりません。
         self.when = when
         self.rc = None
@@ -129,7 +129,7 @@ class Step:
 
 
 def unclassified() -> list[str]:
-    """どの節にも分類されていない `scripts/*.py` を返します。"""
+    """どの段階にも分類されていない `scripts/*.py` を返します。"""
     known = set(GATES) | set(NOT_A_CHECK) | set(NEEDS_ARG) | set(HARNESS)
     return [p.name for p in sorted((ROOT / "scripts").glob("*.py")) if p.name not in known]
 
@@ -201,7 +201,7 @@ def stale_stamps() -> list[str]:
     **これが無いと、古い実行ファイルを測ったまま全部が緑になります。**
     実際に端末版が3つ前のコミットのままでした。`-dirty` は許します ── 作業中は
     木が汚れているのが普通で、ここで見たいのは**どのコミットか**だけです。
-    版そのものの名乗り（`-dirty` を許さない物差し）は `scripts/buildstamp.py`
+    版そのものの名乗り（`-dirty` を許さない測定方法）は `scripts/buildstamp.py`
     が配る資材に当てます。
     """
     import importlib.util
@@ -271,7 +271,7 @@ def prepare(quiet=False) -> list[str]:
     # **`-p cian-tui` では端末版の実行ファイルは建ちません。** `cian-tui` という
     # 名前の実行ファイルは `cian-bin`（パッケージ名は `cian`）が作り、
     # `cian-tui` はそれが使うライブラリです。取り違えると、検査は**古い実行
-    # ファイル**を相手にしたまま緑になります ── 実際にこの道具の最初の版が、
+    # ファイル**を相手にしたまま緑になります ── 実際にこのツールの最初の版が、
     # 3つ前のコミットの端末版を測っていました。
     at = time.time()
     rc = subprocess.call(["cargo", "build", "-q", "-p", "cian-server"], cwd=ROOT)
@@ -301,7 +301,7 @@ def plan() -> list[tuple[str, list[Step]]]:
     build = [
         Step("cargo test", "ロジックが合っているか",
              ["cargo", "test", "-q", "--workspace"], timeout=1800),
-        Step("clippy", "警告が1つも無いか（CI と同じ物差し）",
+        Step("clippy", "警告が1つも無いか（CI と同じ基準）",
              ["cargo", "clippy", "-q", "--workspace", "--all-targets", "--", "-D", "warnings"],
              timeout=1800),
     ]
@@ -326,9 +326,9 @@ def plan() -> list[tuple[str, list[Step]]]:
              ["node", "gui/drive.js", "--commands"], timeout=900),
         Step("窓版 値", "設定の値が画面に戻ってくるか",
              ["node", "gui/drive.js", "--values"], timeout=900),
-        # 裏に回した仕事は、返事ではなく知らせで返ります。受け口が無ければ
-        # 面が空のまま開くので、窓の側でも一度通します。
-        Step("窓版 チェックサム", "裏の仕事から結果が面に載るまで",
+        # 裏に回した仕事は、返事ではなく知らせで返ります。ハンドラが無ければ
+        # パネルが空のまま開くので、窓の側でも一度通します。
+        Step("窓版 チェックサム", "裏の仕事から結果がパネルに表示されるまで",
              ["node", "gui/drive.js", "--hash"], timeout=900),
         Step("窓版 AI", "説明からコマンド生成を、答えが返る側まで",
              ["node", "gui/drive.js", "--ai"], timeout=900, env=mock,
@@ -345,7 +345,7 @@ def plan() -> list[tuple[str, list[Step]]]:
              when=ollama_here),
     ]
     return [("① 建つか・通るか", build),
-            ("② 機械の物差し", machine),
+            ("② 機械による検査", machine),
             ("③ 本物で動かす", real)]
 
 
@@ -366,12 +366,12 @@ def main() -> int:
         print("\n分類していない scripts/*.py があります。走らせる前に止めます:")
         for u in unknown:
             print(f"  ✗ {u}")
-        print("  検査なら GATES に1行、道具なら NOT_A_CHECK に理由を書いてください")
+        print("  検査なら GATES に1行、ツールなら NOT_A_CHECK に理由を書いてください")
         return 1
 
     groups = plan()
     if a.self_test:
-        # **赤を赤と報告するか。** 検査を足したら、わざと壊して鳴るのを見ます。
+        # **赤を赤と報告するか。** 検査を足したら、わざと壊して失敗することを確かめます。
         groups.append(("わざと落とす（自己検査）", [
             Step("わざと失敗", "この段は必ず失敗します", [sys.executable, "-c", "raise SystemExit(3)"]),
             Step("わざと時間切れ", "この段は必ず時間切れです",
@@ -402,7 +402,7 @@ def main() -> int:
         for s in shown:
             why = s.when() if s.when else None
             if why:
-                # 飛ばしたことを**必ず出します。** 走らなかった段が黙って
+                # 飛ばしたことを**必ず出します。** 走らなかった段が通知なしに
                 # 消えると、全部緑に見えます。
                 print(f"  {pad('飛ばす', 8)} {pad(s.name, 20)} {'':>6}   "
                       f"{pad(s.what[:34], 36)} {why}")

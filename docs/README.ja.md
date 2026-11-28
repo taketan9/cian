@@ -12,7 +12,7 @@
 | 文書 | 読むとき | 作り方 |
 | --- | --- | --- |
 | [feature-map.ja.md](feature-map.ja.md) | 機能を直すとき。入口・中心・守り・テストの順に並べています | 手書き。名前の実在は検査が確認します |
-| [verify-plan.ja.md](verify-plan.ja.md) | 動作検証をするとき。何を・どの道具で・どの順で確かめるかを書いています | 手書き。道具の一覧は `scripts/verify.py` が持ちます |
+| [verify-plan.ja.md](verify-plan.ja.md) | 動作検証をするとき。何を・どのツールで・どの順で確かめるかを書いています | 手書き。ツールの一覧は `scripts/verify.py` が持ちます |
 | `engine-protocol.ja.md`（未作成） | Electron 版とエンジンの受け渡しを変えるとき。要求は 162 種あります | 生成物にします。手で書くと必ずずれるためです |
 | `folder-map.ja.md`（未作成） | 何かを消してよいか迷ったとき | 手書き |
 | `config-reference.ja.md`（未作成） | 設定を足すとき。正本は `init.lua` ひとつです | 生成寄りにします |
@@ -25,7 +25,7 @@
 | 何 | どこ |
 | --- | --- |
 | 開発の約束と、それを確認する検査の対応表 | [`CLAUDE.md`](../CLAUDE.md) |
-| 依頼の台帳（何を頼まれ、どこで満たしたか） | [`gui/REQUESTS.ja.md`](../gui/REQUESTS.ja.md) |
+| 依頼の記録ファイル（何を頼まれ、どこで満たしたか） | [`gui/REQUESTS.ja.md`](../gui/REQUESTS.ja.md) |
 | 版ごとに、手元から確認できなかった範囲 | [`UNREACHED.ja.md`](../UNREACHED.ja.md) |
 | リリース前に通す検査の手順 | `skills/itsumono-check`（壊れていないか）と `skills/massara-check`（人に渡せるか） |
 

@@ -9,7 +9,7 @@
 
 2026-09-07、crmaine の配布先（会社の運用端末）で**社内の網が `.exe` の直接
 ダウンロードを止め**、Release からエンジンを落とせなかった。zip なら通るので
-`cian-server-win-x64.exe.zip` を足した。そのとき手で踏んだ手順が7つあり、
+`cian-server-win-x64.exe.zip` を足した。そのとき手で実行した手順が7つあり、
 **そのうち3つは飛ばしても成功したように見える**:
 
   ① 公開されている資材を**落とす**（作り直さない）
@@ -43,7 +43,7 @@ zip にした」以外のものを置いてはいけない。
 ## 次の版からは要らない
 
 `release.yml` は Windows / macOS のエンジンを最初から zip でも出す（依頼 185）。
-これは**既に出てしまった版**に後から足すための道具。
+これは**既に出てしまった版**に後から足すためのツール。
 """
 
 from __future__ import annotations
@@ -155,7 +155,7 @@ def main() -> int:
                 sys.exit(f"✗ {args.zip} は {args.tag} に無い")
             name = args.zip + ".zip"
             if name in have:
-                sys.exit(f"✗ {name} は既にある（差し替えはこの道具の仕事ではない）")
+                sys.exit(f"✗ {name} は既にある（差し替えはこのツールの仕事ではない）")
 
             # ① 公開されているものを落とす。作り直さない。
             print(f"① {args.zip} を落とす")
@@ -185,7 +185,7 @@ def main() -> int:
                 sys.exit(f"✗ {local} が無い")
             name = local.name
             if name in have:
-                sys.exit(f"✗ {name} は既にある（差し替えはこの道具の仕事ではない）")
+                sys.exit(f"✗ {name} は既にある（差し替えはこのツールの仕事ではない）")
             out = work / name
             shutil.copy2(local, out)
             run("gh", "release", "download", args.tag, "-R", args.repo,
@@ -241,7 +241,7 @@ def self_test() -> int:
     """網に出ない部分だけを、その場で確かめる。
 
     危ないのは zip の中身と `SHA256SUMS` の継ぎ足しで、どちらも純粋な関数。
-    **足した検査は壊して鳴らす**という規則がここにも要るので、壊れた形を
+    **足した検査は壊して失敗させる**という規則がここにも要るので、壊れた形を
     ぶつけて止まることまで見る。
     """
     d = Path(tempfile.mkdtemp(prefix="cian-selftest-"))

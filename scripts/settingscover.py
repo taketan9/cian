@@ -14,9 +14,9 @@ SSH ホストは触れるが、cian が読む設定はそれだけではない �
 
 ## 何と何を比べているか
 
-* **面 A ── `cian.*` の API**（`cian-lua/src/lib.rs` の `cian.set(…)`）。
+* **観点 A ── `cian.*` の API**（`cian-lua/src/lib.rs` の `cian.set(…)`）。
   init.lua に書けることの全部
-* **面 B ── `:where` が挙げるファイル**（`cian-tui/src/actions.rs`）。cian が
+* **観点 B ── `:where` が挙げるファイル**（`cian-tui/src/actions.rs`）。cian が
   読む設定ファイルの全部
 
 どちらも「画面が触る」か「画面が**どこで直すか**を出している」
@@ -49,10 +49,10 @@ SERVER = ROOT / "crates" / "cian-server" / "src" / "main.rs"
 # 画面に出さない API と、その理由。**理由が要ります。**
 API_OK = {
     "set_option": "画面の本体。20 個ぜんぶ出ている",
-    "ai": "AI の節で出ている",
-    "ssh": "SSH の節で出ている",
-    "set_keymap": "キー割当の節で出ている（押して決める）",
-    "snippets": "スニペットの節で出ている",
+    "ai": "AI の項目で出ている",
+    "ssh": "SSH の項目で出ている",
+    "set_keymap": "キー割当の項目で出ている（押して決める）",
+    "snippets": "スニペットの項目で出ている",
     # 出さないもの ── どれも「画面より良い道がある」か「形が畳めない」。
     "set_theme": "`:theme` のギャラリーで選ぶ。21 個を一覧から選ぶのは画面の仕事ではない",
     "font": "`cian.font{ face }` は窓版だけ。書体の一覧を出す道がまだ無い",
@@ -61,13 +61,13 @@ API_OK = {
     "open": "拡張子ごとの開き方。同上",
     "on_open": "Lua の関数そのもの。欄には入らない",
     "ai_context": "AI に渡す文脈。長い文章なので init.lua で",
-    "spawn": "設定ではなく、init.lua から外部コマンドを起こすための道具",
+    "spawn": "設定ではなく、init.lua から外部コマンドを起こすためのツール",
 }
 
 # 画面に出さないファイルと、その理由。
 FILE_OK = {
     "init.lua": "画面の本体",
-    "ssh.lua": "SSH の節が読み書きする",
+    "ssh.lua": "SSH の項目が読み書きする",
 }
 
 

@@ -20,7 +20,7 @@
 //!
 //! 1. **有効な行がある** → 値だけ差し替える（行末の注釈は残す）
 //! 2. **コメントアウトされた同名の行がある** → それを有効にして値を入れる
-//! 3. **どちらも無い** → 末尾の「設定画面が書いた」節に足す
+//! 3. **どちらも無い** → 末尾の「設定画面が書いた」セクションに足す
 //! 4. **消す** → 行を削らず、**コメントに戻す**（説明が消えるから）
 //!
 //! ## 同じ名前が何度も出てきたら
@@ -33,7 +33,7 @@
 //! ## 改行は元のまま
 //!
 //! `\r\n` のファイルを `\n` で書き戻すと、git が全行を変更として出す。
-//! 会社の Windows で使うものなので、ここは黙って揃えない。
+//! 会社の Windows で使うものなので、ここは通知なしに揃えない。
 
 use crate::config_read_path;
 
@@ -53,7 +53,7 @@ struct Seen {
 /// その行が `cian.set_option("name", …)` なら、見立てを返す。
 ///
 /// **賢くしない。** Lua の構文解析はしない ── ここが当てにならない大きさに
-/// 育つと、設定ファイルを壊す道具になる。見るのは「行頭（`--` を除く）が
+/// 育つと、設定ファイルを壊すツールになる。見るのは「行頭（`--` を除く）が
 /// `cian.set_option("name"` で始まるか」だけで、それ以外の書き方
 /// （変数に入れてから呼ぶ、`for` で回す）は**見つからないほうが正しい** ──
 /// 見つからなければ末尾に足すので、書き手の書いた行は無傷で残る。
@@ -151,7 +151,7 @@ pub fn set_option_in(text: &str, name: &str, value: Option<&str>) -> String {
         // ② コメントアウトされた同名の行を、有効にして使う
         (Some(v), None) => match seen.first() {
             Some(s) => lines[s.at] = write(s, v),
-            // ③ どこにも無い → 末尾の節へ
+            // ③ どこにも無い → 末尾のセクションへ
             None => {
                 if !lines.iter().any(|l| l.trim() == ADDED_HEAD) {
                     if lines.last().map(|l| !l.trim().is_empty()).unwrap_or(false) {
@@ -178,7 +178,7 @@ pub fn set_option_in(text: &str, name: &str, value: Option<&str>) -> String {
 ///
 /// 設定画面が「設定済み」を数えるのはこれ。crmaine は読み込んだ**あと**の値で
 /// 数えて、何も書いていないのに「1件設定済み」と出した ── 計算で埋めた既定が
-/// 混じっていたからで、数が嘘をつくと、何を設定したのか分からなくなる。
+/// 混じっていたからで、数が実態と合わないと、何を設定したのか分からなくなる。
 pub fn get_option_in(text: &str, name: &str) -> Option<String> {
     let lines: Vec<&str> = text.lines().collect();
     let seen: Vec<Seen> = lines
@@ -234,12 +234,12 @@ pub fn get_field_in(text: &str, call: &str, key: &str) -> Option<String> {
 ///
 /// ## コメントアウトされたブロックは、有効にしない
 ///
-/// 1行の設定なら「行頭の `-- ` を外す」が正解だが、ブロックは違う。見本には
+/// 1行の設定なら「行頭の `-- ` を外す」で正しいが、ブロックは違う。見本には
 /// `cian.ai {` が**2つ**コメントアウトされていて（Azure の例と OpenAI 互換の
 /// 例）、中にはさらにコメントアウトされた行が混じっている。どちらをどう外すか
 /// を機械が決めると、**書き手が読むつもりだった説明が設定になる**。
 ///
-/// だから有効なブロックが無いときは、末尾の節に**新しく書く**。見本はそのまま
+/// だから有効なブロックが無いときは、末尾のセクションに**新しく書く**。見本はそのまま
 /// 説明として残り、実際の設定は一か所に集まる。
 ///
 /// `value` が `None` ならその項目をコメントに戻す（行は消さない）。
@@ -425,7 +425,7 @@ fn replace_inline(line: &str, key: &str, value: &str) -> String {
     format!("{}{{{} }}{}", &line[..open], parts.join(",").trim_end(), &line[close + 1..])
 }
 
-/// 末尾の節に、新しいブロックを書く。
+/// 末尾のセクションに、新しいブロックを書く。
 fn append_block(lines: &mut Vec<String>, call: &str, key: &str, value: &str) {
     if !lines.iter().any(|l| l.trim() == ADDED_HEAD) {
         if lines.last().map(|l| !l.trim().is_empty()).unwrap_or(false) {
@@ -443,7 +443,7 @@ fn append_block(lines: &mut Vec<String>, call: &str, key: &str, value: &str) {
 /// `init.lua` を読む。返すのは（場所、中身、Lua として読めなかった理由）。
 ///
 /// **読めなかったら、設定画面は保存させない。** crmaine はここで転けている ──
-/// JSON に書き間違いがあると読み込みが黙って既定へ落ち、設定画面はまっさらな
+/// JSON に書き間違いがあると読み込みが通知なしに既定へ落ち、設定画面はまっさらな
 /// 状態で開き、保存を押した瞬間に元の設定が消えた（5,399 バイト → 64 バイト）。
 /// 中身は必ず返すので、画面は「読めません」と言ったうえで**そのまま見せられる**。
 pub fn read_init() -> (Option<std::path::PathBuf>, String, Option<String>) {
@@ -477,7 +477,7 @@ pub fn syntax_error(text: &str) -> Option<String> {
 ///
 /// 設定は人が何ヶ月もかけて育てるもので、上書きの失敗を取り返す手が要る。
 /// 書き方を2つ持つと、片方だけ直したときにそちらだけ壊れる ── だから
-/// 保存はこの1つの扉だけを通る。
+/// 保存はこの1つの経路だけを通る。
 ///
 /// 控えは `init.lua.bak`。**世代は持たない** ── 設定画面から何度も保存する
 /// 人が、いつの控えか分からない `.bak.3` を並べても使えない。直前の1つが
@@ -505,7 +505,7 @@ mod tests {
     /// **改行の種類と行の分け方は一組**で、5か所が別々に持っていた。片方だけ
     /// 直すと、そこだけ `\r\n` のファイルが `\n` で書き戻される ── git が
     /// 全行を変更として出す形になる。会社の Windows で使うものなので、ここは
-    /// 黙って揃えてはいけない。
+    /// 通知なしに揃えてはいけない。
     #[test]
     fn splitting_remembers_the_line_ending_it_has_to_put_back() {
         let (nl, lines) = split_lines("a\r\nb\r\n");
@@ -599,7 +599,7 @@ cian.set_option(\"shell\", \"/bin/zsh\")
     }
 
     /// **改行は元のまま。** `\\r\\n` のファイルを `\\n` にすると、git が全行を
-    /// 変更として出す ── 会社の Windows で使うものなので、黙って揃えない。
+    /// 変更として出す ── 会社の Windows で使うものなので、通知なしに揃えない。
     #[test]
     fn crlf_stays_crlf() {
         let text = "-- cian.set_option(\"tab_width\", 8)\r\ncian.set_option(\"lang\", \"ja\")\r\n";
@@ -620,7 +620,7 @@ cian.set_option(\"shell\", \"/bin/zsh\")
     /// **見つからない書き方は、見つからないのが正しい。**
     ///
     /// 変数に入れてから呼ぶ書き方を「賢く」拾おうとすると、書き手の行を
-    /// 壊す道具になる。拾わなければ末尾に足すだけで、元の行は無傷。
+    /// 壊すツールになる。拾わなければ末尾に足すだけで、元の行は無傷。
     #[test]
     fn a_clever_spelling_is_left_alone() {
         let text = "local k = \"tab_width\"\ncian.set_option(k, 8)\n";
@@ -656,7 +656,7 @@ cian.set_option(\"shell\", \"/bin/zsh\")
     #[test]
     fn writing_leaves_a_copy_of_what_was_there() {
         let dir = std::env::temp_dir().join(format!("cian-se-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("砂場");
+        std::fs::create_dir_all(&dir).expect("作業用ディレクトリ");
         let path = dir.join("init.lua");
         std::fs::write(&path, "-- もとの中身\n").expect("書けるはず");
 
@@ -828,7 +828,7 @@ cian.ai {
             .join("examples/init.lua");
         let before = std::fs::read_to_string(&path).expect("the sample init.lua");
         // 数ではなく**中身**で見る。数だけだと、1行消えて1行増えたときに
-        // 釣り合って通る ── cian の検査が黙る形。
+        // 釣り合って通る ── cian の検査が何も報告しない形。
         let prose = |s: &str| -> Vec<String> {
             s.lines()
                 .map(|l| l.trim().to_string())
@@ -855,7 +855,7 @@ cian.ai {
         for line in &a {
             assert!(b.contains(line), "説明が消えた: {line}");
         }
-        // 増えたのは、設定画面が書いた節の見出しだけ。
+        // 増えたのは、設定画面が書いたセクションの見出しだけ。
         let added: Vec<_> = b.iter().filter(|l| !a.contains(l)).collect();
         assert_eq!(added, vec![&ADDED_HEAD.to_string()], "見出し以外を足さない");
         // 中身も減らない。

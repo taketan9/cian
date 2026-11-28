@@ -2,8 +2,8 @@
 """設計書（`docs/*.ja.md`）が名乗る名前は、実在するか。
 
 crmaine の `TestDesignRulesPointAtRealThings` / `TestFeatureMapPointsAtRealCode`
-と同じ役目です。設計書は手で書くので、関数名を変えた日に黙って嘘になります。
-**嘘になった瞬間に落ちるのが、この検査の仕事です。**
+と同じ役目です。設計書は手で書くので、関数名を変えた日に誤った記述のまま残ります。
+**誤った記述になった瞬間に失敗するのが、この検査の仕事です。**
 
     python3 scripts/designdoc.py          通る／落ちる
     python3 scripts/designdoc.py --list   何を見たか
@@ -30,7 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 
-# 下限 ── 取りこぼしたときに黙らないため
+# 下限 ── 取りこぼしたときに取りこぼしを報告するため
 LEAST_FUNCS = 20
 LEAST_PATHS = 12
 
@@ -64,7 +64,7 @@ def looks_like_path(tok: str) -> bool:
 
     **素のファイル名は場所を名乗っていません。** `keys.rs` は文中で短く呼ぶ
     ための書き方で、`init.lua` は利用者が作る設定なのでリポジトリにありません。
-    どちらも「ここに在る」と言っていないので、実在を求めません ── 場所を
+    どちらも「ここに在る」と言っていないので、実在を確認しません ── 場所を
     名乗るなら `crates/cian-tui/src/keys.rs` の形で書いてください。
     """
     if tok.startswith(("http://", "https://")) or "/" not in tok:

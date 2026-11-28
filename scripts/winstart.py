@@ -27,11 +27,11 @@ import sys
 from pathlib import Path
 
 # **Windows の runner の標準出力は cp1252。** 日本語を1行出した瞬間に
-# `UnicodeEncodeError` で落ち、「資材が悪い」ではなく「関門が壊れた」で
-# ジョブが赤くなる。`scripts/buildstamp.py` が 2026-10-31 に踏んだ同じ穴に、
+# `UnicodeEncodeError` で落ち、「資材が悪い」ではなく「検査が壊れた」で
+# ジョブが赤くなる。`scripts/buildstamp.py` が 2026-10-31 に発生した同じ原因に、
 # **この検査を足した日にもう一度落ちた**（2026-11-28）── 同じ直しを別の
-# ファイルに書き写す必要があることを、誰も見張っていなかった。
-# いまは `scripts/claudemd.py` が見張る。
+# ファイルに書き写す必要があることを、どの検査も監視していなかった。
+# いまは `scripts/claudemd.py` が監視する。
 for stream in (sys.stdout, sys.stderr):
     try:
         stream.reconfigure(encoding="utf-8", errors="replace")

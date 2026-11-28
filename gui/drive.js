@@ -238,7 +238,7 @@ class Cdp {
     /// **返事に上限を付ける。** ここには何も無かったので、返ってこない呼び
     /// 出しが1つあると走行全体がそこで止まる ── 2026-09-14 に2回、
     /// `Page.captureScreenshot` が返らないまま18分立ち往生した（この機械の
-    /// 画面側の癖で、cian は生きていた）。**道具が黙ると、観測が止まる。**
+    /// 画面側の癖で、cian は生きていた）。**ツールが何も報告しないと、観測が止まる。**
     /// 落ちるのではなく、そこだけ諦めて先へ進めるように、投げる。
     send(method, params = {}, ms = 30000) {
         const id = ++this.id;
@@ -270,8 +270,8 @@ class Cdp {
             return;
         }
         // `raw:{"key":"(","code":"Key(","vk":40,"text":"("}` ── 送るものを
-        // そのまま指定する。**ほかの道具が cian に何を送っているか**を再現する
-        // ための段。crmaine の録画の道具は `(` を番号 40（＝↓）で送っていて、
+        // そのまま指定する。**ほかのツールが cian に何を送っているか**を再現する
+        // ための段。crmaine の録画のツールは `(` を番号 40（＝↓）で送っていて、
         // `ci(` が「c i ↓」になっていた（2026-09-22）。人の手では起きない形を、
         // 手元で起こして確かめるのに使う。
         if (spec.startsWith('raw:')) {
@@ -290,8 +290,8 @@ class Cdp {
         //
         // **この Mac の鍵盤は JIS だ**（CountryCode 15）。上の `press` は US の
         // 位置で打つので、`(` は Shift+Digit9 として届く。JIS では Shift+Digit8
-        // で、**`e.code` で当てている受け口はそこで食い違う**（2026-09-01 に
-        // 半角/全角で踏んだ）。記号の位置が違うものだけを表に持つ。
+        // で、**`e.code` で対応づけているハンドラはそこで食い違う**（2026-09-01 に
+        // 半角と全角の違いで発生した）。記号の位置が違うものだけを表に持つ。
         if (spec.startsWith('jis:')) {
             const JIS = {
                 '"': ['Digit2', 50], '&': ['Digit6', 54], "'": ['Digit7', 55],
@@ -433,9 +433,9 @@ async function main() {
         'fn main() {\n    let x = (1 + 2);\n    println!("hi");\n}\n');
     // A binary, for the hex editor.
     fs.writeFileSync(path.join(sand, 'from', 'z.bin'), Buffer.from('HELLO WORLD\u0000\u0001', 'latin1'));
-    // 大きな疎ファイル。**既定では作りません** ── 一巡やコマンドの掃引が
+    // 大きな疎ファイル。**既定では作りません** ── 一巡やコマンドの全件検査が
     // これに当たると、チェックサムや容量で何十秒も計算することになります。
-    // 帯の絵を撮るときだけ `CIAN_DRIVE_BIG=2048`（MB）で作ります。
+    // 進捗バーの画像を撮るときだけ `CIAN_DRIVE_BIG=2048`（MB）で作ります。
     if (process.env.CIAN_DRIVE_BIG) {
         const fd = fs.openSync(path.join(sand, 'from', 'big.bin'), 'w');
         fs.ftruncateSync(fd, (Number(process.env.CIAN_DRIVE_BIG) || 0) * 1024 * 1024);
@@ -477,9 +477,9 @@ async function main() {
 
     // `--values` ── **欄に意地の悪い値を入れて、往復させる。**
     //
-    // 鍵を押す掃引（`--commands`）は「押したら何か起きるか」を見る。こちらは
+    // 鍵を押す全件検査（`--commands`）は「押したら何か起きるか」を見る。こちらは
     // **書いたものが同じもので戻るか**を見る ── スニペットに複数行を入れると
-    // 保存が壊れていたのがこの型で、押す掃引では永久に出ない。
+    // 保存が壊れていたのがこの型で、押す全件検査では永久に出ない。
     //
     // 意地の悪さは、`init.lua` が Lua だからこその形を選ぶ:
     //
@@ -517,9 +517,9 @@ async function main() {
     // 何も無く、`drive.js` の一周が触るのはひと握りだった ── **配布は窓版
     // 一本**なので、触ったことのない道がそのまま人の手元へ行く。
     //
-    // 見るのは `例外 0 件` だけでいい。中身の良し悪しは端末版の掃引と
-    // `parity.py` が見ているので、ここで重ねない ── **同じことを二つの道具に
-    // 見させると、片方を直したときもう片方が黙る。**
+    // 見るのは `例外 0 件` だけでいい。中身の良し悪しは端末版の全件検査と
+    // `parity.py` が見ているので、ここで重ねない ── **同じことを二つのツールに
+    // 見させると、片方を直したときもう片方が何も報告しない。**
     const commandRound = () => {
         const src = fs.readFileSync(path.join(__dirname, 'renderer.js'), 'utf8');
         const names = new Set();
@@ -528,7 +528,7 @@ async function main() {
             const al = /alias:\s*\[([^\]]*)\]/.exec(m[2]);
             if (al) for (const a of al[1].matchAll(/'([^']+)'/g)) names.add(a[1]);
         }
-        // この道具では見られないもの。**「危ないから」ではなく「見られない
+        // このツールでは見られないもの。**「危ないから」ではなく「見られない
         // から」** ── 別の見方があるものは、そちらで見る。
         const skip = new Set([
             'q', 'quit',                                  // 窓を閉じる
@@ -587,7 +587,7 @@ async function main() {
                 // **正規表現を使わない。** 逃がした字を戻すだけなので、
                 // 素直に一字ずつ見るほうが、書くほうも読むほうも間違えない
                 // （最初ここの正規表現がエスケープで潰れて、11 回とも同じ
-                // 例外を返していた ── 検査が黙るのではなく、検査が転ぶ形）。
+                // 例外を返していた ── 検査が何も報告しないのではなく、検査自身が失敗する形）。
                 const un = (s) => {
                     if (s == null) { return null; }
                     let v = String(s);
@@ -634,14 +634,14 @@ async function main() {
     //   CIAN_CONFIG_DIR=<mock の設定> node gui/drive.js --ai
     //
     // 依頼 702 で直したのは「訊かずに空で呼んでいた」ところだが、壊れうるのは
-    // その後ろ（要求・確認の面・プロンプトに置く）も同じだけある。
+    // その後ろ（要求・確認のパネル・プロンプトに置く）も同じだけある。
     const aiRound = () => [
         ['J', 'シェルへ'], ['wait:1200', ''],
         ['read:(()=>{const r=aiRows().find((x)=>x.value===":aicmd");if(!r)return "行が無い";r.run();return "窓="+(!el.ask.hidden)})()', 'やりたいことを訊く窓'],
         ['want:!el.ask.hidden', '窓が開いている'],
         ['type:ファイルの一覧を出す', ''], ['Enter', '問い合わせる'], ['wait:5000', ''],
-        ['want:!!document.querySelector("#confirm:not([hidden]), #ask:not([hidden])")', '確認の面が出る'],
-        ['want:/[Mm]ock/.test(document.body.textContent)', 'mock の答えが面に載っている'],
+        ['want:!!document.querySelector("#confirm:not([hidden]), #ask:not([hidden])")', '確認のパネルが出る'],
+        ['want:/[Mm]ock/.test(document.body.textContent)', 'mock の答えがパネルに表示されている'],
         ['Enter', 'プロンプトに置く'], ['wait:2500', ''],
         ['want:/実行はしていません|nothing has run/.test(document.querySelector("#status").textContent)', '置くだけで実行しないと言う'],
         ['want:/[Mm]ock/.test((document.querySelector("#s-panes .sgrid.on")||document.querySelector("#s-panes .sgrid")).textContent)', '答えがシェルのプロンプトに載った'],
@@ -666,8 +666,8 @@ async function main() {
         ['read:(()=>{const r=aiRows().find((x)=>x.value===":aicmd");if(!r)return "行が無い";r.run();return "窓="+(!el.ask.hidden)})()', 'やりたいことを訊く窓'],
         ['want:!el.ask.hidden', '窓が開いている'],
         ['type:ファイルの一覧を出す', ''], ['Enter', '問い合わせる'], ['wait:90000', ''],
-        ['want:!!document.querySelector("#confirm:not([hidden]), #ask:not([hidden])")', '確認の面が出る'],
-        ['read:(()=>{const c=document.querySelector("#confirm:not([hidden]), #ask:not([hidden])");return "面の字: "+(c?c.textContent.trim().slice(0,160):"無い")})()', ''],
+        ['want:!!document.querySelector("#confirm:not([hidden]), #ask:not([hidden])")', '確認のパネルが出る'],
+        ['read:(()=>{const c=document.querySelector("#confirm:not([hidden]), #ask:not([hidden])");return "パネルの文字: "+(c?c.textContent.trim().slice(0,160):"無い")})()', ''],
         ['Enter', 'プロンプトに置く'], ['wait:2500', ''],
         ['want:/実行はしていません|nothing has run/.test(document.querySelector("#status").textContent)', '置くだけで実行しないと言う'],
         [`read:'プロンプトの字: ' + ${prompt()}.trim().slice(-140)`, ''],
@@ -679,11 +679,11 @@ async function main() {
     // 2GB のファイルの sha256 は要求の処理の中で数十秒かかり、その間
     // エンジンは次の要求を読まないので窓全体が止まっていた（所見 S3）。
     // 裏に回したので結果は返事ではなく `hash` の知らせで届く ── つまり
-    // **受け口が無ければ面は空のまま開く**ので、この走行はその経路を測る。
+    // **ハンドラが無ければパネルは空のまま開く**ので、この走行はその経路を測る。
     // 本物の桁を見るのは、何もせずに番号だけ返す実装に ok を出さないため。
     const sheet = () => '(report.rows[0] || {})';
     const hashRound = () => [
-        // **置いた場所を確かめてから頼む。** 最初に書いたときは砂場に無い
+        // **置いた場所を確かめてから頼む。** 最初に書いたときは作業用ディレクトリに無い
         // 名前（`Cargo.lock`）を探していて、カーソルは動かないまま偶然
         // 乗っていた実ファイルが測られていた ── 走行は緑だった。
         [`read:(()=>{const p=state[state.focus];const i=p.entries.findIndex((e)=>e.name==="z.bin");`
@@ -693,7 +693,7 @@ async function main() {
             'カーソルは測るつもりのファイルにいる'],
         ['read:(()=>{cmdHash("");return "頼みました";})()', ':hash'],
         ['wait:4000', ''],
-        ['top:#report', '結果の面がいちばん上に見えている'],
+        ['top:#report', '結果のパネルがいちばん上に見えている'],
         [`read:'先頭の行: ' + JSON.stringify(${sheet()})`, ''],
         [`want:${sheet()}.label === 'z.bin'`, '測ったのは、カーソルが指していたもの'],
         [`want:/^[0-9a-f]{64}$/.test(String(${sheet()}.sub || ''))`,
@@ -760,7 +760,7 @@ async function main() {
         // **焦点枠の内側に描く outline は、焦点枠を避けていること。**
         //
         // カーマインが消えていたのは、詰まるところ `outline-offset` が `-2px`
-        // で、焦点枠の 3px の帯と重なっていたからだった（`.dropping` は
+        // で、焦点枠の 3px の枠線と重なっていたからだった（`.dropping` は
         // `-3px` で、ちょうど外している）。**1文字の違いで、読んでも分からない。**
         // だから読まずに測る: 内側 outline の食い込みが焦点枠の太さ以上なら、
         // 覆われようがない。
@@ -790,37 +790,37 @@ async function main() {
         // **閉じるのは本物の Esc で。** `el.ask.hidden` を直に立てると
         // `askFor` の `keydown`（capture・残りを全部 stopPropagation）が
         // 付いたままになり、以降の打鍵を全部食う ── それで後ろの3歩が
-        // 落ちた。扉は1つ、閉じ方も1つ。
+        // 落ちた。経路は1つ、閉じ方も1つ。
         ['want:(()=>{const keep=[term.on,term.focused];term.on=true;term.focused=true;const r=aiRows().find((x)=>x.value===":aicmd");term.on=keep[0];term.focused=keep[1];if(!r)return "その行が無い";r.run();const head=el.ask.querySelector(".head").textContent;return !el.ask.hidden&&head.length>0&&!head.includes(":aicmd")})()', 'AI のコマンド生成は、やりたいことを訊く'],
         ['Esc', '訊く窓を閉じる'],
 
         // シェルの状態（記録中・シンクロ）は**自分の border** で言うので、
-        // 焦点枠（padding box の内側）とは帯が別 ── 覆われない。太さが 0 に
+        // 焦点枠（padding box の内側）とは枠が別 ── 覆われない。太さが 0 に
         // なったらその前提が崩れる。
         ['want:(()=>{el.shell.classList.add("logging");const w=parseFloat(getComputedStyle(el.shell).borderTopWidth)||0;el.shell.classList.remove("logging");return w>0;})()', '記録中の上辺が焦点枠の外にある'],
 
-        // **キーの無い面は退く ── 一覧もシェルも、同じ数で。**
+        // **キーの無いパネルは退く ── 一覧もシェルも、同じ数で。**
         //
         // 「アクティブパネルがどこか誤ってしまう」（本人、2026-10-06）。
         // 一覧は前から退いていたが、シェルは焦点のあるなしで色が変わらず、
-        // 三面のうち一つだけ「いつも手前」に見えていた。
+        // 3つのパネルのうち一つだけ「いつも手前」に見えていた。
         //
         // 数で見る ── 計算後の opacity は打鍵では動かないので、「動かなかった
         // キー」には出ない。目で見て「薄いと思う」と言うのがいちばん危ない
         // （型④）。`--off-tone` の1か所から来ていることも併せて見るので、
-        // 面ごとに別の数を書いた日に鳴る。
-        ['want:(()=>{const t=getComputedStyle(document.documentElement).getPropertyValue("--off-tone").trim();const off=parseFloat(t);return off>0 && off<0.7;})()', '退いた面の濃さが1か所で決まっている'],
+        // パネルごとに別の数を書いた日に失敗する。
+        ['want:(()=>{const t=getComputedStyle(document.documentElement).getPropertyValue("--off-tone").trim();const off=parseFloat(t);return off>0 && off<0.7;})()', '退いたパネルの濃さが1か所で決まっている'],
         ['want:(()=>{const off=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--off-tone"));const rows=(p)=>parseFloat(getComputedStyle(p.querySelector(".rows")).opacity);return rows(document.querySelector(".pane:not(.active)"))===off && rows(document.querySelector(".pane.active"))===1;})()', '非アクティブの一覧だけが退く'],
         // シェルは**開いていて、キーが無い**状態で測る（起動直後がそれ）。
         ['want:(()=>{const off=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--off-tone"));return !el.shell.classList.contains("on") && parseFloat(getComputedStyle(document.getElementById("s-panes")).opacity)===off;})()', 'キーの無いシェルも同じだけ退く'],
         // **カーソル追従の表示は退かせない。** 一覧にキーがあるあいだ中身を
-        // 見せるための面で、そこを薄くすると、見るために作った面がいちばん
+        // 表示のためのパネルで、そこを薄くすると、表示のために作ったパネルがいちばん
         // 読みにくくなる。キーがシェルに無いいまの状態のまま測る ── 検査の
         // ために状態をいじると、測っているものが本物でなくなる。
         ['want:(()=>{const v=document.getElementById("s-preview");const was=v.hidden;v.hidden=false;const o=parseFloat(getComputedStyle(v).opacity);v.hidden=was;return o===1;})()', '追従表示は退かない'],
         ['Shift+J', 'シェルへ'], ['wait:700', ''],
         ['want:parseFloat(getComputedStyle(document.getElementById("s-panes")).opacity) === 1', 'キーが来たシェルは満額に戻る'],
-        // **満額はキーのある面だけ。** `.active` は「2つのうちどちらの一覧か」
+        // **満額はキーのあるパネルだけ。** `.active` は「2つのうちどちらの一覧か」
         // の答えで、「キーがそこにあるか」の答えではない ── シェルへ移った
         // あとも直前の一覧が満額で残っていた（実機、2026-10-06）。
         ['want:(()=>{const off=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--off-tone"));return [el.left,el.right].every((p)=>parseFloat(getComputedStyle(p.querySelector(".rows")).opacity)===off);})()', 'シェルにキーがあるときは一覧が両方とも退く'],
@@ -833,7 +833,7 @@ async function main() {
         // （2026-10-17、「コピーすると文字がロストする」の正体）。
         //
         // ここで見るのは**連なりの長さ**だ ── 字数の合計は壊れていても合う
-        // ので、「600 字あるから無事」は嘘をつく（型②: 同じ見方で測り直す
+        // ので、「600 字あるから無事」は誤った判定になる（型②: 同じ見方で測り直す
         // 検査は、その誤りに永久に ok を返す）。
         ['type:python3 -c "print(\'A\'*600)"', '長い1行を出す'], ['Enter', ''], ['wait:2500', ''],
         ['read:(async()=>{const g=document.querySelector("#s-panes .sgrid.on")||document.querySelector("#s-panes .sgrid");const sel=window.getSelection();const r=document.createRange();r.selectNodeContents(g);sel.removeAllRanges();sel.addRange(r);shellCopy();await new Promise(x=>setTimeout(x,400));window.__COPIED=await navigator.clipboard.readText();sel.removeAllRanges();return "拾った "+window.__COPIED.length+" 字";})()', ''],
@@ -841,7 +841,7 @@ async function main() {
         ['want:window.__COPIED.split(String.fromCharCode(10)).every((l)=>{const c=l.charCodeAt(l.length-1);return c!==32&&c!==9;})', '行末の空白が付いてこない'],
         ['Esc', 'ファイルへ戻る'], ['wait:500', ''],
 
-        // AI の会話窓。**AI が設定されていなくても開く** ── 面と鍵と重なりは
+        // AI の会話窓。**AI が設定されていなくても開く** ── パネルとキーと重なりは
         // モデルと無関係で、それがここで見たいもの。実際に答えが返るところは
         // `CIAN_CONFIG_DIR` に mock を書いた別走行で見る（`[mock +2]` が
         // 会話を運べている証拠になる）。
@@ -850,7 +850,7 @@ async function main() {
         // 事故があるから ── `report.on === true` で「出た」と判断していたが、
         // シートはエディタの裏に開いていた。
         [':', 'コマンド'], ['type:ai', ''], ['Enter', '会話を開く'], ['wait:500', ''],
-        ['read:\'会話の面: \' + chat.on + \' / 見えている: \' + !document.getElementById(\'chat\').hidden', ''],
+        ['read:\'会話のパネル: \' + chat.on + \' / 見えている: \' + !document.getElementById(\'chat\').hidden', ''],
         ['top:#chat', '一番手前にあるか'],
         ['shot:ai-chat@#chat', 'AI の会話窓'],
         ['Escape', '閉じる'], ['wait:300', ''],
@@ -899,7 +899,7 @@ async function main() {
         // **`Enter` だけで開く。** ここには `F3` も並べてあったが、**ビューアの
         // 中の F3 は1回で閉じる**（ヘルプにそう書いてある）。だから下の二つの
         // `top:` は、エディタが無い画面を見て毎回「ない」と答えていた ──
-        // 見張りが止まっていたことに気づけたのは、`top:` を例外に数えるように
+        // 監視が止まっていたことに気づけたのは、`top:` を例外に数えるように
         // した日だった。ペインから F3 で開く道は上の `land:d1.txt` が見ている。
         ['land:c.rs', 'c.rs の行へ'], ['Enter', 'ファイルを読む'], ['wait:3000', ''],
         ['top:#view', 'エディタが最前面'],
@@ -920,7 +920,7 @@ async function main() {
         // **端末版はずっとこうだった**（`viewer_dock`）。窓版だけが txt を開くと
         // 窓全部を本文にしていて、一覧にもシェルにも戻れなかった。
         //
-        // ここで見るのは**打鍵では動かないこと**ばかりだ ── どちらの面が
+        // ここで見るのは**打鍵では動かないこと**ばかりだ ── どちらのパネルが
         // 画面にあるか、どちらがキーを持っているか、そして
         // **一覧で押した `j` が本文に届いていないか**。状態を見るだけでは
         // 足りない（型⑧）ので、計算後の display と、本文のカーソル位置を見る。
@@ -945,7 +945,7 @@ async function main() {
         ['want:getComputedStyle(el.shell).display === "none"', 'シェルも引っ込む'],
         ['want:el.view.getBoundingClientRect().width > el.panes.getBoundingClientRect().width - 8', 'パネルが埋める'],
         ['F12', '戻す'], ['wait:700', ''],
-        ['want:getComputedStyle(el.shell).display !== "none"', '三面に戻る'],
+        ['want:getComputedStyle(el.shell).display !== "none"', '3つのパネルに戻る'],
         ['Shift+l', '右の一覧へ'], ['wait:500', ''],
         ['want:state.focus === "right" && viewerHasKeys() === false', 'キーは一覧のもの'],
         ['want:!el.view.contains(document.activeElement)', 'エディタは焦点を手放す'],
@@ -966,8 +966,8 @@ async function main() {
         //
         // **挿入の途中でマウスで一覧へ移る** ── これが本当に起きる形だ。
         // キーで渡る道は挿入中には開かない（`vimTyping()` を見ている）ので、
-        // 焦点を手放す仕掛けを外しても `j` では鳴らない ── 一覧が
-        // `stopPropagation` して、もともと届かないからだ。**鳴らない検査は
+        // 焦点を手放す仕掛けを外しても `j` では失敗しない ── 一覧が
+        // `stopPropagation` して、もともと届かないからだ。**何も検知しない検査は
         // 無いのと同じ。** 外して確かめたら `AA;;1 行目` になった。
         // 挿入に入った直後に打たない ── 一度だけ、Monaco が隠し textarea を
         // 握るのを待つ。待たずに打って、一周の中で1回だけ字が入らなかった。
@@ -991,7 +991,7 @@ async function main() {
         // この集合にいて実機で壊れているのが見つかった。1周が長くなるのは
         // 承知の上で ── 「プッシュ前の最後に実施するから構わない」。
         //
-        // 順は面ごと。壊すものは押さない（削除は既存の一周が扱う）。
+        // 順序はパネルごと。壊すものは押さない（削除は既存の一周が扱う）。
         // `Ctrl+Enter` はファイルの上では**外部アプリが起動する**ので、
         // ディレクトリの上でだけ押す。
 
@@ -1003,11 +1003,11 @@ async function main() {
         ['Ctrl+n', '次の行'], ['Ctrl+p', '前の行'],
         // **この塊は自分の出発点を自分で決める。**
         //
-        // 最初はここが「砂場のどこか」から始まる前提で書いていて、上の半分が
+        // 最初はここが「作業用ディレクトリのどこか」から始まる前提で書いていて、上の半分が
         // ペインをどこへ置いたかで結果が変わった ── 単独で試すと通り、周回の
-        // 中では通らない、といういちばん質の悪い形になる。砂場の根に降りて
+        // 中では通らない、といういちばん質の悪い形になる。作業用ディレクトリの根に降りて
         // から歩けば、履歴の中身まで決まる。
-        // **前半が残した画面を閉じてから始める。**
+        // **前半が残した画パネルを閉じてから始める。**
         //
         // ここに足した塊は、上の一周が何も開いていない前提で書いてあった ──
         // 実際にはフィルタのプロンプトが開いたままで、`Backspace` は一覧では
@@ -1035,8 +1035,8 @@ async function main() {
         ['F11', '全画面'], ['wait:800', ''], ['F11', '戻す'], ['wait:800', ''],
 
         // 探す
-        // `.rs` は砂場に必ずある。0件だとシートが開かず、その `top:` は
-        // 「隠れている」ではなく「ない」と鳴って、意味が変わる。
+        // `.rs` は作業用ディレクトリに必ずある。0件だとシートが開かず、その `top:` は
+        // 「隠れている」ではなく「ない」と報告して、意味が変わる。
         ['Shift+F', '名前で探す'], ['wait:600', ''],
         ['type:.rs'], ['Enter', ''], ['wait:4000', ''],
         ['read:\'名前で探す → \' + (report.rows||[]).length + \' 件\'', ''],
@@ -1053,7 +1053,7 @@ async function main() {
         // **繋がらない相手に、窓が止まらないこと。**
         //
         // 握手はエンジンの worker で進み、結果は `connected` の知らせで届く
-        // （所見 S4）。ここで見るのは窓の側の受け口 ── 断られた理由が状態行に
+        // （所見 S4）。ここで見るのはウィンドウ版のハンドラ ── 断られた理由が状態行に
         // 出ること、待っていた印（`connectWaiting`）が残らないこと。相手は
         // ポート 1 なので即座に断られる。本物のサーバ相手は
         // `scripts/remote.py` が通す。
@@ -1118,7 +1118,7 @@ async function main() {
         // **横から書き換えられたファイルに保存しない。**
         //
         // 共有ディレクトリで2人が同じノートを開いて両方保存すると、後の人が
-        // 前の人を黙って消していた。保存は断り、選ばせる。
+        // 前の人を通知なしに消していた。保存は断り、選ばせる。
         // **cian 自身の保存では再現しない** ── エンジンから見れば「自分が
         // 書いた」ので、当然ぶつからない。一度それで「書けてしまった」を
         // 出して、再現の作り方を間違えていた。外から書く必要がある。
@@ -1137,7 +1137,7 @@ async function main() {
         ['shot:gutter@#view', '差分ガター'],
         ['read:(()=>{viewer.ed.trigger(\'t\',\'undo\');return \'戻した\';})()', ''], ['wait:900', ''],
         // **`Mod+`、`Ctrl+` ではない。** これらは Monaco の `KeyMod.CtrlCmd` で
-        // 束ねてあり、それは Windows では Ctrl、Mac では ⌘。`Ctrl+]` で
+        // まとめてあり、それは Windows では Ctrl、Mac では ⌘。`Ctrl+]` で
         // 押していたときは三つとも「何も起きない」と出て、危うく壊れて
         // いると報告するところだった ── 押し方が違うだけだった。
         ['Mod+]', '次の見出し'], ['wait:400', ''],
@@ -1160,13 +1160,13 @@ async function main() {
         // ではなく `line`/`lineEnd` に来る取り違え）はどちらもそこにあった。
         // **打ってみるまで、ソースのどこにも矛盾が無い。**
         //
-        // 物差しは**中身に依らないもの**にしてある。`sort` の結果を JS の
-        // sort と比べると、比べる相手が自分の照合順を持ってしまう ── 砂場の
-        // 中身が変わった日に、黙るか嘘の赤を出すかのどちらかになる。`wc -l`
+        // 測定方法は**中身に依らないもの**にしてある。`sort` の結果を JS の
+        // sort と比べると、比べる相手が自分の照合順を持ってしまう ── 作業用ディレクトリの
+        // 中身が変わった日に、何も報告しないか誤った失敗を報告するかのどちらかになる。`wc -l`
         // の答えは「元の行数」ひとつで、中身が何であれ決まる。
         //
         // 状態行は**日本語の文面では見ない**。窓は両方の言葉で喋るので、
-        // 文面で当てると英語で回した日に黙る。コマンド名が出ているか、綴りの
+        // 文面で当てると英語で回した日に何も報告しない。コマンド名が出ているか、綴りの
         // `%!` が出ているか ── どちらの言葉でも変わらないものだけを見る。
         ['land:d1.txt', 'd1.txt の行へ'], ['Enter', '開く'], ['wait:3000', ''],
         ['read:(()=>{window.__f=viewer.ed.getValue();return "元 "+window.__f.split("\\n").length+" 行を控えた";})()', ''],
@@ -1193,7 +1193,7 @@ async function main() {
 
         // 範囲の無い `:!cmd` は vi では「走らせて見せる」で filter ではない。
         // cian は一覧側の `:!` にその意味を渡してあるので、ここでは断って
-        // 綴りを言う ── 黙って何もしないと「効かない」と読まれる。
+        // 綴りを言う ── 通知なしに何もしないと「効かない」と読まれる。
         ['type::!date', '範囲なしの :!'], ['Enter', ''], ['wait:1500', ''],
         ['want:viewer.ed.getValue() === window.__f', '範囲なしは何も変えない'],
         ['want:(document.getElementById("status")||{textContent:""}).textContent.includes("%!")', '綴りを教えている'],
@@ -1286,7 +1286,7 @@ async function main() {
 
         // ヘルプに書いた3つ（Ctrl+Q・Ctrl+A・Ctrl+X）を、**書いたとおりか**で
         // 縛る。Ctrl+X が「引かない」ことも見る ── いつか引くようになったら、
-        // ヘルプの「引くキーはありません」が嘘になるので、そのとき鳴ってほしい。
+        // ヘルプの「引くキーはありません」が実態と合わなくなるので、そのときに失敗してほしい。
         ["read:(()=>{const m=viewer.ed.getModel();viewer.ed.executeEdits('t',[{range:m.getFullModelRange(),text:'n = 10'}]);viewer.ed.pushUndoStop();viewer.ed.setPosition({lineNumber:1,column:1});return '数を仕込んだ';})()", ''],
         ['Esc', ''], ['Ctrl+a', 'vim の足す'], ['wait:400', ''],
         ["want:viewer.ed.getValue() === 'n = 11'", 'Ctrl+A が数に1を足した'],
@@ -1306,7 +1306,7 @@ async function main() {
         // 押すためには先に開く。ここまでの塊と同じで、出発点は自分で作る。
 
         // grep の結果を渡り歩く（Ctrl+N / Ctrl+Shift+N）
-        ['Esc', '画面を閉じる'], ['wait:500', ''],
+        ['Esc', '画パネルを閉じる'], ['wait:500', ''],
         ['Ctrl+f', 'grep'], ['wait:600', ''], ['type:行目'], ['Enter', ''], ['wait:3000', ''],
         ['read:\'grep → \' + (report.rows||[]).length + \' 件\'', ''],
         ['Enter', '最初の一致へ'], ['wait:3000', ''],
@@ -1346,7 +1346,7 @@ async function main() {
 
         // ── 並べた画面で、書いて保存する ──────────────────────────────
         //
-        // **並べた画面は `viewer.ed` を捨てて作る**（同じ節に Monaco は2つ
+        // **並べた画面は `viewer.ed` を捨てて作る**（同じ要素に Monaco は2つ
         // 立たない）。`saveFile` がそれを先に見て戻っていたので、Ctrl+S も
         // `:w` も、保存も言い訳もせずに終わっていた。左右のエディタには vim も
         // 焦点も無く、開いた直後の打鍵はどこにも入らなかった
@@ -1384,7 +1384,7 @@ async function main() {
         ['Tab', '左へ戻す'], ['wait:400', ''],
 
         // アーカイブの中で `l`（素の `l` が「入る」になる唯一の場所）
-        ['Bksp', '砂場の根へ'], ['wait:800', ''],
+        ['Bksp', '作業用ディレクトリの根へ'], ['wait:800', ''],
         ['land:from', 'ディレクトリを選ぶ'],
         ['read:(async()=>{const r=await ask(\'compress\',{pane:state.focus,kind:\'zip\',name:\'bag\'});return \'zip: \' + (r ? \'できた\' : \'できず\');})()', ''],
         ['wait:1200', ''], ['F5', '読み直し'], ['wait:800', ''],
@@ -1419,8 +1419,8 @@ async function main() {
         // 作ったものは無い」と正しく答え、取り消しは何もしない ── 通った
         // のに何も確かめていない一周になる。空の `to/undo` を作って、
         // そこへ一本だけ写す。
-        // **シェルの範囲選択（Shift+←）。** 画面の字は一字も変わらないので、
-        // 「動かなかったキー」の物差しでは永久に黙って見える ── 選択の
+        // **シェルの範囲選択（Shift+←）。** 画パネルの文字は一字も変わらないので、
+        // 「動かなかったキー」の測定方法では永久に変化が無いように見える ── 選択の
         // 長さを直接読む。窓版の選択はブラウザのもの（`Selection.modify`）。
         ['Shift+J', 'シェルへ'], ['wait:1200', ''],
         // **大文字の J で。** 小文字だとシェルに入らず、選択が 0 文字のまま
@@ -1430,7 +1430,7 @@ async function main() {
         ['Shift+ArrowLeft', '一文字えらぶ'], ['wait:400', ''],
         ['Shift+ArrowLeft', 'もう一文字'], ['wait:400', ''],
         ['Shift+ArrowLeft', 'もう一文字'], ['wait:400', ''],
-        ['Shift+ArrowRight', '一文字戻す ── 反対向きも同じ扉'], ['wait:400', ''],
+        ['Shift+ArrowRight', '一文字戻す ── 反対向きも同じ経路'], ['wait:400', ''],
         ['must:window.getSelection().toString().length === 2', 'Shift+← ×3 と → ×1 で 2 文字'],
         ['Escape', '解除 ── シェルには留まる'], ['wait:500', ''],
         ['read:\'Esc のあと: \' + (window.getSelection().toString().length) + \' 文字 / シェルに居る=\' + term.focused', ''],
@@ -1502,19 +1502,19 @@ async function main() {
             + ' + "  エンジンの桁=" + term.at.col + "  窓の桁=" + cellWidth(before);})()', ''],
         ['read:(async()=>{await window.cian.call("shellinput",{text:String.fromCharCode(13)});return "read を終わらせた";})()', ''],
         ['wait:600', ''],
-        // 帯に出した `Ctrl+Q`（中断）も、一度は押しておく ── `keycover.py`
+        // 状態行に表示した `Ctrl+Q`（中断）も、一度は押しておく ── `keycover.py`
         // は「ヘルプが名前を挙げたキー」を数えていて、押していないキーは
         // 「動く証拠が無いキー」として並ぶ。
         ['Ctrl+q', '中断を送る'], ['wait:600', ''],
         ['Escape', 'ファイルへ戻る'], ['wait:600', ''],
 
-        // **F12 で広げた面は、キーと一緒に動く。**
+        // **F12 で広げたパネルは、キーと一緒に動く。**
         //
-        // 広げるのは「どの面か」ではなく「いま鍵のある面」── 端末版の
+        // 広げるのは「どのパネルか」ではなく「いまキーのあるパネル」── 端末版の
         // `draw_zoomed` が毎フレーム `focused` を見るのと同じ規則。窓版は
-        // F12 を押した瞬間の面を凍らせていたので、一覧を広げてから Shift+J
+        // F12 を押した押した時点のパネルを固定していたので、一覧を広げてから Shift+J
         // すると **キーはシェルに入るのに画面は一覧のまま**だった。
-        // `display:none` の面に打ち込んでいる状態で、状態行にも出ない。
+        // `display:none` のパネルに打ち込んでいる状態で、状態行にも出ない。
         //
         // 見えるかどうかは計算後の style でしか言えない ── `hidden` でも
         // クラスでもなく CSS の `display` で消しているので、状態を読んでも
@@ -1541,10 +1541,10 @@ async function main() {
         ['must:(() => { const t = document.querySelector(\'#ask .body\').textContent; const n = (t.match(/^うち (\\d+) 件は既に/) || [])[1]; const marks = t.split(\'\\n\').filter(l => l.startsWith(\'↑ \')).length; return Number(n) > 0 && Number(n) === marks; })()', '衝突の件数と ↑ 印の行数が一致'],
         ['Esc', 'やめる'], ['wait:500', ''],
         ['Esc', 'マークを外す'], ['wait:400', ''],
-        // **左ペインを砂場の根に戻してから次へ渡す。** 下の一連は「左は根に
+        // **左ペインを作業用ディレクトリの根に戻してから次へ渡す。** 下の一連は「左は根に
         // いて、land:from で from の行を選ぶ」前提で書かれている。ここで
         // from の中に立ったまま渡すと land が外れ、Enter が別のものを開いて、
-        // コピーの検査が黙って 0 行を数える ── 実際に一度そうした。
+        // コピーの検査が通知なしに 0 行を数える ── 実際に一度そうした。
         ['z', 'パスで移動'], ['wait:600', ''], [`type:${sand}`, ''], ['Enter', '根へ戻る'], ['wait:800', ''],
 
         ['Tab', '右へ'],
@@ -1566,7 +1566,7 @@ async function main() {
         ['Mod+z', 'もう一度取り消す'], ['wait:2000', ''],
         ['must:(state.right.entries||[]).filter(e=>!e.parent && !e.name.startsWith(String.fromCharCode(46))).length === 0', 'やり直した分もまた取り消せる'],
 
-        // やり直しはもう一つの鍵にも乗っている（vi の Ctrl+R）。同じ扉に
+        // やり直しはもう一つの鍵にも乗っている（vi の Ctrl+R）。同じ経路に
         // 着くことを押して確かめる ── keycover.py は「押されていない鍵は
         // 動く証拠が無い」と数える。
         ['Mod+Shift+z', 'もう一度やり直す'], ['wait:1500', ''],
@@ -1642,7 +1642,7 @@ async function main() {
         await cdp.send('Log.enable');
         // **窓に焦点を持たせる。**
         //
-        // 人が使っている窓は前に出ていて焦点がある。この道具が起こす窓は
+        // 人が使っている窓は前に出ていて焦点がある。このツールが起こす窓は
         // 後ろに居るので、ブラウザから見ると「焦点の無い文書」だ ── そこで
         // 断られるものがある: `navigator.clipboard.writeText` は
         // `NotAllowedError: Document is not focused` で落ち、**コピーと
@@ -1652,7 +1652,7 @@ async function main() {
         // `setFocusEmulationEnabled` は「この頁はいつも焦点がある」と頁に
         // 言わせる CDP の設定で、実機で人が前に出している状態に近づける ──
         // 本物より緩くするのではなく、**本物に合わせる**ための1行だ。
-        // 無い CDP でも落ちないように、失敗は黙って見送る。
+        // 無い CDP でも落ちないように、失敗は報告せずに見送る。
         await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
         await cdp.send('Page.bringToFront').catch(() => {});
         await settle(cdp, sand);
@@ -1686,7 +1686,7 @@ async function main() {
         // **打った字が、開くはずだった欄に入ったか。**
         //
         // `z` の入力欄は非同期に開く（`goToPath` → `askFor`）。開く前に打つと、
-        // パスの字が**窓そのものへの打鍵**になる ── そして砂場のパスは
+        // パスの字が**窓そのものへの打鍵**になる ── そして作業用ディレクトリのパスは
         // mac では `/var/folders/…/T/cian-drive-XXXXXX` で、**`/T/` の `T` が
         // トグルを開く**。あとの字はメニューの中を歩き（`j` が下、`k` が上）、
         // 次の `Enter` がそこの行を実行する。実際に「言語」の行に当たって
@@ -1694,7 +1694,7 @@ async function main() {
         // 顔で出た（2026-09-16）。日本語の正規表現が当たらないだけで、
         // 衝突の数え方はどこも壊れていなかった。
         //
-        // **砂場の名前は毎回違うので、当たる行も毎回違う。** だから「たまに
+        // **作業用ディレクトリの名前は毎回違うので、当たる行も毎回違う。** だから「たまに
         // 落ちる検査」に見える。打ち終わった時点でメニューが開いていないかを
         // 見る ── 開いていたら、その字は欄ではなく窓が食べている。
         //
@@ -1951,7 +1951,7 @@ async function main() {
                 if (!ok) crashes.push(`満たされなかった: ${what || expr} → ${JSON.stringify(out)}`);
                 continue;
             }
-            // `top:<css>` — その面が**本当にいちばん上に見えているか**。
+            // `top:<css>` — そのパネルが**本当にいちばん上に見えているか**。
             //
             // 二度やった: 状態（`report.on === true`、タイトルも正しい）だけ見て
             // 「出た」と判断し、実際には `#view` の**裏**に開いていた。
@@ -1988,7 +1988,7 @@ async function main() {
                            : ('隠れている ← ' + (at.closest('[id]') || at).id); })()`,
                 );
                 console.log(`  top     ${sel} → ${out}`);
-                // **`例外` に数える。** ここは面の重なりを見る唯一の道具で、
+                // **`例外` に数える。** ここはパネルの重なりを見る唯一のツールで、
                 // 失敗を `bad`（動かなかったキー）に混ぜていたせいで、その
                 // 註が「混ぜると見えない」と書いているとおりに見えなくなって
                 // いた ── エディタの上にキー一覧が出るかを見る一歩は、しばらく
@@ -1999,7 +1999,7 @@ async function main() {
                 //   node gui/drive.js land:c.rs Enter wait:2500 ? wait:800 \
                 //     'read:(()=>{el.report.style.zIndex="0";return "裏へ"})()' top:#report
                 // → `隠れている ← v-body`、例外 1 件、終了コード 1。
-                if (out !== 'ok') crashes.push(`面の重なり: ${sel} が最前面にない（${out}）`);
+                if (out !== 'ok') crashes.push(`パネルの重なり: ${sel} が最前面にない（${out}）`);
                 continue;
             }
             // `land:<name>` — put the cursor on a named row. A step that
@@ -2015,7 +2015,7 @@ async function main() {
                 );
                 console.log(`  land    ${want} → 行 ${at}`);
                 // これも例外。**その行に居ないまま次の手が走る**ので、あとの
-                // 一歩がぜんぶ別のファイルの話になる ── 掃引が自分に騙された
+                // 一歩がぜんぶ別のファイルの話になる ── 全件検査が自分の誤りで誤判定した
                 // 三つのうちの一つがこの形だった。`bad` に入れると 40 件台の
                 // 中に埋もれる。
                 if (at === 'なし') crashes.push(`${want} がその一覧にない（land が空振り）`);
@@ -2075,7 +2075,7 @@ async function main() {
         // final key is still running when the loop ends.
         await sleep(600);
         console.log(`\n最後の状態: ${(await cdp.read(LOOK)).status}`);
-        console.log('砂場:');
+        console.log('作業用ディレクトリ:');
         for (const extra of ['from/展開先']) {
             const at = path.join(sand, ...extra.split('/'));
             if (fs.existsSync(at)) {
