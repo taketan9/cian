@@ -79,11 +79,76 @@ impl Hasher {
     }
 }
 
+/// What a path is, when it is not something cian can read to the end.
+///
+/// **It is not "missing".** A named pipe and `/dev/zero` both exist; cian's
+/// own refusal said they did not, which sent the reader looking for a file
+/// that was right there (2026-11-28, findings S5 and S6). The difference
+/// matters more than it looks: one of these is a typo, the others are a
+/// program that never returns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Special {
+    /// Nothing at this path.
+    Missing,
+    /// A directory. Real, but not a file to read.
+    Directory,
+    /// A named pipe. Reading waits for a writer that may never come.
+    Fifo,
+    /// A device. `/dev/zero` answers for ever, and the read never ends.
+    Device,
+    /// A socket.
+    Socket,
+    /// Something else that is not a regular file.
+    Other,
+}
+
+/// `None` when the path is an ordinary file that can be read to the end.
+///
+/// Symbolic links are followed: a link to `/dev/zero` is a device, and
+/// treating it as a file is how the harness managed to allocate memory
+/// without limit.
+pub fn special(path: &Path) -> Option<Special> {
+    let md = match fs::metadata(path) {
+        Ok(md) => md,
+        Err(_) => return Some(Special::Missing),
+    };
+    if md.is_file() {
+        return None;
+    }
+    if md.is_dir() {
+        return Some(Special::Directory);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt;
+        let t = md.file_type();
+        if t.is_fifo() {
+            return Some(Special::Fifo);
+        }
+        if t.is_char_device() || t.is_block_device() {
+            return Some(Special::Device);
+        }
+        if t.is_socket() {
+            return Some(Special::Socket);
+        }
+    }
+    Some(Special::Other)
+}
+
 /// Hash a file, reading it in chunks so a large one neither loads into memory
 /// nor delays a cancel until it finishes.
 ///
 /// Returns `Ok(None)` if it was cancelled.
+///
+/// **Refuses anything that is not an ordinary file.** Reading a named pipe
+/// waits for a writer; reading `/dev/zero` never ends, and the request thread
+/// that called this is the one the whole window waits on. The callers say so
+/// in the reader's own language before getting here; this is the backstop, so
+/// no future caller can hang the program by forgetting.
 pub fn hash_file(path: &Path, kind: HashKind, cancel: &AtomicBool) -> Result<Option<String>> {
+    if let Some(what) = special(path) {
+        anyhow::bail!("not an ordinary file ({what:?}): {}", path.display());
+    }
     let mut f = fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
     let mut buf = vec![0u8; 1024 * 1024];
     let mut hasher = Hasher::new(kind);
@@ -254,6 +319,48 @@ mod tests {
         fs::write(&f, vec![0u8; 4 * 1024 * 1024]).unwrap();
         let cancel = AtomicBool::new(true);
         assert!(hash_file(&f, HashKind::Sha256, &cancel).unwrap().is_none());
+    }
+
+    /// **「ありません」と言っていたものは、全部そこに在った。**
+    ///
+    /// 名前付きパイプと `/dev/zero` を「ありません」と断っていたので、読む人は
+    /// 在るファイルを探しにいくことになる（2026-11-28、所見 S5・S6）。
+    #[test]
+    fn what_is_not_an_ordinary_file_says_what_it_is() {
+        let d = tempfile::tempdir().unwrap();
+        let f = d.path().join("plain");
+        fs::write(&f, b"x").unwrap();
+        assert_eq!(special(&f), None, "読める");
+        assert_eq!(special(d.path()), Some(Special::Directory));
+        assert_eq!(special(&d.path().join("nope")), Some(Special::Missing));
+        #[cfg(unix)]
+        {
+            assert_eq!(special(Path::new("/dev/null")), Some(Special::Device));
+            let fifo = d.path().join("pipe");
+            let made = std::process::Command::new("mkfifo").arg(&fifo).status();
+            if made.map(|s| s.success()).unwrap_or(false) {
+                assert_eq!(special(&fifo), Some(Special::Fifo));
+            }
+        }
+    }
+
+    /// **読み始めたら返らないものは、読み始めない。**
+    ///
+    /// エンジンは要求を1本ずつ処理するので、ここで返らないことは窓が二度と
+    /// 描かれないことと同じ。呼ぶ側も断るが、これは最後の砦。
+    #[cfg(unix)]
+    #[test]
+    fn hashing_refuses_what_never_ends() {
+        let d = tempfile::tempdir().unwrap();
+        let fifo = d.path().join("pipe");
+        let made = std::process::Command::new("mkfifo").arg(&fifo).status();
+        if !made.map(|s| s.success()).unwrap_or(false) {
+            return; // mkfifo が無い環境では測れない
+        }
+        let cancel = AtomicBool::new(false);
+        // 返ること自体が答え。固まるなら、ここでテストが終わらない。
+        assert!(hash_file(&fifo, HashKind::Sha256, &cancel).is_err());
+        assert!(hash_file(Path::new("/dev/zero"), HashKind::Sha256, &cancel).is_err());
     }
 
     #[test]

@@ -1468,10 +1468,22 @@ impl Session {
                 for p in paths.iter().take(200) {
                     // A directory has no checksum, and saying so beats the
                     // read error the caller would otherwise be handed.
-                    if p.is_dir() {
+                    // **通常ファイル以外は、読む前に断ります。** 名前付きパイプは
+                    // 書く側が現れるまで返らず、`/dev/zero` は終わりません。
+                    // エンジンは要求を1本ずつ処理するので、**そこで窓全体が
+                    // 止まります**（2026-11-28、所見 S1・S2）。
+                    if let Some(what) = cian_core::attrs::special(p) {
+                        use cian_core::attrs::Special;
                         rows.push(serde_json::json!({
                             "name": p.file_name().map(|s| s.to_string_lossy().into_owned()),
-                            "sum": "(ディレクトリ)",
+                            "sum": match what {
+                                Special::Directory => "（ディレクトリ）",
+                                Special::Missing => "（ありません）",
+                                Special::Fifo => "（名前付きパイプ）",
+                                Special::Device => "（デバイス）",
+                                Special::Socket => "（ソケット）",
+                                Special::Other => "（通常ファイルではありません）",
+                            },
                         }));
                         continue;
                     }
@@ -5086,8 +5098,23 @@ impl Session {
             }
             "viewpath" => {
                 let path = std::path::PathBuf::from(arg(req, "path"));
-                if !path.is_file() {
-                    anyhow::bail!("{} がありません", path.display());
+                // **「ありません」は嘘でした。** 名前付きパイプも `/dev/zero` も
+                // 実在します。読むと返らないだけで、消えているわけではない
+                // （2026-11-28、所見 S5・S6）。何であるかを言います。
+                if let Some(what) = cian_core::attrs::special(&path) {
+                    use cian_core::attrs::Special;
+                    anyhow::bail!(
+                        "{} {}",
+                        path.display(),
+                        match what {
+                            Special::Missing => "がありません",
+                            Special::Directory => "はディレクトリです",
+                            Special::Fifo => "は名前付きパイプです。読むと書く側が現れるまで返りません",
+                            Special::Device => "はデバイスです。読み終わりがありません",
+                            Special::Socket => "はソケットです",
+                            Special::Other => "は通常ファイルではありません",
+                        }
+                    );
                 }
                 let name = path
                     .file_name()

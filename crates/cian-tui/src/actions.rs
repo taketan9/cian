@@ -6,6 +6,30 @@
 //! lib.rs as an `impl App` block.
 use super::*;
 
+/// 通常ファイルでないものを読もうとしたときの知らせ。
+///
+/// **「ありません」と言ってはいけません。** 名前付きパイプも `/dev/zero` も
+/// 実在していて、読むと返らないだけです（2026-11-28、所見 S5・S6）。
+fn special_reason(lang: Lang, path: &Path, what: cian_core::attrs::Special) -> String {
+    use cian_core::attrs::Special;
+    let ja = lang == Lang::Ja;
+    let what = match (what, ja) {
+        (Special::Missing, true) => "がありません",
+        (Special::Missing, false) => "is not there",
+        (Special::Directory, true) => "はディレクトリです",
+        (Special::Directory, false) => "is a directory",
+        (Special::Fifo, true) => "は名前付きパイプです。読むと書く側が現れるまで返りません",
+        (Special::Fifo, false) => "is a named pipe. reading waits for a writer",
+        (Special::Device, true) => "はデバイスです。読み終わりがありません",
+        (Special::Device, false) => "is a device. the read never ends",
+        (Special::Socket, true) => "はソケットです",
+        (Special::Socket, false) => "is a socket",
+        (Special::Other, true) => "は通常ファイルではありません",
+        (Special::Other, false) => "is not an ordinary file",
+    };
+    format!("{} {}", path.display(), what)
+}
+
 /// クリップボードが使えなかったときの知らせ。3か所から呼びます。
 ///
 /// **同じ失敗を同じ言葉で言うため**に1つにしました。写して回ると、片方だけ
@@ -1200,6 +1224,17 @@ impl App {
     /// Open the F3 viewer on `path`, with the cursor on `line0` (0-based). Used
     /// by F3 (line 0) and by "open a grep hit at its line".
     pub(crate) fn open_viewer_at(&mut self, path: &Path, title: &str, line0: usize) {
+        // **通常ファイル以外は、読む前に断ります。** 端末版の閲覧は画面を
+        // 描く側で読むので、名前付きパイプを開くと**そこで止まります**
+        // （書く側が現れるまで返りません）。断る理由は、何であるかを言う
+        // ものにします ──「ありません」は嘘でした（所見 S5・S6）。
+        if let Some(what) = cian_core::attrs::special(path) {
+            use cian_core::attrs::Special;
+            if what != Special::Directory {
+                self.message = Some(special_reason(self.lang, path, what));
+                return;
+            }
+        }
         // Remember it for the recent-files finder (skip the remote temp copies).
         self.note_recent_file(path);
         // Images preview as half-block cells rather than a hex dump.
@@ -2124,10 +2159,22 @@ impl App {
             .map(|p| p.target_paths())
             .unwrap_or_default()
             .into_iter()
-            .filter(|p| p.is_file())
             .collect();
+        // **選んだものが通常ファイルでないなら、そう言います。** 以前は黙って
+        // 落として「ファイルが選択されていません」と言っていたので、選んだ
+        // 本人には何が起きたのか分かりませんでした。
+        let (paths, dropped): (Vec<PathBuf>, Vec<PathBuf>) = paths
+            .into_iter()
+            .partition(|p| cian_core::attrs::special(p).is_none());
         if paths.is_empty() {
-            self.message = Some(tr(self.lang, "no files selected", "ファイルが選択されていません").into());
+            self.message = Some(match dropped.first() {
+                Some(p) => special_reason(
+                    self.lang,
+                    p,
+                    cian_core::attrs::special(p).unwrap_or(cian_core::attrs::Special::Other),
+                ),
+                None => tr(self.lang, "no files selected", "ファイルが選択されていません").into(),
+            });
             return;
         }
         self.start_op("hashing", move |ctl| {
