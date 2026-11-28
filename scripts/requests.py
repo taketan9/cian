@@ -88,10 +88,27 @@ def matches(pattern: str, text: str) -> int | None:
     m = LOOKAHEADS.match(pattern)
     if m:
         # `(?=.*X)` を1つずつに割る。入れ子の括弧があるので、深さで数える。
+        # **`\(` を括弧として数えてはいけない。** 逃がした括弧を深さに数えると
+        # 先読みの切れ目がずれ、**別の正規表現を当てたまま緑になる** ── 台帳に
+        # 14 行あった形で、「検査が黙る」そのものだった。文字クラスの中の
+        # 括弧も同じなので、`[...]` の内側は数えない。
         parts, depth, start = [], 0, None
         body = m.group(1)
+        esc = in_class = False
         for i, c in enumerate(body):
-            if c == "(":
+            if esc:
+                esc = False
+                continue
+            if c == "\\":
+                esc = True
+                continue
+            if in_class:
+                if c == "]":
+                    in_class = False
+                continue
+            if c == "[":
+                in_class = True
+            elif c == "(":
                 if depth == 0:
                     start = i
                 depth += 1

@@ -19,8 +19,16 @@ use serde::{Deserialize, Serialize};
 /// The bundled Python helper, materialised to disk when needed.
 const SCRIPT: &str = include_str!("../cian_ai.py");
 
-/// How to reach the model. `auth_mode` is
-/// `broker` (Windows AAD), `apikey`, or `mock` (offline echo, for testing).
+/// How to reach the model. `auth_mode` is `broker` (Windows AAD), `apikey`
+/// (any OpenAI-compatible endpoint, Ollama included), `cli` (a locally
+/// installed Claude CLI), or `mock` (offline echo, for testing).
+///
+/// **`cli` exists because `mock` cannot answer anything.** It echoes the
+/// question back, which proves the wiring and nothing about the reply, so
+/// every AI feature was unverifiable away from the corporate endpoint. With
+/// `cli` the same features run against real answers on a machine with no key
+/// and no gateway; with `apikey` and `api_base_url` pointing at
+/// `http://localhost:11434/v1`, against a model on the same machine.
 #[derive(Debug, Clone)]
 pub struct AiConfig {
     pub python: String,

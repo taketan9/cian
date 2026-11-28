@@ -1,0 +1,12 @@
+# 配る Windows の exe は、素の Windows で起動すること。
+#
+# **2026-11-28、仮想環境の素の Windows 11 で起動しなかった。** 終了コードは
+# `-1073741515`（`0xC0000135` = DLL が見つかりません）で、画面には何も出ない。
+# 原因は `VCRUNTIME140.dll` ── Visual C++ の再頒布可能パッケージに入っている
+# もので、**Windows の素の状態には無い**。会社の PC には別のアプリが置いて
+# いったものが在るので、ここまで気づかなかった。
+#
+# 静的に結び付ければ、exe 1つで起動する。`scripts/winstart.py` が関門で、
+# 配る exe を**走らせずに**読んで確かめる（落とした exe にも当てられる）。
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

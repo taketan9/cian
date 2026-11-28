@@ -320,6 +320,16 @@ jobs:
         shell: pwsh
         run: python scripts/buildstamp.py cian-tui-win-x64.exe cian-server-win-x64.exe
 
+      # **素の Windows で起動すること。** 2026-11-28 に仮想環境の素の
+      # Windows 11 で起動せず、画面には何も出ないまま終了コードだけが
+      # `0xC0000135`（DLL が見つかりません）だった。要っていたのは
+      # `VCRUNTIME140.dll` ── 再頒布可能パッケージの中身で、Windows の素の
+      # 状態には無い。`.cargo/config.toml` の `crt-static` が効いているかを、
+      # exe を走らせずに読んで確かめる。
+      - name: The package starts on a Windows with nothing installed
+        shell: pwsh
+        run: python scripts/winstart.py cian-tui-win-x64.exe cian-server-win-x64.exe
+
       - name: Upload the terminal build
         uses: actions/upload-artifact@v6
         with:
@@ -454,7 +464,10 @@ jobs:
       - name: Vendor every dependency
         run: |
           mkdir -p .cargo
-          cargo vendor --versioned-dirs vendor > .cargo/config.toml
+          # **足す。上書きしない。** `.cargo/config.toml` には配る Windows の
+          # exe を静的に結び付ける指定が入っていて、上書きすると
+          # オフラインで建てたエンジンだけが素の Windows で起動しなくなる。
+          cargo vendor --versioned-dirs vendor >> .cargo/config.toml
           echo "vendored crates: $(ls vendor | wc -l)"
           du -sh vendor
 

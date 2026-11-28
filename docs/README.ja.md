@@ -12,6 +12,7 @@
 | 文書 | 読むとき | 作り方 |
 | --- | --- | --- |
 | [feature-map.ja.md](feature-map.ja.md) | 機能を直すとき。入口・中心・守り・テストの順に並べています | 手書き。名前の実在は検査が確認します |
+| [verify-plan.ja.md](verify-plan.ja.md) | 動作検証をするとき。何を・どの道具で・どの順で確かめるかを書いています | 手書き。道具の一覧は `scripts/verify.py` が持ちます |
 | `engine-protocol.ja.md`（未作成） | Electron 版とエンジンの受け渡しを変えるとき。要求は 162 種あります | 生成物にします。手で書くと必ずずれるためです |
 | `folder-map.ja.md`（未作成） | 何かを消してよいか迷ったとき | 手書き |
 | `config-reference.ja.md`（未作成） | 設定を足すとき。正本は `init.lua` ひとつです | 生成寄りにします |

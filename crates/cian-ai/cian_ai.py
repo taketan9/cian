@@ -16,13 +16,20 @@ Protocol (single request per process):
     python cian_ai.py            (request JSON on stdin)
         {"messages": [{"role": "...", "content": "..."}],
          "model": "...", "endpoint": "...", "api_version": "...",
-         "auth_mode": "broker|apikey|mock", "api_key": "...",
+         "auth_mode": "broker|apikey|cli|mock", "api_key": "...",
          "api_base_url": "...", "max_tokens": 1024}
         Prints {"ok": true, "content": "..."} or {"ok": false, "error": "..."}.
 
 Everything is one process per call; cian runs it on a worker thread. Azure
 packages are imported lazily so `--check` for apikey/mock does not need them and
 so a broken azure install cannot hang plain apikey use.
+
+`cli` asks a locally installed Claude CLI (`claude -p`) instead of an endpoint.
+It exists so the AI features can be exercised **with real answers** on a
+machine that has neither the corporate endpoint nor an API key: until it was
+added, the only offline mode was `mock`, which echoes the question back and
+therefore proves the wiring and nothing about the answer. It needs no network
+configuration and no key — the CLI carries its own sign-in.
 """
 import base64
 import json
@@ -89,9 +96,88 @@ def build_client(req):
     raise ValueError(f"unknown auth_mode: {auth}")
 
 
+# How long one `claude -p` call may take.
+#
+# **A wait with no upper bound is a window that never paints again.** The AI
+# runs on a worker thread, so the limit here is not about freezing cian; it is
+# about a process that is never reaped and an answer that never arrives,
+# leaving "考えています…" on screen for good. A CLI answer to a one-line
+# question takes seconds; two minutes is slack for a long conversation.
+CLI_SECONDS = 120
+
+
+def cli_exe():
+    """The Claude CLI, or None."""
+    import shutil
+
+    return shutil.which("claude")
+
+
+def cli_model(model):
+    """The `--model` to pass, or None to let the CLI choose.
+
+    **cian's default model name is an Azure one** (`gpt-5-mini`), and handing
+    that to the Claude CLI fails. Only a name the CLI can mean is passed on.
+    """
+    m = (model or "").strip()
+    if m in ("sonnet", "opus", "haiku") or m.startswith("claude"):
+        return m
+    return None
+
+
+def ask_cli(req, messages):
+    """Ask the local Claude CLI and return its text.
+
+    The conversation is flattened into one prompt because `claude -p` takes a
+    prompt, not a turn list. Tools are switched off (`--tools ""`): cian is
+    using the CLI as a model, and a prompt typed into a file manager must not
+    be able to read files or run commands on the machine. For the same reason
+    it runs in a scratch directory, so the CLI does not pick up whatever
+    `CLAUDE.md` happens to sit next to cian's current folder.
+    """
+    import subprocess
+    import tempfile
+
+    exe = cli_exe()
+    if exe is None:
+        raise RuntimeError("claude が見つかりません（Claude CLI を入れてください）")
+    if req.get("images"):
+        # Tools are off, so the CLI cannot open an image file. Saying so is
+        # better than answering a question about a picture nobody looked at.
+        raise RuntimeError("cli では画像を渡せません（apikey か broker を使ってください）")
+
+    system = "\n\n".join(m["content"] for m in messages if m.get("role") == "system")
+    turns = [m for m in messages if m.get("role") in ("user", "assistant")]
+    if len(turns) <= 1:
+        prompt = turns[-1]["content"] if turns else ""
+    else:
+        # Labels only when there is something to tell apart.
+        named = ["{}: {}".format("User" if m["role"] == "user" else "Assistant", m["content"])
+                 for m in turns]
+        prompt = "\n\n".join(named)
+
+    cmd = [exe, "-p", "--output-format", "text", "--tools", ""]
+    if system:
+        cmd += ["--system-prompt", system]
+    model = cli_model(req.get("model"))
+    if model:
+        cmd += ["--model", model]
+    with tempfile.TemporaryDirectory(prefix="cian-cli-") as neutral:
+        out = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                             timeout=CLI_SECONDS, cwd=neutral)
+    if out.returncode != 0:
+        why = (out.stderr or out.stdout or "").strip().splitlines()
+        raise RuntimeError("claude が失敗しました: " + (why[0] if why else f"終了コード {out.returncode}"))
+    return (out.stdout or "").strip()
+
+
 def do_check(auth):
     """Import what the auth mode needs, without contacting anything."""
     if auth == "mock":
+        return
+    if auth == "cli":
+        if cli_exe() is None:
+            raise RuntimeError("claude が PATH にありません")
         return
     import openai  # noqa: F401
     if auth == "broker":
@@ -129,6 +215,9 @@ def main():
             prior = sum(1 for m in messages if m.get("role") in ("user", "assistant")) - 1
             mark = f"[mock +{prior}]" if prior > 0 else "[mock]"
             emit({"ok": True, "content": f"{mark} {last}"})
+            return
+        if req.get("auth_mode") == "cli":
+            emit({"ok": True, "content": ask_cli(req, messages)})
             return
         # Attach any pasted images to the last user turn (Vision).
         messages = attach_images(messages, req.get("images", []))

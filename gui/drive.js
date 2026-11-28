@@ -502,7 +502,7 @@ async function main() {
         ['とても長い', 'x'.repeat(400)],
         ['タブ', 'a\tb'],
     ];
-    const keys = process.argv.slice(2).filter((a) => a !== '--commands' && a !== '--values' && a !== '--ai');
+    const keys = process.argv.slice(2).filter((a) => !['--commands', '--values', '--ai', '--ai-real'].includes(a));
     // `--commands` ── **辞書にある名前を、一つずつ全部打つ。**
     //
     // 端末版には `scripts/sweep.py` があって verb を全部叩く。窓版には
@@ -639,7 +639,35 @@ async function main() {
         ['want:/[Mm]ock/.test((document.querySelector("#s-panes .sgrid.on")||document.querySelector("#s-panes .sgrid")).textContent)', '答えがシェルのプロンプトに載った'],
     ];
 
-    const round = process.argv.includes('--ai') ? aiRound()
+    // `--ai-real` ── **本物のモデルに訊いて、答えが返るところまで。**
+    //
+    // `--ai` の mock は質問をそのまま返すので、経路は測れても**答えは測れない**。
+    // 手元で本物の答えを得る道は2つある。どちらも鍵も社内の経路も要らない:
+    //
+    //   CIAN_CONFIG_DIR=~/.cache/cian-cli    node gui/drive.js --ai-real   Claude CLI
+    //   CIAN_CONFIG_DIR=~/.cache/cian-ollama node gui/drive.js --ai-real   Ollama
+    //
+    // **特定の語を期待しない。** モデルが何と答えるかは選べないので、見るのは
+    // 「答えが返り、それが打った説明の echo ではないこと」── mock はまさに
+    // echo を返すので、mock の設定でこの走行を回すと落ちる（それが変異テスト
+    // になっている）。モデルは遅いので待ちは長い。
+    const prompt = () => '(document.querySelector("#s-panes .sgrid.on")'
+        + ' || document.querySelector("#s-panes .sgrid")).textContent';
+    const aiRealRound = () => [
+        ['J', 'シェルへ'], ['wait:1200', ''],
+        ['read:(()=>{const r=aiRows().find((x)=>x.value===":aicmd");if(!r)return "行が無い";r.run();return "窓="+(!el.ask.hidden)})()', 'やりたいことを訊く窓'],
+        ['want:!el.ask.hidden', '窓が開いている'],
+        ['type:ファイルの一覧を出す', ''], ['Enter', '問い合わせる'], ['wait:90000', ''],
+        ['want:!!document.querySelector("#confirm:not([hidden]), #ask:not([hidden])")', '確認の面が出る'],
+        ['read:(()=>{const c=document.querySelector("#confirm:not([hidden]), #ask:not([hidden])");return "面の字: "+(c?c.textContent.trim().slice(0,160):"無い")})()', ''],
+        ['Enter', 'プロンプトに置く'], ['wait:2500', ''],
+        ['want:/実行はしていません|nothing has run/.test(document.querySelector("#status").textContent)', '置くだけで実行しないと言う'],
+        [`read:'プロンプトの字: ' + ${prompt()}.trim().slice(-140)`, ''],
+        [`want:(()=>{const t=${prompt()};return /[A-Za-z]/.test(t) && !/mock/i.test(t) && !t.includes('ファイルの一覧を出す')})()`, '本物の答えが載っている（echo ではない）'],
+    ];
+
+    const round = process.argv.includes('--ai-real') ? aiRealRound()
+        : process.argv.includes('--ai') ? aiRound()
         : process.argv.includes('--values') ? valueRound()
         : process.argv.includes('--commands') ? commandRound()
         : keys.length ? keys.map((k) => [k, '']) : [

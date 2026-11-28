@@ -302,6 +302,18 @@ def main():
               sorted(x["name"] for x in r["pane"]["entries"] if not x.get("parent")),
               ["one.txt", "sub"])
 
+        # 窓版のパンくずは `pane.remote` と `pane.remote_path` を読みます。
+        # **ここが空だと、リモートペインの上部に手元のパスが出ます**（依頼 700）。
+        # 窓版の表示そのものは `gui/drive.js` が見ますが、**エンジンが本物の
+        # サーバ相手に何を返すか**を見られるのはこの検査だけです。
+        print("リモートペインは、自分が今どこを見ているかを言う")
+        check("接続先を名乗る", r["pane"]["remote"],
+              f"{os.environ.get('USER') or os.environ.get('LOGNAME')}@127.0.0.1")
+        check("リモートのパスを名乗る", r["pane"]["remote_path"], root)
+        v = e.call("remotelist", pane="right", path=os.path.join(root, "sub"))
+        check("降りたらパスも付いてくる", v["pane"]["remote_path"], os.path.join(root, "sub"))
+        e.call("remotelist", pane="right", path=root)
+
         # `..` is navigation, not a row: first whatever the order, shown
         # with dotfiles off, absent only at `/`. It used to sort among the
         # directories — at the bottom in reverse — so a home with thirty
