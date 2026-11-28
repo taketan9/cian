@@ -97,7 +97,7 @@ RETIRED = {
     "重複を探す": "重複ファイルを検出",
 }
 
-# 語を数える対象。コメントは読まない ── 経緯としてわざと書いてあるので。
+# 語を数える対象。コメントは読まない。経緯としてわざと書いてあるので。
 TEXTS = ["gui/renderer.js", "crates/cian-tui/src/lib.rs",
          "crates/cian-tui/src/palette.rs", "crates/cian-tui/src/toggles.rs",
          "crates/cian-tui/src/render.rs", "crates/cian-tui/src/commands.rs"]
@@ -191,7 +191,7 @@ def ai_prompts():
 
     **これも「同じものを同じ言葉で呼んでいるか」の話です。** 人が読むラベルは
     この表が監視していたのに、モデルが読む文章は4本とも両前端に別々のコピーが
-    あって、誰も見ていませんでした。コピーは必ずずれます ── ずれても、どちらが
+    あって、誰も見ていませんでした。コピーは必ずずれます。ずれても、どちらが
     正しいかを言える人がいません。
 
     見つけ方は「`"You ` で始まる Rust の文字列リテラル」。cian のプロンプトは

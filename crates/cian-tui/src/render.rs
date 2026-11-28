@@ -150,7 +150,7 @@ fn draw_split(f: &mut Frame, main_area: Rect, app: &mut App, ov: AnimOverride) {
     // the file under the cursor instead; the PTY runs on underneath, and
     // focusing the shell (Shift+J / click) gets its pixels back.
     app.scroll_tracks = std::mem::take(&mut tracks);
-    // 表示切替がこの上端の枠に乗っていた ── **押しても何も起きない
+    // 表示切替がこの上端の枠に乗っていた。**押しても何も起きない
     // ボタンだった**。`view_request` を立てるだけで、それを読むのは winit 版
     // だけだったので、あの窓が出た時点で見えるだけの飾りになっていた
     // （2026-09-06 に撤去）。押せないものを画面に出さない。
@@ -292,7 +292,7 @@ fn draw_zoomed(f: &mut Frame, area: Rect, app: &mut App, ov: AnimOverride) {
 /// **観測**（2026-09-10、本物の pty）: `?` でマニュアルを開いて Esc で閉じると、
 /// その文字が一覧の上に残った。j も k も **F5 も**動かせず、そのセルに何か
 /// 書かれるまで居座る。翌日、151 個のコマンドを一つずつ叩いたら、同じものが
-/// **ポップアップ以外でも**出た ── `:shell` でシェル枠へ移ると、後ろにあった
+/// **ポップアップ以外でも**出た。`:shell` でシェル枠へ移ると、後ろにあった
 /// 日本語のファイル名の片割れが 27 個残る。状態行も、文言が短くなった回に
 /// 末尾の2桁が残る。
 ///
@@ -303,7 +303,7 @@ fn draw_zoomed(f: &mut Frame, area: Rect, app: &mut App, ov: AnimOverride) {
 ///
 /// **なぜ差分が送らないのか。** ratatui は前の画面と比べて、変わったセルだけを
 /// 送る。全角の2桁目は `Cell::EMPTY`（記号は `" "`）で持たれていて、次の画面の
-/// そこも空白なら**等しい**ので送られない ── ところが端末のほうには、前の
+/// そこも空白なら**等しい**ので送られない。ところが端末のほうには、前の
 /// 全角の右半分がまだ描かれている。だから「変わっていないから送らない」が、
 /// そのまま「消えない」になる。
 ///
@@ -328,7 +328,7 @@ thread_local! {
 }
 
 /// 前の画面で全角だった桁を失った**行**を、送り直させる。`whole` のときは
-/// 画面ぜんぶ ── ポップアップの開け閉めはパネルの下が丸ごと入れ替わるので、
+/// 画面ぜんぶ。ポップアップの開け閉めはパネルの下が丸ごと入れ替わるので、
 /// 行ごとに繕うより確実。
 fn mend_wide_leftovers(f: &mut Frame, whole: bool) {
     let buf = f.buffer_mut();
@@ -358,7 +358,7 @@ fn mend_wide_leftovers(f: &mut Frame, whole: bool) {
             // **消えた全角のある行は、行ごと送り直す。**
             //
             // 最初は「消えた全角の右隣だけ」を送り直させた。5 件あった崩れは
-            // 1 件に減ったが、**別の崩れを1つ作った** ── 印を付けたセルは
+            // 1 件に減ったが、**別の崩れを1つ作った。** 印を付けたセルは
             // `diff_option` ごと次のフレームの「前の画面」になるので、次に
             // そこが全角の2桁目になった回、中身が等しくないと見なされて
             // **空白が右半分に書かれた**（`Backspace` で親へ上がると
@@ -1496,7 +1496,7 @@ fn shell_tabs_title<'a>(
         // **桁で測る、字で測らない。** `offsets` はこの見出し行のクリックの当たり
         // 判定になる（`tab_rects`）。`:shellname` に日本語を付けると1文字が
         // 2桁で描かれるので、字数で測った箱は描かれた幅より短くなり、**その
-        // タブ自身の右半分が隣のタブの当たり判定になる** ── 実測では 3..10 桁に
+        // タブ自身の右半分が隣のタブの当たり判定になる。** 実測では 3..10 桁に
         // 「日本語」が描かれているのに、8・9・10 桁を叩くと隣のタブへ飛んだ。
         // ファイルのペインの見出し行（`tabs_title`）は既に `width_of` で測っている。
         let w = width(&label) as u16;
@@ -2240,7 +2240,7 @@ fn draw_shell_inner(
             // 既定で切にしたので、起動して最初に目に入る枠がこれになった）。
             // 周りが全部日本語で、この一行だけ英語だった。**`tr()` の外に
             // あったので、句点の検査（`nothing_cian_says_ends_in_a_full_stop`）
-            // にも掛かっていなかった** ── 包んだ瞬間に英語のほうも検知された。
+            // にも掛かっていなかった。** 包んだ瞬間に英語のほうも検知された。
             tr(
                 lang,
                 "shell pane — focus here (Shift+J / click / :shell) to start a shell. \
@@ -5469,9 +5469,9 @@ fn draw_simple_dialog(
     // Spelled out rather than inherited: a `Block`'s style does not reach a
     // paragraph rendered into it, so without this the text kept the
     // terminal's own foreground — invisible on a light dialog.
-    // 折り終わったものを渡すので、`Wrap` は要らない ── 付けると、二度目の
+    // 折り終わったものを渡すので、`Wrap` は要らない。付けると、二度目の
     // 折り方（空白でしか折らない）がここで混ざる。
-    // 折り終わったものを渡すので `Wrap` は要らない ── ただし入力欄だけは
+    // 折り終わったものを渡すので `Wrap` は要らない。ただし入力欄だけは
     // 上で折っていないので、そちらのために残す。
     let p = Paragraph::new(body_text)
         .style(Style::default().fg(readable_on(theme().popup_bg)))
@@ -5484,7 +5484,7 @@ fn draw_simple_dialog(
         for (label, kind) in &buttons {
             let text = format!("[ {} ]", label);
             // **桁で測る。** `[ コピー ]` は9字だが13桁で、字数で作った箱に
-            // 入れると ratatui が9桁で切って `[ コピ` になる ── 実測でそう出た。
+            // 入れると ratatui が9桁で切って `[ コピ` になる。実測でそう出た。
             // 当たり判定も同じ箱なので、押せる幅も足りていなかった。英語では
             // 字数と桁数が同じなので、日本語でしか出ない。
             let w = crate::util::width(&text) as u16;

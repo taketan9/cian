@@ -155,7 +155,7 @@ impl App {
                 mods.join("+")
             };
             // **`:keys` ではない。** 止めるのは `:key`（もう一度）で、
-            // `:keys` は「そんなコマンドはありません」と返る ── キーを見に
+            // `:keys` は「そんなコマンドはありません」と返る。キーを見に
             // 来た人に、出口として存在しない名を教えていた。151 個の verb を
             // 一つずつ叩いていて見つけた（2026-09-11）。
             self.message = Some(format!(
@@ -493,7 +493,7 @@ impl App {
             // for. (Overwrite/permanent stays on its own key so it is never
             // the accidental default.)
             KeyCode::Char('y') | KeyCode::Enter => match &self.popup {
-                // 「大きいけど落とすか」に はい ── 承知を立てて、同じ2つで
+                // 「大きいけど落とすか」に はい。承知を立てて、同じ2つで
                 // やり直す（`start_remote_diff`）。
                 Popup::ConfirmFetchDiff { .. } => {
                     self.dismiss_to_viewer();

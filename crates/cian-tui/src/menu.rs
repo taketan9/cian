@@ -99,7 +99,7 @@ impl App {
     /// stranded behind a popup that has already closed.
     pub(crate) fn dismiss_to_viewer(&mut self) {
         // **比べるために落とした複製は、閉じたら消す**（本人、2026-09-23）。
-        // 大きさに関係なく残さない ── サーバの中身のコピーを一時ディレクトリに
+        // 大きさに関係なく残さない。サーバの中身のコピーを一時ディレクトリに
         // 溜めない、という約束のほうが、取り直す手間より大事だ。
         if matches!(self.popup, Popup::Diff { .. }) {
             for at in std::mem::take(&mut self.diff_temps) {

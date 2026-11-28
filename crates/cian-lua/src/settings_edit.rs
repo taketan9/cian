@@ -27,7 +27,7 @@
 //!
 //! Lua は上から実行するので、**最後に有効な行が勝つ**。見本にも
 //! `cian.set_option("shell", …)` が3行並んでいる（Windows / pwsh / zsh）。
-//! だから書き換えるのは**最後の有効な行**で、ほかは触らない ── 触ると、
+//! だから書き換えるのは**最後の有効な行**で、ほかは触らない。触ると、
 //! 書き手が「こっちの機械ではこう」と並べておいた列が崩れる。
 //!
 //! ## 改行は元のまま
@@ -52,7 +52,7 @@ struct Seen {
 
 /// その行が `cian.set_option("name", …)` なら、見立てを返す。
 ///
-/// **賢くしない。** Lua の構文解析はしない ── ここが当てにならない大きさに
+/// **賢くしない。** Lua の構文解析はしない。ここが当てにならない大きさに
 /// 育つと、設定ファイルを壊すツールになる。見るのは「行頭（`--` を除く）が
 /// `cian.set_option("name"` で始まるか」だけで、それ以外の書き方
 /// （変数に入れてから呼ぶ、`for` で回す）は**見つからないほうが正しい** ──
@@ -107,7 +107,7 @@ fn look(line: &str, at: usize, name: &str) -> Option<Seen> {
 /// 見出し。**末尾に足した行が、どこから来たのか分かるように。**
 ///
 /// 手で書いた行と機械が書いた行が混ざると、次に人がこのファイルを読むとき
-/// 「自分が書いたのか」が分からなくなる ── cian では、頼まれて足した行を
+/// 「自分が書いたのか」が分からなくなる。cian では、頼まれて足した行を
 /// 後のパスで自分の判断だと思って消した事故がある（`gui/REQUESTS.ja.md` の
 /// 1行目）。**出どころを書いておけば、消す前に訊ける。**
 pub const ADDED_HEAD: &str = "-- ここから下は設定画面が書きます（手で直しても構いません）";
@@ -115,13 +115,13 @@ pub const ADDED_HEAD: &str = "-- ここから下は設定画面が書きます�
 /// `text` の `cian.set_option("name", …)` を `value` にする。
 ///
 /// `value` が `None` なら**コメントに戻す**（行は消さない）。`value` は
-/// **Lua の字面**をそのまま渡す ── `"8"`、`"true"`、`"\"nvim\""`、
+/// **Lua の字面**をそのまま渡す。`"8"`、`"true"`、`"\"nvim\""`、
 /// `"{ \"bak\", \"dmp\" }"`。引用符を付けるのは呼び出し側の仕事で、
 /// ここで型を推し量ると `"true"` という文字列が真偽値になる。
 /// ファイルを行に分け、**戻すときの改行を一緒に覚える**。
 ///
 /// 5か所が同じ2行を書いていた（`audit.py` の「同じ行が4回」）。別々に書くと、
-/// 片方だけ直したときにそこだけ改行が変わる ── `\r\n` のファイルを `\n` で
+/// 片方だけ直したときにそこだけ改行が変わる。`\r\n` のファイルを `\n` で
 /// 書き戻すと git が全行を変更として出すので、**この2つは一緒でなければ
 /// 意味が無い**。だから1つの関数が両方を返す。
 pub(crate) fn split_lines(text: &str) -> (&'static str, Vec<String>) {
@@ -177,7 +177,7 @@ pub fn set_option_in(text: &str, name: &str, value: Option<&str>) -> String {
 /// `init.lua` に**実際に書いてある**値（Lua の字面のまま）。無ければ `None`。
 ///
 /// 設定画面が「設定済み」を数えるのはこれ。crmaine は読み込んだ**あと**の値で
-/// 数えて、何も書いていないのに「1件設定済み」と出した ── 計算で埋めた既定が
+/// 数えて、何も書いていないのに「1件設定済み」と出した。計算で埋めた既定が
 /// 混じっていたからで、数が実態と合わないと、何を設定したのか分からなくなる。
 pub fn get_option_in(text: &str, name: &str) -> Option<String> {
     let lines: Vec<&str> = text.lines().collect();
@@ -414,7 +414,7 @@ fn replace_inline(line: &str, key: &str, value: &str) -> String {
             parts.push(format!(" {key} = {value}"));
             replaced = true;
         } else {
-            // 末尾の空白は落とす ── 落とさないと `face = "Cica" , size = 14` の
+            // 末尾の空白は落とす。落とさないと `face = "Cica" , size = 14` の
             // ように、カンマの前に空白が残る。
             parts.push(part.trim_end().to_string());
         }
@@ -457,7 +457,7 @@ pub fn read_init() -> (Option<std::path::PathBuf>, String, Option<String>) {
 
 /// Lua として読めるか。読めなければその訳を返す。
 ///
-/// **走らせない。** `mlua` に**コンパイルだけ**させる ── 設定を確かめるために
+/// **走らせない。** `mlua` に**コンパイルだけ**させる。設定を確かめるために
 /// 設定を実行すると、書き間違いを見るだけのつもりで `os.execute` が動く。
 pub fn syntax_error(text: &str) -> Option<String> {
     if text.trim().is_empty() {
@@ -476,10 +476,10 @@ pub fn syntax_error(text: &str) -> Option<String> {
 /// `init.lua` を書く。**控えを取ってから、一時ファイル経由で置き換える。**
 ///
 /// 設定は人が何ヶ月もかけて育てるもので、上書きの失敗を取り返す手が要る。
-/// 書き方を2つ持つと、片方だけ直したときにそちらだけ壊れる ── だから
+/// 書き方を2つ持つと、片方だけ直したときにそちらだけ壊れる。だから
 /// 保存はこの1つの経路だけを通る。
 ///
-/// 控えは `init.lua.bak`。**世代は持たない** ── 設定画面から何度も保存する
+/// 控えは `init.lua.bak`。**世代は持たない。** 設定画面から何度も保存する
 /// 人が、いつの控えか分からない `.bak.3` を並べても使えない。直前の1つが
 /// 取り返せればいい。
 pub fn write_init(path: &std::path::Path, text: &str) -> std::io::Result<()> {
@@ -503,7 +503,7 @@ mod tests {
     /// 括ったものが、また分かれないように。
     ///
     /// **改行の種類と行の分け方は一組**で、5か所が別々に持っていた。片方だけ
-    /// 直すと、そこだけ `\r\n` のファイルが `\n` で書き戻される ── git が
+    /// 直すと、そこだけ `\r\n` のファイルが `\n` で書き戻される。git が
     /// 全行を変更として出す形になる。会社の Windows で使うものなので、ここは
     /// 通知なしに揃えてはいけない。
     #[test]
@@ -521,7 +521,7 @@ mod tests {
         // ものと見る）。分けたあとの行に `\r` は残らない。
         let (nl, lines) = split_lines("a\r\nb\n");
         assert_eq!(nl, "\r\n");
-        // 末尾の改行のあとの空文字も1行として持つ ── 書き戻すときに
+        // 末尾の改行のあとの空文字も1行として持つ。書き戻すときに
         // 「ファイルが改行で終わっていた」を再現するのがこの空行だ。
         assert_eq!(lines, vec!["a", "b", ""]);
     }
@@ -553,7 +553,7 @@ cian.set_option(\"editor\", \"nvim\")   -- お気に入り
     fn unsetting_comments_out_rather_than_deleting() {
         let out = set_option_in(SAMPLE, "editor", None);
         assert!(out.contains("-- cian.set_option(\"editor\", \"nvim\")   -- お気に入り"), "{out}");
-        // 行数は変わらない ── 説明ごと消さない。
+        // 行数は変わらない。説明ごと消さない。
         assert_eq!(SAMPLE.lines().count(), out.lines().count());
     }
 
@@ -599,7 +599,7 @@ cian.set_option(\"shell\", \"/bin/zsh\")
     }
 
     /// **改行は元のまま。** `\\r\\n` のファイルを `\\n` にすると、git が全行を
-    /// 変更として出す ── 会社の Windows で使うものなので、通知なしに揃えない。
+    /// 変更として出す。会社の Windows で使うものなので、通知なしに揃えない。
     #[test]
     fn crlf_stays_crlf() {
         let text = "-- cian.set_option(\"tab_width\", 8)\r\ncian.set_option(\"lang\", \"ja\")\r\n";
@@ -687,7 +687,7 @@ cian.set_option(\"shell\", \"/bin/zsh\")
         assert_eq!(get_option_in(&back, "tab_width"), None);
     }
 
-    /// **最後の有効な行を読む** ── 書き換えるのと同じ行でなければ、画面に
+    /// **最後の有効な行を読む。** 書き換えるのと同じ行でなければ、画面に
     /// 出ている値と、保存が触る行がずれる。
     #[test]
     fn the_value_read_is_the_value_that_wins() {
@@ -828,7 +828,7 @@ cian.ai {
             .join("examples/init.lua");
         let before = std::fs::read_to_string(&path).expect("the sample init.lua");
         // 数ではなく**中身**で見る。数だけだと、1行消えて1行増えたときに
-        // 釣り合って通る ── cian の検査が何も報告しない形。
+        // 釣り合って通る。cian の検査が何も報告しない形。
         let prose = |s: &str| -> Vec<String> {
             s.lines()
                 .map(|l| l.trim().to_string())

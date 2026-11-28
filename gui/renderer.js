@@ -370,7 +370,7 @@ let zoomOn = false;
 /// いなければ `null`）。
 ///
 /// **端末版がこれで**（`viewer_dock`）、ファイルを開くと一覧のあった場所に
-/// パネルが嵌まる ── 左に一覧・右に本文・下に一覧・本文・シェルの3つのパネルが残り、キーは
+/// パネルが嵌まる。左に一覧・右に本文・下に一覧・本文・シェルの3つのパネルが残り、キーは
 /// そのあいだを行ったり来たりできる。窓版だけが窓全部を本文にしていて、
 /// 一覧にもシェルにも戻れなかった（本人、2026-10-02）。
 ///
@@ -389,7 +389,7 @@ function markFocus() {
     const where = term.on && term.focused ? 'shell' : 'files';
     el.work.dataset.focus = where;
     el.work.dataset.zoom = zoomOn ? where : '';
-    // 嵌まったパネルも表示領域の1つ ── 枠（3px）と、F12 で埋める側を、ペインと
+    // 嵌まったパネルも表示領域の1つ。枠（3px）と、F12 で埋める側を、ペインと
     // まったく同じ言葉（`.active`）で言う。別の言葉で言うと、同じ問いに
     // 答える規則が2通りになる。
     el.view.classList.toggle('active', !!viewerDock && where === 'files' && state.focus === viewerDock);
@@ -399,7 +399,7 @@ function markFocus() {
 /// 嵌まったパネルと一覧のあいだで、**DOM の焦点**も渡す。
 ///
 /// cian のなかの「どこにキーがあるか」は `state.focus` が答えるが、ブラウザは
-/// それを知らない ── Monaco は自分の隠し textarea に焦点を握ったままで、
+/// それを知らない。Monaco は自分の隠し textarea に焦点を握ったままで、
 /// 一覧に移ったあと、こちらが拾わなかった1文字（`;` や `u`）がそのまま
 /// ファイルに入る。渡すのではなく**手放させる**のが要点だ。
 ///
@@ -418,7 +418,7 @@ function syncDockFocus() {
     } else {
         // **挿入したまま出ていかせない。**
         //
-        // 端末版にはこの状態が無い ── パネルから出る鍵は編集中には開かない
+        // 端末版にはこの状態が無い。パネルから出る鍵は編集中には開かない
         // （`editing: false` を要求している）。窓版はマウスがあるので、
         // 挿入の途中で隣の一覧をクリックできてしまい、「パネルは挿入中、
         // キーは一覧」という、どちらの前端の設計にも無い状態が作れた。
@@ -507,7 +507,7 @@ function draw(which) {
     }
     // **リモートペインの `cwd` は、繋ぐ前に立っていたローカルのディレクトリ。**
     // それをここに出していたので、窓でいちばん読まれる行だけがローカルを指し、
-    // 行と下の状態行はサーバを指していた ── 同じペインが2つの場所を名乗り、
+    // 行と下の状態行はサーバを指していた。同じペインが2つの場所を名乗り、
     // 上に出ていたほうが間違っていた。コピーの確認シートは同じ罠で既に
     // 直してある（下の `dest.remote_path`）が、パンくずは直っていなかった。
     const where = pane.remote
@@ -519,7 +519,7 @@ function draw(which) {
     // With both panes visible the highlight says it; with one, Tab would
     // otherwise change everything and announce nothing.
     // **どちら側かは、下の状態行が示している。** 状態行の先頭に `L` / `R` が
-    // 出ているのに、パンくずの頭にも `[左]` と書いていた ── 同じことを2回
+    // 出ているのに、パンくずの頭にも `[左]` と書いていた。同じことを2回
     // 言っていて、しかも読む場所として悪い方（一番読まれる行の頭）を
     // 使っていた。2026-09-05:「めっちゃダサい」。
     const lead = '';
@@ -940,7 +940,7 @@ function truncateMiddle(text, max = 68) {
 }
 
 /// 進捗の窓を畳む。**`prog` は状態、`el.prog` が窓**で、状態だけ畳んでも窓は
-/// 残る ── 転送の終わりがそれで、「100%」のまま画面に居座っていた。畳む道を
+/// 残る。転送の終わりがそれで、「100%」のまま画面に居座っていた。畳む道を
 /// 1つにして、`drawProg()` の呼び忘れが起きないようにする。
 function hideProg() {
     prog.hidden = true;
@@ -950,7 +950,7 @@ function hideProg() {
 /// 経過の言い方。
 ///
 /// **ミリ秒は短い仕事のためのものです。** 2GB のチェックサムが終わったとき、
-/// 状態行は「チェックサム 1 件（103262 ms）」と言いました ── 正しい数ですが、
+/// 状態行は「チェックサム 1 件（103262 ms）」と言いました。正しい数ですが、
 /// 読める形ではありません（2026-11-28）。1秒を超えたら秒で、1分を超えたら
 /// 分と秒で言います。`always` は状態行の中の言い方で、始まったばかりでも
 /// 「0秒」と言います（刻みが ms と秒で跳ぶと、動いて見えないためです）。
@@ -1813,10 +1813,10 @@ function clearPalette() {
 /// アイコンモードは 2026-09-02 に入口を閉じ、描く側も 2026-09-06 に消した。
 // モードの順番はここ一つ。`モード ▸` も T トグルの巡回も `表示 ▸` も
 // この順に従う（クラシック → 詳細一覧）。**amber モードは 2026-09-06 に
-// 出た** ── ノートのアプリは `~/workspace/amber` で、cian は2画面ファイラ。
+// 出た。** ノートのアプリは `~/workspace/amber` で、cian は2画面ファイラ。
 const VIEWS = ['classic', 'details'];
 function viewName(mode) {
-    // 「モード」と呼ぶと決めたので、名前にも付ける ── メニューが
+    // 「モード」と呼ぶと決めたので、名前にも付ける。メニューが
     // 「モード ▸ クラシック」なら、それは「クラシックモード」のこと。
     return {
         classic: tr("classic mode", 'クラシックモード'),
@@ -1845,7 +1845,7 @@ function setView(mode, remember = true) {
     if (remember) ask('remember', { key: 'gui_view', value: mode });
 }
 
-/// 「そのパネルはいま無い」を言う3つ ── 同じ行を6回・4回・4回書いていた。
+/// 「そのパネルはいま無い」を言う3つ。同じ行を6回・4回・4回書いていた。
 ///
 /// **括ったのは文言のためではなく、答えが1つであるため。** 同じ問いに同じ
 /// 言葉で答える場所が10か所あると、いつか1か所だけ別の言い方になる ──
@@ -2143,7 +2143,7 @@ function tellFrame() {
 function setLook(i, remember = true) {
     look = (i + LOOKS.length) % LOOKS.length;
     // 窓の見た目を選んだら、配色は選んでいないことになる。**変数もここで
-    // 落とす** ── `:theme 陰翳` は `pickTheme` を通らないので、そちらだけで
+    // 落とす。** `:theme 陰翳` は `pickTheme` を通らないので、そちらだけで
     // 落としていると `●` が配色の行に残ったままになる。
     palette = null;
     clearPaneSkins();
@@ -2166,7 +2166,7 @@ function setLook(i, remember = true) {
         // `theme = "nord"` と `gui_look = "hakuji"` が同居し、**起動のたびに
         // 残っていた配色が勝って**暗いまま開いていた（2026-09-14、実機。
         // 「theme を選んでも次の起動で永続しない」の正体がこれ）。
-        // 空で覚えさせる ── `state_get` は空を「無い」と読む。
+        // 空で覚えさせる。`state_get` は空を「無い」と読む。
         ask('remember', { key: 'theme', value: '' });
     }
 }
@@ -2232,7 +2232,7 @@ function hintsNow() {
         return [['Ctrl+S', tr('save', '保存')], ['Esc', tr('leave the editor', '編集終了')], ['/', tr('search', '検索')], ['i', tr('edit', '編集')],
             ['v', tr('select', '選択')], ['y', tr('copy', 'コピー')], ['d c y', tr('+ motion', '＋モーション')], [':q', tr('close', '閉じる')],
             // **ペインに嵌まっているときだけ。** 窓を覆っているパネルから見ると
-            // 渡る先が無く、効かないキーを並べることになる ── シェルの行が
+            // 渡る先が無く、効かないキーを並べることになる。シェルの行が
             // 「2つめのペインがあるときだけ」を見ているのと同じ作り。
             // 1つずつ挙げるのも同じ理由（`keycover.py` は家族にまとめた行を
             // 1件と数え、残り半分が押されていないことを隠す）。
@@ -2404,7 +2404,7 @@ const TOGGLES = {
                 run: () => { togglePreview(); drawMenu(); },
             },
             {
-                // 印を先頭に置かない ── この行だけ左端がずれる（端末版の
+                // 印を先頭に置かない。この行だけ左端がずれる（端末版の
                 // `toggles.rs` に同じ註）。**同じ言葉であること**が parity の
                 // 見ているところなので、二つを一緒に動かす。
                 label: tr("Read \u2601 cloud-only files", 'クラウド上（☁）のファイルも読む'),
@@ -2504,7 +2504,7 @@ function viewerRows() {
     v.push({ label: tr("Save", '保存'), value: 'Ctrl+S', run: saveFile });
     v.push({ label: tr("Open in my editor", '外部エディタで開く'), value: ':edit', run: cmdEditExternal });
     v.push({ label: tr("Text encoding\u2026", '文字コードを指定…'), value: ':enc', run: () => cmdEncoding() });
-    // `?` はキーの取り合いになりうる ── vim の後方検索、IME、配列。
+    // `?` はキーの取り合いになりうる。vim の後方検索、IME、配列。
     // **鍵の取り合いにならない道**を一本、メニューに置く。
 
     v.push({ label: tr("Who changed each line", '各行の最終変更者'), value: ':blame', run: cmdBlame });
@@ -2524,13 +2524,13 @@ function viewerRows() {
     v.push({ label: tr("Theme (whole app)", 'テーマ（全体）'), value: ':theme', run: () => cmdTheme() });
     v.push({ label: tr("Close without saving", '保存せずに閉じる'), value: '', run: () => closeView(false) });
     // `?` はこの中のキー、`:help` は cian 全体。**別のもの**で、
-    // ここは `?` と書いておきながら全体のほうを開いていた ── 押した人は
+    // ここは `?` と書いておきながら全体のほうを開いていた。押した人は
     // 「? を押したのに違うものが出た」としか思えない。
     v.push({ label: tr("Keys in here", 'ここのキー一覧'), value: '?', run: viewerHelp });
     v.push({ label: tr("The whole manual", 'cian のキー一覧（全体）'), value: ':help', run: openHelp });
     // **`:key` に、ここから届く道が無かった。**
     //
-    // あれは押されたキーを全部飲み込む ── それが目的なので正しい。だが
+    // あれは押されたキーを全部飲み込む。それが目的なので正しい。だが
     // Enter も飲み込むので、**echo を点けてからファイルを開くことはできない**。
     // そしてエディタの中では `:` は vim のもので、cian のコマンド行ではない。
     // つまり「エディタでこのキーが効かない」を調べる道が、エディタの中には
@@ -2592,7 +2592,7 @@ const cfg = { ai: false, snippets: false, macros: false, hosts: false, tabWidth:
 /// init.lua の `tab_width` を、いま開いているモデルに当てる。
 ///
 /// **`create` の options ではなくモデルの側。** タブ幅は Monaco では文書の
-/// 性質（`ITextModelUpdateOptions`）で、エディタの表示設定ではない ── 作る
+/// 性質（`ITextModelUpdateOptions`）で、エディタの表示設定ではない。作る
 /// ときに渡しても効かない。差分エディタは2つのモデルを持つので両方。
 function applyTabWidth() {
     if (!cfg.tabWidth) return;
@@ -2973,7 +2973,7 @@ function openMenu(spec) {
     menu.spec = spec;
     menu.at = Math.max(0, spec.at ? spec.at() : 0);
     // **開いた瞬間も、カーソルはキーボードのもの。** 行はいま作られて、止まって
-    // いるマウスの下に現れる ── それで `mouseenter` が走り、カーソルがマウスの
+    // いるマウスの下に現れる。それで `mouseenter` が走り、カーソルがマウスの
     // 乗っている行へ飛んでいた。`T` を押して Enter を叩くと、マウスがたまたま
     // 乗っている行が切り替わる。一周の最初の段がそれで「言語」を押し、画面が
     // 英語になった（2026-09-22）。作り直しと巻き上げの2つは塞いであり
@@ -3157,7 +3157,7 @@ function dismissFind() {
 // stops it there — a listener waiting for the bubble never hears the click.
 /// 嵌まったパネルを**クリックしたら、キーもそこへ**。
 ///
-/// Monaco は押された時点で自分の textarea に焦点を取る ── こちらの
+/// Monaco は押された時点で自分の textarea に焦点を取る。こちらの
 /// `state.focus` がまだ隣の一覧を指していると、打った字が二重に効く
 /// （一覧が拾い、拾い残しが Monaco に入る）。端末版も同じことを
 /// `inside_panel` で見ている（mouse.rs:145）。
@@ -3236,7 +3236,7 @@ function viewerHelp() {
     // **キーは `label`、説明は `sub`。**
     //
     // 前は逆で、キーを `n`（行番号のための右詰め 9ch の列）に入れ、説明を
-    // `label` に入れていた ── だから短いキーは右に寄り、長いキーは列から
+    // `label` に入れていた。だから短いキーは右に寄り、長いキーは列から
     // はみ出し、`align` は説明のほうを揃えていた。届いた画像がそのまま
     // 「ぐっちゃぐちゃ」で、そのとおりでした。
     const rows = (section ? section[1] : []).map(([k, what]) => ({ label: keyLabel(k), sub: what }));
@@ -3377,7 +3377,7 @@ function helpRows() {
         [tr("a binary", 'バイナリ'), tr("shown in hex; i edits \u2014 0-9 a-f overwrite, Ctrl+S saves (keeping a .bak)", '16進で表示。i で編集 — 0-9 a-f で上書き、Ctrl+S 保存（.bak を残す）')],
         [tr("  overwrite only", '  上書きのみ'), tr("nothing shifts, so the file cannot change size", 'ずれないので、ファイルの大きさは変わりません')],
         ['Ctrl+S', tr("save (same encoding, same line endings, same BOM)", '保存（元の文字コード・改行・BOM のまま）')],
-        ['Esc ×3', tr("close \u2014 three in a row (unsaved, the third asks)", '閉じる ── 3回連続（未保存なら3回目で確認）')],
+        ['Esc ×3', tr("close \u2014 three in a row (unsaved, the third asks)", '閉じる。3回連続（未保存なら3回目で確認）')],
         ['Backspace ×3', tr("the same, in vim style and only in normal mode", '同じ。vim でノーマルモードのときだけ')],
         ['F3', tr("closes on one press", '1回で閉じる')],
         [tr("F3 with marks", 'F3（マーク中）'), tr("opens every marked file", 'マークした全部を開く')],
@@ -3407,7 +3407,7 @@ function helpRows() {
         ['  :combine [n][!]', tr("join the next line (! without a space)", '次の行を連結（! は空白なし）')],
         [tr("rectangle", '矩形'), tr("Alt+Shift+arrows selects; Alt+Shift+I/A/C/D for left edge / right edge / replace / delete", 'Alt+Shift+矢印 で選び、Alt+Shift+I/A/C/D で 左端/右端/置換/削除')],
         // **vim の人は Ctrl+V を先に押す。** ここでは貼り付けなので何も起きず、
-        // 案内も出ないので止まる ── crmaine の紹介動画を撮っていて分かった
+        // 案内も出ないので止まる。crmaine の紹介動画を撮っていて分かった
         // （2026-09-22）。monaco-vim は vim と同じく <C-q> でも矩形に入るので、
         // それを書く。Ctrl+C/X/V を貼り付けに回した結果、Ctrl+X の「引く」が
         // 消えていることも併せて書く（`cxvCXV` の註）。
@@ -3415,7 +3415,7 @@ function helpRows() {
         ['  Ctrl+A', tr("add 1 to the number under the cursor (Ctrl+X is cut, so there is no key to subtract)", 'カーソルの数に1を足す（Ctrl+X は切り取りなので、引くキーはありません）')],
         ['Ctrl+] / Ctrl+[', tr("move by heading (works in notepad style too)", '見出し移動（notepad のキー操作でも使えます）')],
         [tr("  in notepad style", '  notepad のとき'), tr("Ctrl+C/V/Z/F and the rest of the Windows hand", 'Ctrl+C/V/Z/F など Windows の手が効く')],
-        ['jj  /  ｊｊ  /  っｊ', tr("leave insert mode — the last two are what a Japanese IME makes of pressing j twice", '挿入モードを抜ける ── 後ろ2つは、IME オンで j を2回押したときに出るもの')],
+        ['jj  /  ｊｊ  /  っｊ', tr("leave insert mode — the last two are what a Japanese IME makes of pressing j twice", '挿入モードを抜ける。後ろ2つは、IME オンで j を2回押したときに出るもの')],
         ['ZZ  /  ZQ', tr("save and close / close without saving", '保存して閉じる ／ 保存せずに閉じる')],
     ]],
     [tr("Marks and file operations", 'マークと操作'), [
@@ -3470,7 +3470,7 @@ function openHelp() {
     help.on = true;
     el.find.hidden = false;
     el.find.classList.add('help');
-    el.findFoot.textContent = tr('Esc or ? closes  ── the same keys as cian in a terminal', 'Esc か ? で閉じる  ── 端末版の cian と同じキーです');
+    el.findFoot.textContent = tr('Esc or ? closes  ── the same keys as cian in a terminal', 'Esc か ? で閉じる。端末版の cian と同じキーです');
     const frag = document.createDocumentFragment();
     for (const [group, rows] of helpRows()) {
         const h = document.createElement('div');
@@ -3801,7 +3801,7 @@ function keySpec(spec) {
 /// 「Windows で Ctrl+なにか としているショートカットを、Mac では
 /// Meta+なにか と一律読み替えて」── そのとおりで、`Ctrl+C` と `⌘C` は
 /// 二つの鍵ではなく、二つの機械が同じ鍵に付けている名前です。
-/// 23 箇所は既に両方を見ていて、残りが Ctrl だけを見ていた ── つまり
+/// 23 箇所は既に両方を見ていて、残りが Ctrl だけを見ていた。つまり
 /// Mac では `⌘h` でペインが移らず、`Ctrl+n` だけが下に動いた。ばらついた
 /// のは、site ごとに書いていたから。**一つの関数にすれば、次に足すものも
 /// 迷わない。**
@@ -3813,7 +3813,7 @@ function mod(e) {
     return e.ctrlKey || e.metaKey;
 }
 
-/// キーの見せ方。Mac では `Ctrl+` を `⌘` と書く ── 押す鍵は同じでも、
+/// キーの見せ方。Mac では `Ctrl+` を `⌘` と書く。押す鍵は同じでも、
 /// 手元のキーボードに書いてある文字は違う。
 const MAC = navigator.platform.startsWith('Mac');
 function keyLabel(k) {
@@ -3847,19 +3847,19 @@ document.addEventListener('keydown', (e) => {
     const bits = [
         e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Meta',
     ].filter(Boolean);
-    // どこで押されたかも言う ── 同じキーが場所によって別の扱いを受けるので、
+    // どこで押されたかも言う。同じキーが場所によって別の扱いを受けるので、
     // 「どこで」が抜けていると答えが半分になる。
     // どこで押されたか **と、そのパネルがいまどういう状態か**。
     //
     // `code=Slash` まで出ているのに `?` がキー一覧を開かない、という報告が
-    // あった ── キーは届いていて、残る条件は「エディタが vim の流儀か」と
+    // あった。キーは届いていて、残る条件は「エディタが vim の流儀か」と
     // 「挿入モードでないか」の二つだけ。それを言わない限り、一往復ぶん
     // 当て推量が要る。**押されたキーの話だけでは足りない。**
     let where;
     if (viewerHasKeys()) {
         // `tr()` をテンプレート literal の中に書かない。中身は訳されて
         // いても、外側の literal は日本語を含む一つの文字列に見えるので、
-        // scripts/i18n.py が「まだ日本語だけ」と数える ── 検査のほうを
+        // scripts/i18n.py が「まだ日本語だけ」と数える。検査のほうを
         // 対象から外すより、書き方を変えるほうが安い。
         const surface = tr('editor', 'エディタ');
         where = `${surface}/${STYLES[style][0]}`;
@@ -3913,7 +3913,7 @@ document.addEventListener('keydown', (e) => {
     // silences the bubble phase on the same node. One receiver, one order.
     if (chat.on) { chatKey(e); return; }
     // 設定画面は、開いているあいだ**それだけを表示する**パネル。Esc で閉じ、
-    // それ以外は欄のものなので、一覧の 27 分岐へ回さない ── 回すと、
+    // それ以外は欄のものなので、一覧の 27 分岐へ回さない。回すと、
     // エンドポイントに `j` と打っただけでカーソルが動く。
     if (settings.on) {
         if (settings.capturing) { captureKey(e); return; }
@@ -3926,7 +3926,7 @@ document.addEventListener('keydown', (e) => {
     //
     // **「開いている」ではなく「キーがそこにある」。** 嵌まったパネルは隣の
     // 一覧と並んで出ているので、焦点が一覧にあるあいだ `j` も `k` も一覧の
-    // ものだ ── 端末版の `docked_elsewhere`（keys.rs:348）と同じ線。
+    // ものだ。端末版の `docked_elsewhere`（keys.rs:348）と同じ線。
     if (viewerHasKeys()) return;
     // **And not before there is a listing to steer.**
     //
@@ -3985,7 +3985,7 @@ document.addEventListener('keydown', (e) => {
     else if (k === 'h' && mod(e)) focusPane('left');
     else if (k === 'ArrowRight' && !e.altKey) focusPane('right');
     else if (k === 'l' && mod(e)) focusPane('right');
-    // `l` はアーカイブの中でだけ「入る」── ヒント行が `Enter/l 入る` と
+    // `l` はアーカイブの中でだけ「入る」。ヒント行が `Enter/l 入る` と
     // 書いているのはその画面だけで、書いてある以上のことはしない。
     // 両前端とも、書いてあるのに割り当てが無かった。
     else if (k === 'l' && bare && state[state.focus].archive) enter();
@@ -4180,17 +4180,17 @@ document.addEventListener('keydown', (e) => {
 ///   * 項目は**スキーマから生成**する（cian では `cian-lua` の `Options`。
 ///     エンジンが `settings_read` で渡す）。手で並べると、設定を足した日に
 ///     取り残される
-///   * **元のファイルに重ねる。丸ごと書き直さない** ── 触った項目だけを
+///   * **元のファイルに重ねる。丸ごと書き直さない。** 触った項目だけを
 ///     エンジンへ送り、ほかの行は読みもしない
 ///   * **読めなかったら保存させない**（5,399 バイトが 64 バイトになった日が
 ///     ある）
 ///   * **カテゴリごとに畳み、最初の1つだけ開く**
-///   * **「設定済み」はファイルに実際に書いてあるかで数える** ── 読み込んだ
+///   * **「設定済み」はファイルに実際に書いてあるかで数える。** 読み込んだ
 ///     あとの値には計算した既定が混じっていて、何も書いていないのに
 ///     「1件設定済み」と出る
 const settings = {
     on: false,
-    /// 保存が断られた理由。**シートの中に残す** ── 状態行は次の知らせで流れ、
+    /// 保存が断られた理由。**シートの中に残す。** 状態行は次の知らせで流れ、
     /// 設定の保存は「押したはずなのに効いていない」がいちばん起きる場所だ。
     failed: null,
     /// エンジンが渡した項目の表。
@@ -4206,7 +4206,7 @@ const settings = {
     /// **ここでは直せないもの。** 画面が触らない設定の置き場 ── 出さないと
     /// 「設定画面に無い＝設定できない」と読まれる。
     elsewhere: [],
-    /// SSH ホスト。**`init.lua` とは別のファイルかもしれない** ── cian は
+    /// SSH ホスト。**`init.lua` とは別のファイルかもしれない。** cian は
     /// `ssh.lua` を init.lua の直後に同じ設定として読むので、書き先は
     /// 「いま `cian.ssh{}` がある方」。どちらに書くかは画面に出す。
     ssh: { path: '', writes: '', hosts: [], worldReadable: false, error: null },
@@ -4369,7 +4369,7 @@ function drawSettings() {
               + esc(tr('remove', '消す')) + '</button>'
             : '';
         // 片方でしか効かない設定は、そう言う。**効かない設定を効くふりで
-        // 並べない** ── cian で最頻のバグは「設定を直したのに効かない」。
+        // 並べない。** cian で最頻のバグは「設定を直したのに効かない」。
         const only = f.applies === 'tui'
             ? `<span class="sonly">${esc(tr('terminal build only', '端末版だけ'))}</span>`
             : f.applies === 'gui'
@@ -4382,7 +4382,7 @@ function drawSettings() {
     };
 
     // AI は既定オフ。**endpoint が書いてあるかどうかが「オン」**で、
-    // 別のスイッチを足さない ── 状態を持つものが二つあると、必ず食い違う。
+    // 別のスイッチを足さない。状態を持つものが二つあると、必ず食い違う。
     const aiRow = (key, label, help) => {
         const v = settings.touchedAi.has(key)
             ? (settings.touchedAi.get(key) ?? '')
@@ -4478,7 +4478,7 @@ function drawSettings() {
     // `e.key`）、欄を押したあとの打鍵をそのまま割当にする。
     //
     // **足すのであって、置き換えるのではない。** 縛らなかったキーは既定のまま
-    // 動く。それを一言目に書く ── でないと「ここに無い＝使えない」と読まれる。
+    // 動く。それを一言目に書く。でないと「ここに無い＝使えない」と読まれる。
     const keyRow = (b) => {
         const cur = settings.touchedKeys.has(b.action)
             ? settings.touchedKeys.get(b.action)
@@ -4518,7 +4518,7 @@ function drawSettings() {
     // ── スニペット ────────────────────────────────────────────────
     //
     // シェルへ送る一行に名前を付けたもの。**同梱の見本に一行も無い**ので、
-    // 書き方を知る道がここになる ── だから欄の脇に例を置く。
+    // 書き方を知る道がここになる。だから欄の脇に例を置く。
     const snipRow = (s, i) => {
         const t2 = settings.touchedSnips;
         const key = s.name || `__new${i}`;
@@ -4703,7 +4703,7 @@ function drawSettings() {
     drawSettingsFoot();
 }
 
-// パネルの下のボタン。**キーでも押せるものに、押せる形を添える** ── 設定画面を
+// パネルの下のボタン。**キーでも押せるものに、押せる形を添える。** 設定画面を
 // 必要とする人は、Esc も Ctrl+S も覚えていない。
 el.seSave.addEventListener('click', () => saveSettings());
 el.seCancel.addEventListener('click', () => closeSettings());
@@ -4742,7 +4742,7 @@ function drawSettingsFoot() {
 }
 
 /// 保存。**触った項目だけを送る。** 元のファイルに重ねるのはエンジンの仕事で、
-/// ここが知らない行は送りようがない ── だから消えない。
+/// ここが知らない行は送りようがない。だから消えない。
 /// 打鍵を、`cian.set_keymap` が受け取る綴りにする。
 ///
 /// **`e.key` を見る。** ふだん窓版が物理キーを `e.code` で当てているのは、
@@ -4754,7 +4754,7 @@ function drawSettingsFoot() {
 /// どちらを送るかで結果が変わる。
 ///
 /// 1文字にならないキー（F5、矢印、Enter）は `cian.set_keymap` が受け取らない。
-/// **警告を出さずに無視せず、そう言う** ── 押したのに何も起きない欄は、壊れて見える。
+/// **警告を出さずに無視せず、そう言う。** 押したのに何も起きない欄は、壊れて見える。
 function captureKey(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -5342,7 +5342,7 @@ function closeReport(abandoned = false) {
     if (abandoned && report.leave) report.leave();
     // **比べるために落とした複製は、シートを閉じたときにも消す。**
     // 消していたのは並べた画パネルを閉じたときだけで、`=` が「2つは同一です」で
-    // 終わったときや、一覧で見て閉じたときは誰も消していなかった ── 実機の
+    // 終わったときや、一覧で見て閉じたときは誰も消していなかった。実機の
     // 一時領域に、サーバから落とした CSV が残っていた（2026-09-28）。
     // 並べた画面が開いているあいだは消さない（保存で上げ直す先だ）。
     if (comparing && !pair.on) {
@@ -5598,7 +5598,7 @@ const viewer = {
 /// door that makes the window do the same, rather than eight remembered calls.
 function setViewerOn(on, dock = null) {
     viewer.on = on;
-    // **嵌める先は開いた瞬間に決まる** ── 端末版の Enter と同じ（mouse.rs:950
+    // **嵌める先は開いた瞬間に決まる。** 端末版の Enter と同じ（mouse.rs:950
     // 「Enter reads it *here*: the same viewer, docked in the pane whose
     // listing it replaces」）。あとから決め直す道は作らない: どこに嵌まって
     // いるかを二度書くと、片方だけ古くなる。
@@ -5615,7 +5615,7 @@ function setViewerOn(on, dock = null) {
 ///
 /// 嵌まっているなら `#panes` の子（区切りのパーセントが寸法を決める）、
 /// 浮いているなら元の場所に戻して `position: fixed` で窓を覆う。
-/// **寸法を測って置かない** ── 境界を掴んで動かしたとき、測ったペインだけが
+/// **寸法を測って置かない。** 境界を掴んで動かしたとき、測ったペインだけが
 /// 付いてこない（型④）。親を替えるだけなら、幅も高さも CSS が決める。
 function applyDock() {
     const parent = viewerDock ? el.panes : viewHome.parent;
@@ -5630,7 +5630,7 @@ function applyDock() {
     else delete el.work.dataset.dock;
     markFocus();
     // `automaticLayout` は自分の箱を監視しているが、親が替わった直後の1枚は
-    // 古い寸法で描かれる ── 一度だけ、こちらから言う。
+    // 古い寸法で描かれる。一度だけ、こちらから言う。
     if (viewer.ed) viewer.ed.layout();
     if (pair.ed) pair.ed.layout();
     placeGrips();
@@ -5641,12 +5641,12 @@ function applyDock() {
 ///
 /// 「ファイルが開いているか」（`viewer.on`）とは別の問い。嵌まったパネルは、
 /// 自分のペインに焦点があるあいだだけキーの持ち主で、隣の一覧に移れば
-/// `j` や `k` は一覧のものに戻る ── 端末版の「A docked viewer owns the
+/// `j` や `k` は一覧のものに戻る。端末版の「A docked viewer owns the
 /// keyboard only while the pane it sits in has the focus」（keys.rs:348）を
 /// 窓版で言うと、この一行になる。
 function viewerHasKeys() {
     if (!viewer.on) return false;
-    // 浮いているパネルは窓を覆っている ── 渡す先が画面に無い。
+    // 浮いているパネルは窓を覆っている。渡す先が画面に無い。
     if (!viewerDock) return true;
     if (term.on && term.focused) return false;
     return state.focus === viewerDock;
@@ -5843,7 +5843,7 @@ function armJJ() {
     });
 }
 
-/// 挿入モードから出る ── Esc が出るのと同じ道。
+/// 挿入モードから出る。Esc が出るのと同じ道。
 ///
 /// **`viewer.vim` は編集器ではなくアダプタ。** `initVimMode` が返すのは
 /// monaco-vim の CodeMirror 互換のラッパー（`handleKeyDown`・`state`・`editor`）で、
@@ -6005,7 +6005,7 @@ async function openAsPicture(which) {
 /// closing it again, which worked exactly as badly as it sounds.
 function makeEditor(monaco, text, lang) {
     if (!viewer.ed) {
-    // 開くたびに当てる ── モデルは開くたびに新しく、既定の 4 で生まれる。
+    // 開くたびに当てる。モデルは開くたびに新しく、既定の 4 で生まれる。
     queueMicrotask(applyTabWidth);
     viewer.ed = monaco.editor.create(el.vBody, {
         value: text,
@@ -6330,7 +6330,7 @@ function setStyle(i, remember = true) {
     el.vFoot.textContent = '';
     // **monaco-vim は vim を外すとき、渡された要素を `display:none` にする。**
     // ふつうのエディタはこの足元そのものを渡しているので、vim のエディタを
-    // 一度閉じると足元が隠れ、次に vim を付けるまで戻らない ── notepad の
+    // 一度閉じると足元が隠れ、次に vim を付けるまで戻らない。notepad の
     // 流儀で開いても案内が出ないのはそれだった。CSS の既定（flex）へ戻す。
     el.vFoot.style.display = '';
     if (STYLES[style][0] === 'vim') {
@@ -6417,7 +6417,7 @@ function armVimGrammar() {
     // `argString`（生）の両方に入れるので、足すと `sort` が `sortsort` に
     // なる。実機で一度そうなった。
     //
-    // 範囲は `p.line` / `p.lineEnd`（0始まり）に入る ── `line1`/`line2`
+    // 範囲は `p.line` / `p.lineEnd`（0始まり）に入る。`line1`/`line2`
     // ではない。取り違えていたせいで `:.!tr a-z A-Z` がファイル全体を
     // 大文字にした。実機で見るまで気づけない類のずれで、範囲の名前は
     // `monaco-vim.js` の `parseInput_` にある。
@@ -6836,7 +6836,7 @@ document.addEventListener('keydown', (e) => {
     if (viewerDock && viewer.vim && !vimTyping() && !hex.editing && !viewer.zPending
         && !el.vFoot.querySelector('input')
         && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        // 物理位置で見る ── `?` と `ZZ` と同じ理由（配列と IME で `key` はぶれる）。
+        // 物理位置で見る。`?` と `ZZ` と同じ理由（配列と IME で `key` はぶれる）。
         const to = e.shiftKey
             ? ({ KeyH: 'left', KeyL: 'right', KeyJ: 'shell' })[e.code]
             : (e.key === 'Tab' ? (viewerDock === 'left' ? 'right' : 'left') : null);
@@ -6858,7 +6858,7 @@ document.addEventListener('keydown', (e) => {
     // shell have」）。ここで受けるのは、キーがパネルにあるあいだ一覧のハンドラが
     // 降りているから ── 鍵が1つでも、ハンドラはパネルごとに必要になる。
     // **嵌まっているときだけ。** 窓を覆っているパネルの下で広げても、見える
-    // ものは何も変わらないのに「左ペインを広げました」と言う ── 画面に出ない
+    // ものは何も変わらないのに「左ペインを広げました」と言う。画面に出ない
     // 変化を言葉だけが報告する、いちばん質の悪い形になる。
     if (viewerDock && e.key === 'F12' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.stopPropagation();
@@ -6874,7 +6874,7 @@ document.addEventListener('keydown', (e) => {
     // holding it costs nothing; anything else clears it.
     if (viewer.vim && !vimTyping() && !hex.editing
         && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        // 物理位置で見る ── `?` と同じ理由（配列と IME で `key` はぶれる）。
+        // 物理位置で見る。`?` と同じ理由（配列と IME で `key` はぶれる）。
         if (e.code === 'KeyZ' && e.shiftKey) {
             e.stopPropagation();
             e.preventDefault();
@@ -6908,7 +6908,7 @@ document.addEventListener('keydown', (e) => {
     //
     // Only in vim style, and only when the keys are commands: in notepad
     // style `?` is a character, and so it is in the middle of a word.
-    // `e.key` で当てるだけでは足りない ── 日本語キーボードでは同じ刻印が
+    // `e.key` で当てるだけでは足りない。日本語キーボードでは同じ刻印が
     // 違う `key` で届きうるし、IME が拾っている間は `Process` になる。
     // `?` は JIS でも US でも `Slash` の位置なので、物理キーでも受ける。
     if ((e.key === '?' || (e.code === 'Slash' && e.shiftKey))
@@ -7723,7 +7723,7 @@ let aiWaiting = null;
 /// 右クリックから選んだときは、**やりたいことを先に訊く。**
 ///
 /// メニューの行は `cmdAiCmd('')` を呼んでいて、エンジンが「やりたいことを
-/// 書いてください」と断る一行が状態行に出るだけだった ── 窓が開かないので、
+/// 書いてください」と断る一行が状態行に出るだけだった。窓が開かないので、
 /// 選んでも**何も起きないように見える**（2026-11-27、本人が会社で）。
 /// 端末版は同じ項目で入力窓を開く（`MenuItem::AiShellCmd` →
 /// `start_ai_shell_prompt`）。`:aicmd` はパレットでも引数が必須で、
@@ -8340,7 +8340,7 @@ async function transfer() {
     const r = await ask('transfer', { pane: which });
     running = null;
     // **`prog` は状態、`el.prog` が窓。** ここは状態だけを畳んで `drawProg()` を
-    // 呼んでおらず、転送が終わっても窓が「100%」のまま残っていた ── そして
+    // 呼んでおらず、転送が終わっても窓が「100%」のまま残っていた。そして
     // ウィンドウ版のハンドラは `running` が空になると何も報告しないので、Esc も b も後ろの一覧へ
     // 抜けていた（Esc で接続が切れる）。ほかの2か所は呼んでいる
     // （crmaine の紹介動画、2026-09-23）。
@@ -8498,11 +8498,11 @@ let innerBlockMapped = false;
 /// **Monaco は6カーソルの挿入を1つの変更として届ける。** monaco-vim は最初の
 /// 1つを記録したら残りを読み飛ばす仕掛け（`ignoreCount`）を持っていて、届く数が
 /// 足りないので**引かれないまま残る**。残った数だけ、その後の打鍵が記録から
-/// 消える ── 矩形で6行に足した後にマクロを録ると、` // NOT NULL` が
+/// 消える。矩形で6行に足した後にマクロを録ると、` // NOT NULL` が
 /// `OT NULL` になった（crmaine の紹介動画、2026-09-23）。同じ挿入の中でも
 /// 起きて、矩形で `XY` と入れた後の `.` は `X` しか繰り返さなかった。
 ///
-/// 前提が成り立たない以上、数える仕掛けごと止めるのが正しい ── 常に 0 を返し、
+/// 前提が成り立たない以上、数える仕掛けごと止めるのが正しい。常に 0 を返し、
 /// 書き込みは捨てる。読み飛ばしはもともと Monaco では要らない（1つしか来ない）。
 function neutraliseIgnoreCount() {
     // eslint-disable-next-line no-undef
@@ -8552,7 +8552,7 @@ function noteVimMode(e, ed = viewer.ed) {
     if (!model || !e) return;
     const now = model.getAlternativeVersionId();
     const inserting = e.mode === 'insert' || e.mode === 'replace';
-    // 挿入に入るたびに見る ── `resetVimGlobalState_` で箱が作り直されたときも、
+    // 挿入に入るたびに見る。`resetVimGlobalState_` で箱が作り直されたときも、
     // 次の挿入で掛け直る（`neutraliseIgnoreCount` の註）。
     if (inserting) neutraliseIgnoreCount();
     if (inserting && !vimInsert) {
@@ -8563,14 +8563,14 @@ function noteVimMode(e, ed = viewer.ed) {
     }
     // **挿入を抜けたら手を区切る。** vim ではそこで1つの変更が終わる。区切らない
     // と、次の変更の「消す」がこの挿入の「打つ」と同じ手に混ざり、`u` を重ねても
-    // 「この挿入の後」の版を一度も通らない ── 止まる場所を見失って、仕込みより
+    // 「この挿入の後」の版を一度も通らない。止まる場所を見失って、仕込みより
     // 前まで戻った（一周の⑦、2026-09-22）。
     if (!inserting && vimInsert) ed.pushUndoStop();
     vimInsert = inserting;
 }
 
 /// 履歴に記録されている手なら、`to` の版になるまで Monaco の手を重ねて戻す／進める。
-/// 版が動かなくなったら止まる ── 山が尽きたのに回り続けないように。
+/// 版が動かなくなったら止まる。山が尽きたのに回り続けないように。
 ///
 /// **行き過ぎない。** 版の番号は新しい状態ほど大きく、取り消すと小さくなる。
 /// だから取り消しは「目標以下になったら止まる」で、下回っていたら1手だけ
@@ -8595,7 +8595,7 @@ function vimStepTo(to, how, ed = viewer.ed) {
 /// の中で `ci{` を打つと `joined() {X}` になる。本物の vim（9.1 で確かめた）は
 /// `{` と `}` を元の行に残し、間の1行に打つ（crmaine の紹介動画、2026-09-22）。
 /// monaco-vim の内側は「開きの直後から閉じの手前まで」で、開きが行末にあると
-/// 行末の改行から始まる ── それが括弧をつなげていた。
+/// 行末の改行から始まる。それが括弧をつなげていた。
 ///
 /// 手順は vim の `current_block`（textobject.c）そのまま:
 ///
@@ -8671,7 +8671,7 @@ function innerBlock(cm, head, motionArgs, vim) {
 /// **monaco-vim は `t` を持っているのに、効かなかった。** 探すのを CodeMirror の
 /// xml-fold（`findMatchingTag` / `findEnclosingTag`）に任せていて、Monaco の上
 /// にはそれが無い。無いと長さ0の範囲が返り、`cit` は「カーソルの位置で挿入に
-/// 入る」だけになる ── **中身が消えず、打った字がそこに入る**。crmaine の紹介
+/// 入る」だけになる。**中身が消えず、打った字がそこに入る**。crmaine の紹介
 /// 動画を撮っていて見つかった（2026-09-22）。`ci{` や `ci"` は別の道で
 /// 探しているので効いていて、仕組みが無いのではなく、ここだけ空だった。
 ///
@@ -8750,7 +8750,7 @@ async function filterThroughShell(cmd, from, to) {
     let hi = Math.max(lo, Math.min(to ?? from, last));
     // **ファイル末尾の改行は「行」ではない。** Monaco は "a\nb\n" を3行
     // （a, b, ""）として持つので、`%` の範囲をそのまま送ると空行が1つ混ざり、
-    // `sort` がそれを先頭に持ってくる ── 実機で先頭に空行が生えた。vim が
+    // `sort` がそれを先頭に持ってくる。実機で先頭に空行が生えた。vim が
     // `%` を「3行」ではなく「2行」と読むのと同じ理由で、末尾の空行は外す。
     if (hi === last && hi > lo && model.getLineContent(hi) === '') hi -= 1;
     const lines = [];
@@ -8795,7 +8795,7 @@ async function cmdSvn(what) {
     // **git の中では、無いのではなく入れていない。** エンジンは「svn の作業
     // コピーではありません」としか言えず、それだと忘れられているのか断られて
     // いるのかが分からない。端末版はここで理由を言う（gitui.rs `svn_update`）
-    // ので、窓も同じことを言う ── `:update` と `:resolve` は svn 専用だと
+    // ので、窓も同じことを言う。`:update` と `:resolve` は svn 専用だと
     // 決めたのであって、作り忘れではない。
     if ((what === 'update' || what === 'resolve')
         && repo[state.focus] && repo[state.focus].v && repo[state.focus].v.kind === 'git') {
@@ -8899,7 +8899,7 @@ async function completeCmdLine() {
 
     let hits;
     if (!before.trim()) {
-        // 別名も候補に。**打てば動くものは、Tab で書けるべき**だ ── 窓版で
+        // 別名も候補に。**打てば動くものは、Tab で書けるべき**だ。窓版で
         // 重複検出の本名は `dup` で `duplicate` は別名、端末版はその逆で、
         // 名前だけ見ていると同じ `dupli` が前端によって当たったり外れたりする。
         hits = commands()
@@ -8995,7 +8995,7 @@ async function runCommand(cmd, arg, invokedAs) {
 /// `C` — every command, fuzzy.
 function openPalette() {
     // **使うときだけ生えてくる。** `cian.ai{}` を書いていない機械では、一覧の
-    // 先頭に AI が並んでいた ── いちばんよく開く窓の、いちばん上に、その機械では
+    // 先頭に AI が並んでいた。いちばんよく開く窓の、いちばん上に、その機械では
     // 何もできないものが（2026-09-20）。打てば今までどおり「未設定です」と
     // 答えるので、道は塞いでいない。`hidden` は `:ai` の引数に畳んだ古い名前。
     const rows = commands()
@@ -9659,7 +9659,7 @@ async function saveReport(title) {
 /// it in one window and typing in another is how the wrong half gets edited.
 const pair = { on: false, ed: null, vims: null, base: null };
 
-/// 並べた画面に、保存していない編集があるか。版の番号で見る ── 取り消して
+/// 並べた画面に、保存していない編集があるか。版の番号で見る。取り消して
 /// 元に戻したなら、編集は無かったことになる（ふつうのエディタと同じ規則）。
 function pairDirty() {
     if (!pair.on || !pair.ed || !pair.base) return false;
@@ -9668,7 +9668,7 @@ function pairDirty() {
         || m.modified.getAlternativeVersionId() !== pair.base[1];
 }
 
-/// いま比べている最中か ── 落とした複製を、いつ消してよいかの目印。
+/// いま比べている最中か。落とした複製を、いつ消してよいかの目印。
 let comparing = false;
 
 async function cmdDiffEdit(agreed = false) {
@@ -9729,12 +9729,12 @@ async function cmdDiffEdit(agreed = false) {
     const m = pair.ed.getModel();
     pair.base = [m.original.getAlternativeVersionId(), m.modified.getAlternativeVersionId()];
     // **左右とも、ふつうのエディタと同じ手で。** これまでは素の Monaco で、
-    // vim の流儀でも vim のキーが無く、焦点もどこにも無かった ── 開いた直後に
+    // vim の流儀でも vim のキーが無く、焦点もどこにも無かった。開いた直後に
     // 打った `$ b ciw` は後ろへ抜けていた（crmaine の紹介動画、2026-09-23）。
     const sides = [pair.ed.getOriginalEditor(), pair.ed.getModifiedEditor()];
     for (const ed of sides) ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveFile());
     if (STYLES[style][0] === 'vim') {
-        // 状態行は左右に1つずつ ── monaco-vim は渡された要素に自分の欄を
+        // 状態行は左右に1つずつ。monaco-vim は渡された要素に自分の欄を
         // 足していくので、共有すると2つのモード表示と2つの `:` が混ざる。
         // 差分送りの案内は上の行へ移す。
         el.vAbout.textContent = tr('both sides are editable. Ctrl+S or :w saves both   ·   F7 / Shift+F7 differences   ·   Esc in normal mode closes',
@@ -9742,7 +9742,7 @@ async function cmdDiffEdit(agreed = false) {
         el.vFoot.textContent = '';
         // 隠されたままのことがある（`setStyle` の註）。並べた画面の状態行は
         // この中に作るので、隠れていると `:` の欄に焦点が渡らず、`:w` が
-        // 打てなかった ── 一周でだけ落ちて、そこで見つかった。
+        // 打てなかった。一周でだけ落ちて、そこで見つかった。
         el.vFoot.style.display = '';
         armVimGrammar();
         pair.vims = sides.map((ed) => {
@@ -10398,7 +10398,7 @@ function cmdPaneTheme() {
 /// code point, so a table that drifts fails `cargo test`.
 ///
 /// 詰め方は `始まりの間隔.長さ` を 16 進で並べたもの。前の範囲の終わりから
-/// 何個あけて始まるか、そこから何個続くか ── 521 個の範囲が 2.4KB で入る。
+/// 何個あけて始まるか、そこから何個続くか。521 個の範囲が 2.4KB で入る。
 const W_ZERO = unpackWidths(
     '0.1f 5f.20 d.0 252.6f 113.6 107.2c 1.0 1.1 1.1 1.0 3d.0 a.a 1.0 2e.14 10.0 65.6 2.5 2.1 1.3 21.0 '
     + '1.0 1e.1a 5b.a 3a.8 9.0 18.3 1.8 1.2 1.4 2b.2 34.1 5.8 2a.38 37.0 1.0 4.7 4.0 3.6 a.1 1d.0 3a.0 '
@@ -10787,7 +10787,7 @@ document.addEventListener('keydown', (e) => {
 /// **横取りするのは、何も打ちかけていないときだけ。** `ru` は「u に置き換え」、
 /// `fu` は「u を探す」、`2u` は「2手戻す」で、どれも monaco-vim に任せる。
 /// ビジュアルの `u` は小文字にする命令なので、これも触らない。履歴に無い手
-/// （`x` や `dd`）も触らない ── もともと1手だ。
+/// （`x` や `dd`）も触らない。もともと1手だ。
 ///
 /// document の capture で受けるのは、Monaco の textarea より先に見るため
 /// （その前に版を控えないと、挿入に入った手の「前」が分からない）。
@@ -11199,7 +11199,7 @@ async function cmdState(arg = '') {
         rows.push({
             label: f.name,
             // 文の組み立てを `tr()` の中で終わらせる。外で足すと、`i18n.py` が
-            // 「日本語だけの断片が地の文に混ざっている」と読む ── 実際そう
+            // 「日本語だけの断片が地の文に混ざっている」と読む。実際そう
             // 見えるのは正しくて、訳す単位は行のほうだ。
             sub: f.path
                 ? tr(`${f.path}${f.present ? '' : '   (not present)'}`,
@@ -11262,7 +11262,7 @@ async function cmdEditorTab(_arg, invokedAs) {
     if (!row || row.parent || row.is_dir) { say(tr('choose a file first', 'ファイルを選んでください'), true); return; }
     const want = invokedAs && invokedAs !== 'vi' ? invokedAs : 'vi';
     // **PATH に無くても、隣に置いてあれば使う。** 会社の Windows には vim が
-    // 入っておらず入れることもできない ── ここまでは `vim %f` をそのまま
+    // 入っておらず入れることもできない。ここまでは `vim %f` をそのまま
     // シェルに打っていたので、そういう機械では `command not found` で
     // 終わっていた。どれを起動するかは engine が答える（`cian_core::editor`、
     // 端末版と同じ1か所）。括りも向こうで済んでいる。
@@ -11302,7 +11302,7 @@ async function cmdScratch() {
         monaco = await loadMonaco();
     } catch (e) { say(e.message, true); return; }
     if (viewer.on) await closeView(false);
-    // 下書きも一覧のあった場所に嵌まる ── 端末版の空ファイルと同じ
+    // 下書きも一覧のあった場所に嵌まる。端末版の空ファイルと同じ
     // （viewer.rs:4801「Docked where you were, like anything else opened
     // from a listing」）。
     setViewerOn(true, dockForOpen());
@@ -11355,7 +11355,7 @@ async function cmdLimit(spec) {
 /// 届かない機械では git にコミットできない**。svn の側には最初から素のコミットが
 /// あって（`cmdSvn('commit')`）、git にだけ無かった。
 ///
-/// 訊き方も svn のコミットと同じにしてある ── 同じことをする2つの入口が違う
+/// 訊き方も svn のコミットと同じにしてある。同じことをする2つの入口が違う
 /// 訊き方をすると、どちらを使っているのか分からなくなる。
 /// `:commit` — 一語で両方。どちらのリポジトリかはディレクトリが知っている。
 ///
@@ -11774,7 +11774,7 @@ function placeGrips() {
     el.gripPanes.style.left = `${left.right - 4}px`;
     // **広げているあいだは、境界を掴めない。**
     //
-    // F12 で1つのペインがウィンドウを埋めているとき、動かす境界はもう画面に無い ── それでも
+    // F12 で1つのペインがウィンドウを埋めているとき、動かす境界はもう画面に無い。それでも
     // 掴めたままで、シェルを広げると `#panes` は `display: none` なのに、その
     // 上を縦の掴み手が横切っていた（2026-09-14、実機）。見えない境界を
     // 動かすと、戻したときに知らない割り方になっている。
@@ -12137,7 +12137,7 @@ function drawShell(screen, into) {
         term.rows = screen.rows;
         term.cols = screen.cols;
         // エンジンが言った最後のカーソルの**桁**。画面に出ている位置と
-        // 突き合わせられるように残す ── 桁と字数の取り違えは目では言えず、
+        // 突き合わせられるように残す。桁と字数の取り違えは目では言えず、
         // `drive.js` が「`.cur` の手前の桁数がこれと同じか」で見る。
         term.at = { row: screen.cursor.row, col: screen.cursor.col };
         // The tab strip, spelled the way the terminal build spells it, and
@@ -12173,7 +12173,7 @@ function drawShell(screen, into) {
         // **桁で数える、字数ではなく。** エンジンは端末の桁で数えていて
         // （全角は2桁、続きのセルは飛ばす）、カーソルの位置も桁で来る。ここが
         // `text.length`（UTF-16 の単位）で歩いていたので、行に全角があると
-        // その字数ぶんカーソルが右へずれた ── 日本語を含むパスを貼り付けると
+        // その字数ぶんカーソルが右へずれた。日本語を含むパスを貼り付けると
         // 目に見えてずれる（2026-09-15、実機）。`cellWidth` は端末版の
         // `unicode-width` に当たるもので、この窓ではもう1か所で使っている。
         let col = 0;
@@ -12205,7 +12205,7 @@ function drawShell(screen, into) {
         }
         if (!div.childNodes.length) div.append(document.createTextNode(' '));
         // **この行は折り返しの続きか。** 画面の行は桁で切った升目で、長い1行は
-        // 何行にもなって並ぶ ── 印が無いと、ここから拾った文字列は画面の桁で
+        // 何行にもなって並ぶ。印が無いと、ここから拾った文字列は画面の桁で
         // 切られた形になる（`shellSelectionText` が読む）。
         if (screen.wrapped && screen.wrapped[row]) div.dataset.wrap = '1';
         frag.append(div);
@@ -12246,7 +12246,7 @@ function shellBytes(e) {
     // `Backquote` の位置にあり、`key` は環境によって `Zenkaku` だったり
     // `Process` だったり `Unidentified` だったりする。Alt+` も、JIS では
     // バッククォート自体が別の位置にあるので `key === '`'` で待っていても
-    // 来ない。**物理位置で見る** ── ただし修飾なしの `Backquote` は US 配列で
+    // 来ない。**物理位置で見る。** ただし修飾なしの `Backquote` は US 配列で
     // ただのバッククォートなので、決して飲み込まない。
     const imeNamed = ['Zenkaku', 'Hankaku', 'ZenkakuHankaku', 'KanjiMode',
                       'Convert', 'NonConvert', 'Eisu', 'Kana', 'KanaMode'];
@@ -12291,10 +12291,10 @@ document.addEventListener('mouseup', () => {
 /// シェルで選んだところを、**画面の形ではなく元の文**にして返す。
 ///
 /// 端末の画面は桁で区切った升目なので、`selection.toString()` は見たままを
-/// 返す ── 長い1行は画面の桁で切られ、改行が挿し込まれ、短い行は右端まで
+/// 返す。長い1行は画面の桁で切られ、改行が挿し込まれ、短い行は右端まで
 /// 空白で埋まっている。実機で測ると、600 字の1行が `[149,149,149,149,4]` の
 /// 5つに割れて戻った（2026-10-17）。字は1つも失われていないが、拾った道や
-/// SQL を他所へ貼ると切れた形で届く ── 「コピーすると文字がロストする」の
+/// SQL を他所へ貼ると切れた形で届く。「コピーすると文字がロストする」の
 /// 正体はこれだった。
 ///
 /// 直し方は端末が昔からやっていることと同じ: **折り返しの続きは改行なしで
@@ -12323,7 +12323,7 @@ function shellSelectionText() {
         if (range.compareBoundaryPoints(Range.END_TO_END, part) < 0) {
             part.setEnd(range.endContainer, range.endOffset);
         }
-        // 折り返している行は右端まで中身なので、空白を落とさない ── 落とすと、
+        // 折り返している行は右端まで中身なので、空白を落とさない。落とすと、
         // 続きとつないだ境目で本物の空白が消える。
         const wrap = div.dataset.wrap === '1';
         out.push({ text: wrap ? part.toString() : part.toString().replace(/[ \t]+$/, ''), wrap });
@@ -12367,7 +12367,7 @@ function shellCopy() {
     const text = shellSelectionText();
     if (!text) {
         say(tr('nothing selected — drag to select, or use the menu to interrupt',
-               '選択がありません ── ドラッグで選ぶか、メニューから中断できます'), true);
+               '選択がありません。ドラッグで選ぶか、メニューから中断できます'), true);
         return;
     }
     navigator.clipboard.writeText(text);
@@ -12482,7 +12482,7 @@ document.addEventListener('keydown', (e) => {
         return;
     }
     // **F11 も窓の話。** F12 はここに書いてあったのに F11 は無く、シェルに
-    // キーがあるあいだ全画面にできなかった ── そのまま子プロセスへ流れて
+    // キーがあるあいだ全画面にできなかった。そのまま子プロセスへ流れて
     // いた（2026-09-14、実機）。窓そのものを動かすキーは、どちらのペインに
     // キーがあっても同じように効く、が筋。
     if (e.key === 'F11') {
@@ -12969,7 +12969,7 @@ async function recall() {
     // on a keystroke, and a row that appears a moment after the menu does is
     // worse than one that never appears.
     // `cian.set_option("tab_width", n)`。**端末版は `viewer::set_tab_width`
-    // でずっと効いていて、窓版は受け取って捨てていた** ── Monaco の既定の 4
+    // でずっと効いていて、窓版は受け取って捨てていた。** Monaco の既定の 4
     // のまま。開いているものにも、次に開くものにも当てる。
     if (Number.isFinite(c.tab_width) && c.tab_width > 0) {
         cfg.tabWidth = c.tab_width;
@@ -13024,7 +13024,7 @@ el.gripMain.addEventListener('mousedown', (e) => startGripDrag('main', e));
 // 混ざると「例外 0 件」という基準が当てにならなくなる）。
 //
 // **`Canceled` という名前のものだけ**を対象から外す。ほかの拒否は今までどおり
-// 表に出す ── ここを広く取ると、本物の失敗が一緒に消える。
+// 表に出す。ここを広く取ると、本物の失敗が一緒に消える。
 window.addEventListener('unhandledrejection', (e) => {
     if (e.reason && (e.reason.name === 'Canceled' || e.reason.message === 'Canceled')) {
         e.preventDefault();

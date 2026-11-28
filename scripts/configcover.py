@@ -4,13 +4,13 @@
 **cian でいちばんよく出るバグに、測定方法だけが無かった。**
 
 「設定を直したのに効かない」は cian の最頻のバグで、renderer.js には
-その顛末が書いてある ── *the window was ignoring seventeen of the twenty
+その顛末が書いてある。*the window was ignoring seventeen of the twenty
 settings cian-tui reads — silently, which is the worst way to ignore a config*。
 17 個は直った。**そして 2026-09-06 に、同じものが3つ残っていた**
 （`tab_width` `editor` `home`）。エンジンは送っていて、窓版は一度も読んで
 いなかった。
 
-メッセージを出さずに失敗するので、動かして気づくことはない ── `cargo test` も `drive.js` も
+メッセージを出さずに失敗するので、動かして気づくことはない。`cargo test` も `drive.js` も
 `audit.py` も、**送られてきた値を誰も読まないこと**は見ていない。だから数える。
 
     python3 scripts/configcover.py          # 被覆
@@ -24,7 +24,7 @@ settings cian-tui reads — silently, which is the worst way to ignore a config*
   `c`）と、`cfg.<名前>`（menu の出し分けに使う保存先）
 
 **下限を書いてある。** `keycover.py` は窓版を `tr()` に通した回に 72 → 2 種へ
-落ちたまま百分率を出し続けた。数を数える検査には下限が要る ── 送る側の名前が
+落ちたまま百分率を出し続けた。数を数える検査には下限が要る。送る側の名前が
 1つも拾えなくなったら、それは「全部読まれている」ではなく「読めていない」。
 """
 
@@ -41,7 +41,7 @@ RENDERER = ROOT / "gui" / "renderer.js"
 # **窓版が読まなくて正しいもの。**
 #
 # 免除は「窓が読み忘れている」ではなく「**エンジンが自分で使う**」という判断。
-# だから**裏を取る** ── ここに名前を書くだけでは通らず、エンジンの中に
+# だから**裏を取る。** ここに名前を書くだけでは通らず、エンジンの中に
 # `options.<名前>` が実在しなければ検査が落ちる。免除の一覧が、直さない
 # ための置き場になるのを防ぐ唯一の方法。
 ENGINE_SIDE = {
@@ -113,7 +113,7 @@ def reads() -> set[str]:
     """窓版が実際に触っている名前。
 
     `c.foo`（`const c = s.cfg` を受けた側）と `cfg.foo`（保存しておく側）の
-    両方。**綴りで拾う** ── 使われ方まで見ようとすると、この検査そのものが
+    両方。**綴りで拾う。** 使われ方まで見ようとすると、この検査そのものが
     信用できない大きさになる。
     """
     src = RENDERER.read_text(encoding="utf-8")
@@ -136,7 +136,7 @@ def main() -> int:
     unbacked = [n for n in ENGINE_SIDE if n not in used]
     if unbacked:
         print(f"！ 免除に書いてあるのにエンジンが使っていません: {', '.join(unbacked)}")
-        print(f"   {ENGINE.name} に `options.<名前>` がありません ──"
+        print(f"   {ENGINE.name} に `options.<名前>` がありません。"
               " 免除は「エンジンが使う」という主張なので、使っていないなら免除ではない")
         return 1
 

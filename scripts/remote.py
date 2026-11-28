@@ -16,7 +16,7 @@
   * `/usr/sbin/sshd` を自分の権限で起動する
   * `cian-server` を繋いで、実際にファイルが動いたかを**サーバ側の実体で**見る
 
-これを立てた日に、**素通りしていた不具合が1つ出た** ── ローカルペインから
+これを立てた日に、**素通りしていた不具合が1つ出た。** ローカルペインから
 リモートペインへの `c` が、ローカルにコピーして「1件コピーしました」と言って
 いた。リモートペインの `cwd` は接続前のディレクトリのままなので、行き先が
 手元の適当な場所になっていた。画面には何も出ない。
@@ -137,7 +137,7 @@ class Engine:
     """`cian-server` を1本、stdin/stdout で叩く。
 
     **読み取りは専用スレッドで、`select` は使わない。** 最初は select で待って
-    いて、転送は成功しているのに `done` が来ない ── と3回報告した。届いていた。
+    いて、転送は成功しているのに `done` が来ない。と3回報告した。届いていた。
     Python の `readline` はバッファで読むので、`call` が返事を読んだときに次の
     行まで一緒に取り込んでいて、その行はもうカーネルには無い。`select` は
     「読むものは無い」と答え、こちらは「エンジンが何も返さない」と読んだ。
@@ -226,7 +226,7 @@ class Engine:
         **エンジンは要求を1本ずつ処理する。** 握手を要求の処理の中でやると、
         応答しない相手に当たったとき窓全体が 20 秒止まる。要求は操作番号を
         すぐ返し、繋がったら `connected` の知らせが来て、`connectdone` が
-        ペインに入れる ── 窓も同じ順で呼ぶ。
+        ペインに入れる。窓も同じ順で呼ぶ。
         """
         pane = params.get("pane", "left")
         started = self.call("connect", **params)
@@ -242,7 +242,7 @@ class Engine:
     def wait_done(self, secs=15.0):
         """転送は worker で走る。`done` が来るまで待つ。
 
-        先に貯まっている分を見てから待つ ── 速い転送は、次の要求の返事を待って
+        先に貯まっている分を見てから待つ。速い転送は、次の要求の返事を待って
         いる間に終わっていて、`call` がもう拾っている。
         """
         for d in self.events:
@@ -389,7 +389,7 @@ def main():
         check("断られたら need_password", nope.get("need_password"), True)
         check("どの鍵かを言う", nope.get("key"), other)
         check("繋いだことにはしない", nope.get("pane"), None)
-        # 足場を戻す ── 下の検査は右が繋がっている前提に乗っている。
+        # 足場を戻す。下の検査は右が繋がっている前提に乗っている。
         connect("right", root)
 
         print("ローカル → サーバ")
@@ -457,7 +457,7 @@ def main():
               os.path.exists(os.path.join(local, "proj", "src", "deep", "x.rs")), True)
 
         print("サーバ → サーバ（コピーは中継）")
-        # 両ペインとも繋ぎ直す ── 上のディレクトリの検査で左は手元に戻して
+        # 両ペインとも繋ぎ直す。上のディレクトリの検査で左は手元に戻して
         # いる。**足場の前提は毎回書き直すこと**：直前の検査が置いていった
         # 状態に乗ると、検査は通ったり落ちたりするだけで何も言わなくなる。
         connect("left", os.path.join(root, "sub"))
@@ -494,7 +494,7 @@ def main():
         # **カーソルは窓と同じ形で送る。** `remoteview` はマークではなく
         # カーソルの行を開く（`selected()`）。窓版は `ask()` が毎回
         # `cursors: {left, right}` を載せているので、足場も同じにしないと
-        # 「エンジンが違う行を開く」と読めてしまう ── 一度そう読んだ。
+        # 「エンジンが違う行を開く」と読めてしまう。一度そう読んだ。
         v = e.call("remotelist", pane="right", path=root)
         rows = [x["name"] for x in v["pane"]["entries"]]
         at = rows.index("one.txt")
@@ -533,12 +533,12 @@ def main():
         r = e.call("twofiles", cursors=at)
         check("サーバ側の中身が読めた", r["right"]["lines"], ["changed"])
         # **自分が起こしたエンジンの置き場だけを見る。** 一時領域には別の
-        # エンジン（実機の cian や、前の走行）の置き場も並ぶ ── まとめて見ると、
+        # エンジン（実機の cian や、前の走行）の置き場も並ぶ。まとめて見ると、
         # 直っていても他人の置き土産で赤くなる。
         copies = glob.glob(os.path.join(tempfile.gettempdir(), f"cian-compare-{e.p.pid}", "*"))
         check("落とした複製が在る", len(copies) >= 1, True)
 
-        # 大きいものは落とさずに断る ── エディタの天井（8MB）を超えるものは、
+        # 大きいものは落とさずに断る。エディタの天井（8MB）を超えるものは、
         # 落としても開けない。落としてから断るのは待たせるだけだ。
         big = os.path.join(root, "big.bin")
         with open(big, "wb") as f:
@@ -559,7 +559,7 @@ def main():
         # 溜まり続けないための二重の備え ── 実機の一時領域に、サーバから
         # 落とした CSV が残っていた（2026-09-28、「2つは同一です」で終わった
         # ときに誰も消していなかった）。
-        # **別のファイルで比べ直す** ── 同じものだと同じ名前で落ち直すので、
+        # **別のファイルで比べ直す。** 同じものだと同じ名前で落ち直すので、
         # 道を見ても消えたかどうか分からない。
         open(os.path.join(root, "two.txt"), "w").write("two\n")
         v = e.call("remotelist", pane="right", path=root)
@@ -573,7 +573,7 @@ def main():
         after = set(glob.glob(os.path.join(tempfile.gettempdir(), f"cian-compare-{e.p.pid}", "*")))
         check("次の比較で前の複製が消えている", any("one.txt" in p for p in after), False)
 
-        # 閉じたら消す ── 大きさに関係なく、複製を残さない。
+        # 閉じたら消す。大きさに関係なく、複製を残さない。
         e.call("dropfetched")
         check("閉じたら複製が消える",
               glob.glob(os.path.join(tempfile.gettempdir(), f"cian-compare-{e.p.pid}", "*")), [])

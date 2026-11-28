@@ -64,7 +64,7 @@ def looks_like_path(tok: str) -> bool:
 
     **素のファイル名は場所を名乗っていません。** `keys.rs` は文中で短く呼ぶ
     ための書き方で、`init.lua` は利用者が作る設定なのでリポジトリにありません。
-    どちらも「ここに在る」と言っていないので、実在を確認しません ── 場所を
+    どちらも「ここに在る」と言っていないので、実在を確認しません。場所を
     名乗るなら `crates/cian-tui/src/keys.rs` の形で書いてください。
     """
     if tok.startswith(("http://", "https://")) or "/" not in tok:

@@ -350,7 +350,7 @@ impl Session {
     /// この時間を超えた要求だけを残します（ミリ秒）。
     ///
     /// 5秒は本人が待てると答えた上限で、検査が失敗と見なす値です。ここは
-    /// その手前に置きます ── 5秒だけを記録すると、4秒の要求が毎回あっても
+    /// その手前に置きます。5秒だけを記録すると、4秒の要求が毎回あっても
     /// 記録に出ず、**遅くなっていく過程が見えません。**
     const SLOW_MS: u128 = 1_000;
 
@@ -451,14 +451,14 @@ impl Session {
     /// files themselves.
     ///
     /// **比べる二つは、どちらも手元のものとして読んでいる。** サーバに繋いだ
-    /// ペインの道はサーバの中の道で、手元には無い ── 読もうとして
+    /// ペインの道はサーバの中の道で、手元には無い。読もうとして
     /// `stat /opt/…` が赤く出るだけだった（crmaine の紹介動画、2026-09-23）。
     /// 落としてから比べる道はまだ無いので、**何をすればいいかを言って断る**。
     /// 比べる側のファイルを、手元の道にして返す。
     ///
     /// サーバのペインなら**一時ファイルへ落として**その道を返し、どこから来たかを
     /// `fetched` に覚える（保存は上げ直し、閉じたら消す）。`ok` が立っていない
-    /// うちは、大きいものを通知なしに落とさない ── 先に訊くために `needs_ok` を返す。
+    /// うちは、大きいものを通知なしに落とさない。先に訊くために `needs_ok` を返す。
     fn here_or_fetched(&mut self, which: &str, ok: bool, ceiling: Option<u64>)
         -> anyhow::Result<Result<std::path::PathBuf, u64>> {
         let (path, name, is_dir) = self.selected(which)?;
@@ -485,7 +485,7 @@ impl Session {
         }
         let remote_path = path.display().to_string();
         // もう落としてあるなら、それを使う（`=` は compare の直後に twofiles を
-        // 呼ぶ ── 二度落とす理由が無い）。落とし直さないので、大きさの確認も
+        // 呼ぶ。二度落とす理由が無い）。落とし直さないので、大きさの確認も
         // もう一度は訊かない。
         if let Some(at) = self
             .fetched
@@ -672,10 +672,10 @@ impl Session {
     /// コマンドを**プロンプトを空にしてから**打ち込む。
     ///
     /// 書き込みはいまの行の後ろに足すので、打ちかけの字が残っていればその後ろに
-    /// 繋がる ── `clear` と打ったまま「右クリック ▸ SSH接続」を選ぶと
+    /// 繋がる。`clear` と打ったまま「右クリック ▸ SSH接続」を選ぶと
     /// `clearssh user@host` が走った（2026-11-27、本人が会社で。本物の pty で
     /// 再現した）。**コマンドを打ち込む道は全部ここを通す。** 貼り付けと生の
-    /// バイト（`shellinput`）は通さない ── あれは行を置き換える話ではない。
+    /// バイト（`shellinput`）は通さない。あれは行を置き換える話ではない。
     fn write_command(&mut self, line: &str) -> anyhow::Result<()> {
         let Some(sh) = self.shell_now() else {
             anyhow::bail!("シェルが開いていません");
@@ -1617,8 +1617,8 @@ impl Session {
                     anyhow::bail!("{ln} と {rn} は種類が違います");
                 }
                 // ディレクトリ同士はそのまま（サーバのものは `here_or_fetched`
-                // が断る ── 木を SFTP で歩くのは桁が違う）。**天井は両方に
-                // 掛ける** ── `=` は差分を取った後で並べる画面へ進むので、
+                // が断る。木を SFTP で歩くのは桁が違う）。**天井は両方に
+                // 掛ける。** `=` は差分を取った後で並べる画面へ進むので、
                 // 一覧のときだけ落とせても、そのあと必ず断られる。
                 let (lp, rp) = if ld {
                     self.both_sides_are_here("比べられません")?;
@@ -1748,7 +1748,7 @@ impl Session {
                 // **入れ替え（a↔b）を通すために、フォルダごとに二段で。**
                 //
                 // ここは1件ずつ `rename_in_place` を呼んでいて、`a → b` の
-                // 時点で `b` がまだ在るので断られた ── 断るのは正しい（以前は
+                // 時点で `b` がまだ在るので断られた。断るのは正しい（以前は
                 // 通知なしに上書きして片方が消えていた）が、一括では巡回を解く道が
                 // 要る。端末版は前から二段でやっていて、窓版だけ素朴な繰り返し
                 // だった（2026-10-30）。`ops::rename_batch` に出して両方から呼ぶ。
@@ -3179,7 +3179,7 @@ impl Session {
             // arrangement — everything downstream works on a path, and the
             // engine remembers where the copy came from so Ctrl+S can put it
             // back. A temporary that has forgotten its origin can only be lost.
-            // 比べるために落とした複製を片付ける。**閉じたら消す** ── 窓が
+            // 比べるために落とした複製を片付ける。**閉じたら消す。** 窓が
             // 並べた画パネルを閉じるとき、単体のリモート表示を閉じるときに呼ぶ。
             "dropfetched" => {
                 self.drop_fetched();
@@ -4136,7 +4136,7 @@ impl Session {
                             "label": { "en": f.label_en, "ja": f.label_ja },
                             "help": { "en": f.help_en, "ja": f.help_ja },
                             // **ファイルに実際に書いてある字面。** 読み込んだ
-                            // あとの値ではない ── そこには計算で埋めた既定が
+                            // あとの値ではない。そこには計算で埋めた既定が
                             // 混じっていて、何も書いていないのに「設定済み」
                             // と数えてしまう（crmaine が実機でそうなった）。
                             "written": cian_lua::settings_edit::get_option_in(&text, f.name),
@@ -4159,7 +4159,7 @@ impl Session {
                         })
                         .collect();
                 // **画面に出ないものは、無いことにされる。** cian が読む設定は
-                // `Options` の 20 個だけではない ── キー割当もブックマークも
+                // `Options` の 20 個だけではない。キー割当もブックマークも
                 // マクロもテーマもある。画面が一言も触れなければ「設定画面に
                 // 無い＝設定できない」と読まれるので、どこで直すかを出す。
                 // 実装とずれないよう `scripts/settingscover.py` が数える。
@@ -4183,7 +4183,7 @@ impl Session {
                     "elsewhere": elsewhere,
                     "exists": path.as_ref().map(|p| p.exists()).unwrap_or(false),
                     // Lua として読めないなら、その訳。**画面はこのとき保存
-                    // させない** ── 壊れたファイルを塗り潰すのが、設定画面の
+                    // させない。** 壊れたファイルを塗り潰すのが、設定画面の
                     // いちばん高い事故。
                     "error": bad,
                     "text": text,
@@ -4194,7 +4194,7 @@ impl Session {
             // ---- スニペット ----
             //
             // シェルへ送る一行に名前を付けたもの（`Ctrl+Shift+Enter` / `:snip`）。
-            // **同梱の見本に一行も無い** ── マニュアルは名前を挙げているのに
+            // **同梱の見本に一行も無い。** マニュアルは名前を挙げているのに
             // 書き方を知る道が無かったので、この画面がその穴を埋める側になる。
             //
             // 分割ファイルは無いので、置き場は `init.lua`。
@@ -4337,7 +4337,7 @@ impl Session {
                     let key = change["key"].as_str().filter(|k| !k.trim().is_empty());
                     // `cian.set_keymap` が受け取るのは「1文字」か「修飾+1文字」。
                     // 受け取らない綴りを書き込むと、起動時に苦情が出るだけで
-                    // **効かない設定**になる ── ここで断る。
+                    // **効かない設定**になる。ここで断る。
                     if let Some(k) = key {
                         let last = k.rsplit('+').next().unwrap_or("");
                         if last.chars().count() != 1 || k.ends_with('+') {
@@ -4360,7 +4360,7 @@ impl Session {
             }
             // ---- SSH ホスト ----
             //
-            // `cian.ssh{…}` は `init.lua` にも `ssh.lua` にも書ける ── cian は
+            // `cian.ssh{…}` は `init.lua` にも `ssh.lua` にも書ける。cian は
             // 後者を前者の直後に**同じ設定として**読む。だから設定画面が
             // いつも `init.lua` へ書くと、`ssh.lua` を使っている人に**二つ目の
             // 水源**ができる。規則は「いま有効なブロックがある方に書く」。
@@ -4387,7 +4387,7 @@ impl Session {
                                 "port": h.port,
                                 "notes": h.notes,
                                 // 字面のまま。画面は読めるように出すだけで
-                                // 書き換えない ── 鍵やパスワードの形が
+                                // 書き換えない。鍵やパスワードの形が
                                 // 畳まれて失われる。
                                 "users": h.users,
                             })
@@ -4483,7 +4483,7 @@ impl Session {
                     out = cian_lua::settings_edit::set_option_in(&out, name, lua.as_deref());
                 }
                 // AI のブロック。字面は画面が渡す型ではなく、ここで文字列と
-                // して包む ── endpoint も鍵も、Lua から見れば文字列。
+                // して包む。endpoint も鍵も、Lua から見れば文字列。
                 for change in req.params["ai"].as_array().cloned().unwrap_or_default() {
                     let Some(key) = change["key"].as_str() else { continue };
                     let lua = change["value"].as_str().and_then(|v| {
@@ -4694,7 +4694,7 @@ impl Session {
                 }
                 // **init.lua が先。** ここは `$VISUAL`/`$EDITOR` しか見て
                 // いなかったので、`cian.set_option("editor", "code")` は端末版
-                // でだけ効いていた ── 同じ設定で二つの前端が別のものを開く。
+                // でだけ効いていた。同じ設定で二つの前端が別のものを開く。
                 // 判断は `cian_core::editor`（端末版と同じ1か所）。
                 let cfg = cian_lua::load();
                 let words = cian_core::editor::resolve(cfg.options.editor.as_deref())
@@ -4941,7 +4941,7 @@ impl Session {
                 let dest_dir = std::path::PathBuf::from(req.params["dest"].as_str().unwrap_or(""));
                 let name = arg(req, "name");
                 // **断る理由を分けて言う。** 「正しくありません」は、空だった
-                // のか区切り文字が入っていたのかを言っていない ── 直すのに
+                // のか区切り文字が入っていたのかを言っていない。直すのに
                 // 要るのはそこ。どちらの言い方も、この前端に既にある
                 // （`名前を入れてください` / `名前に区切り文字は使えません`）。
                 if name.is_empty() {
@@ -5000,7 +5000,7 @@ impl Session {
                 let which = req.params["pane"].as_str().unwrap_or("left").to_string();
                 let name = arg(req, "name");
                 // **断る理由を分けて言う。** 「正しくありません」は、空だった
-                // のか区切り文字が入っていたのかを言っていない ── 直すのに
+                // のか区切り文字が入っていたのかを言っていない。直すのに
                 // 要るのはそこ。どちらの言い方も、この前端に既にある
                 // （`名前を入れてください` / `名前に区切り文字は使えません`）。
                 if name.is_empty() {
@@ -5544,7 +5544,7 @@ impl Session {
                 } else {
                     cian_core::inspect::End::Head
                 };
-                // 先頭だけ読む道でも、**開くところで止まります** ── 名前付き
+                // 先頭だけ読む道でも、**開くところで止まります。** 名前付き
                 // パイプは `File::open` が書く側を待ちます（所見 S12）。
                 if let Some(what) = cian_core::attrs::special(&path) {
                     return Err(special_refusal(&path, what));
@@ -6112,7 +6112,7 @@ impl Session {
                 pane.set_mask(spec);
                 self.view(&which)
             }
-            // `:mirror` の入り切り。状態はここ（engine）が持つ ── 両方のペインを
+            // `:mirror` の入り切り。状態はここ（engine）が持つ。両方のペインを
             // 持っているのはこちらで、窓は結果を描くだけ。
             "mirror" => {
                 self.mirror = !self.mirror;
@@ -6232,7 +6232,7 @@ fn big(name: &str, len: u64) -> serde_json::Value {
 /// 落ちた回の置き土産を掃く。
 ///
 /// **サーバから落とした複製は、一時領域に残ると中身の話になる。** ふつうは
-/// 閉じたときに消すが、エンジンが殺されたときは誰も消さない ── 置き場は
+/// 閉じたときに消すが、エンジンが殺されたときは誰も消さない。置き場は
 /// エンジンごと（`cian-compare-<pid>`）なので、**自分のものでなく、1時間以上
 /// 触られていないもの**だけを畳む。動いている別のエンジンの作業を取り上げない
 /// ための2条件だ。

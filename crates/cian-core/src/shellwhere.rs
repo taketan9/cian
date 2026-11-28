@@ -108,16 +108,16 @@ pub fn shell_looks_unix(screen: &str) -> Option<bool> {
 /// cian がシェルにコマンドを書くとき、プロンプトに**打ちかけの字が残っている**
 /// ことがある。書き込みはいまの行の後ろに足すので、`clear` と打って Enter を
 /// 押さないまま「右クリック ▸ SSH接続」を選ぶと、シェルは `clearssh user@host`
-/// を受け取って走らせる（本物の pty で再現した ── `zsh: command not found:
+/// を受け取って走らせる（本物の pty で再現した。`zsh: command not found:
 /// clearecho`）。**打ち込む側が、行を空にしてから書く。**
 ///
-/// `Ctrl+E` で行末へ、`Ctrl+U` で行頭まで削る ── readline（bash）・zle（zsh）・
+/// `Ctrl+E` で行末へ、`Ctrl+U` で行頭まで削る。readline（bash）・zle（zsh）・
 /// PSReadLine（PowerShell）のどれでも、この2つで行が空になる。`cmd.exe` だけは
 /// その2つを知らず、行を消すのは `Esc` なので分ける。
 ///
 /// **`Ctrl+C` にしていない。** どのシェルでも行を捨てられるが、前面で何かが
 /// 走っていればそれを殺す。行を削るバイトなら、走っているプログラムの標準入力へ
-/// 流れても何も壊さない ── 判定を外したときの被害が軽いほうを選ぶ。
+/// 流れても何も壊さない。判定を外したときの被害が軽いほうを選ぶ。
 ///
 /// `screen` は pty の見えている中身。`ssh` した先が Unix なら、手元の `cmd.exe`
 /// ではなく**向こうの shell が相手**なので、画面の判定を先に効かせる。
@@ -193,7 +193,7 @@ mod tests {
         // cmd.exe だけ Esc
         assert_eq!(line_clear("cmd.exe", None), esc);
         assert_eq!(line_clear("C:\\Windows\\System32\\cmd.exe", None), esc);
-        // **Ctrl+C は送らない** ── 前面のプログラムを殺さないため
+        // **Ctrl+C は送らない。** 前面のプログラムを殺さないため
         assert!(!line_clear("zsh", None).contains(&0x03));
         assert!(!line_clear("cmd.exe", None).contains(&0x03));
     }

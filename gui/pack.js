@@ -1,5 +1,5 @@
 /*
- * 配布物を組み立てる ── Electron 本体を同梱して、**exe をダブルクリックで
+ * 配布物を組み立てる。Electron 本体を同梱して、**exe をダブルクリックで
  * 起動する形**にする。
  *
  *   node gui/pack.js --out /tmp/dist                     … フル（初回配布用）
@@ -9,7 +9,7 @@
  *   node gui/pack.js --where                             … 何を入れるかだけ言う
  *
  * **なぜ electron-builder を使わないか。** crmaine が同じ判断をしていて、
- * 理由がそちらの `gui/pack.js` に書いてある ── 取得を伴うツールは途中で
+ * 理由がそちらの `gui/pack.js` に書いてある。取得を伴うツールは途中で
  * 落ちたときに中途半端な生成物を残し、**それが正常に見える**。ここは
  * コピーとリネームだけで作り、そのかわり**出口で必ず検証する**。
  *
@@ -23,7 +23,7 @@
  * **exe の隣に .lua を置かない。** cian は exe の隣の設定を読み書き両方で
  * 優先する（`config_write_path`）。同梱版では exe の隣は `resources/app/`
  * なので、そこに init.lua が1つ紛れると全員のしおりがそこへ保存されに行く。
- * 出口の検証がこれを見る ── 説明ではなく、機械で止める。
+ * 出口の検証がこれを見る。説明ではなく、機械で止める。
  * 設定は `~/.config/cian` に置かせる（crmaine が config.json でそうしている）。
  */
 const fs = require('fs');
@@ -119,7 +119,7 @@ function dirSize(dir) {
 }
 const mb = (n) => `${(n / 1048576).toFixed(0)} MB`;
 
-/// Electron の展開先を探す。**run.bat / run.sh と同じ順**にする ── 探す順が
+/// Electron の展開先を探す。**run.bat / run.sh と同じ順**にする。探す順が
 /// ツールごとに違うと、「どの Electron で動いたのか」が答えられなくなる。
 function findElectron(platform) {
     const given = arg('electron');
@@ -175,7 +175,7 @@ function checkEngine(platform) {
     // 「無い」とだけ言われた人は道を疑うが、答えは「隣に在る」だった。
     // 機械が知っていることを報告しないのがいちばん高くつく。
     if (fs.existsSync(`${at}.zip`)) {
-        console.error(`  ${path.basename(at)}.zip は在ります ── まだ展開していませんか`);
+        console.error(`  ${path.basename(at)}.zip は在ります。まだ展開していませんか`);
         console.error('  展開してできた .exe を渡してください。');
         process.exit(1);
     }
@@ -240,11 +240,11 @@ function checkOut(target, appDir, platform) {
                                           : path.join(target, `${NAME}.app`);
     if (!fs.existsSync(launcher)) bad.push(`${path.basename(launcher)} が無い`);
     // **Windows は vim も検証する。** 一式（`cian-src-win.zip`）には必ず
-    // 入っている ── 入っていなければ、`:vim` の効かない cian ができて、
+    // 入っている。入っていなければ、`:vim` の効かない cian ができて、
     // それは気づかれないまま出る。無い理由は「一式ではなく git の作業ツリーから
     // 叩いた」がほとんどなので、取り方をそのまま言う。
     if (platform === 'win32' && !fs.existsSync(path.join(target, 'vim'))) {
-        bad.push('vim/ が無い ── python3 scripts/fetch-vim.py で落とすか、cian-src-win.zip から組み立てる');
+        bad.push('vim/ が無い。python3 scripts/fetch-vim.py で落とすか、cian-src-win.zip から組み立てる');
     }
     // **エンジンが vim まで届く階にいること。**
     //
@@ -254,7 +254,7 @@ function checkOut(target, appDir, platform) {
     // なり、しかも zip は今までどおり出る。
     //
     // 数え方を Rust と揃えて書き写すと、片方を直したときに割れる。ここでは
-    // **構造のほう**を見る ── vim は `cian.exe` の隣、エンジンはその2階下。
+    // **構造のほう**を見る。vim は `cian.exe` の隣、エンジンはその2階下。
     // どちらかが動いたらここが失敗するので、そのとき Rust の上限を見直せばいい。
     if (platform === 'win32' && fs.existsSync(path.join(target, 'vim'))) {
         const rel = path.relative(target, appDir).split(path.sep).length;
@@ -281,7 +281,7 @@ function packWindows(target, dist) {
     fs.mkdirSync(target, { recursive: true });
     for (const name of fs.readdirSync(dist)) {
         if (name === 'resources') {
-            // 既定の app（default_app.asar）は入れない ── 残すと、こちらの
+            // 既定の app（default_app.asar）は入れない。残すと、こちらの
             // resources/app より先に読まれて Electron の案内画面が開く。
             for (const r of fs.readdirSync(path.join(dist, 'resources'))) {
                 if (r === 'app' || r === 'default_app.asar') continue;
@@ -303,14 +303,14 @@ function packWindows(target, dist) {
         console.log(`  + ${NAME}.exe`);
     }
     // **同梱の vim を cian.exe の隣へ。** 会社の Windows には vim が無く、
-    // 入れることもできない ── `:vim` がそこで止まっていた。cian は隣に
+    // 入れることもできない。`:vim` がそこで止まっていた。cian は隣に
     // 置いたものを使えるので（`editor::beside_exe`）、ここに写せば届く。
     //
     // `resources/app/` ではなく**いちばん上**に置く。人が自分で入れ替える
     // ときに見える場所であること、そして cian.exe の隣が portable-first の
     // 置き場所だからだ（エンジンは2階下にいるが、そこから上へ探している）。
     //
-    // Mac には要らない ── `/usr/bin/vim` が必ずある。
+    // Mac には要らない。`/usr/bin/vim` が必ずある。
     const vim = path.join(ROOT, 'vim');
     if (fs.existsSync(vim)) {
         copyDir(vim, path.join(target, 'vim'));
@@ -331,7 +331,7 @@ function dirSize(dir) {
 
 /// exe のアイコンは PE リソースなので、差し替えに `rcedit` が要る（GitHub の
 /// electron/rcedit のリリース資産、1MB ほどの単体 exe）。crmaine も同じツールで
-/// 焼いている。**無くても配布はできる** ── 窓とタスクバーは `main.js` の
+/// 焼いている。**無くても配布はできる。** 窓とタスクバーは `main.js` の
 /// `BrowserWindow` の icon で cian になり、エクスプローラ上の exe の絵だけが
 /// Electron のままになる。
 function burnIcon(target) {
@@ -398,7 +398,7 @@ function packMac(target, dist) {
 }
 
 /// その場で作った .app が「壊れている」と言われないための署名。配布用でも
-/// 公証でもない ── それには Apple の証明書が要る。**中身を全部置いたあとで
+/// 公証でもない。それには Apple の証明書が要る。**中身を全部置いたあとで
 /// 掛ける**（署名してから差し替えると、別のものを指す署名が残り、macOS は
 /// それを破損と読む）。`packaging/macos/bundle-gui.sh` が同じことをしている。
 function signMac(target) {
@@ -482,7 +482,7 @@ function main() {
     console.log(`cian ${version} を ${platform} 向けに組み立てます → ${target}`);
 
     if (appOnly) {
-        // 更新用。**Electron には触らない** ── 触らないから数十MB で済む。
+        // 更新用。**Electron には触らない。** 触らないから数十MB で済む。
         const appDir = platform === 'darwin'
             ? path.join(target, `${NAME}.app`, 'Contents', 'Resources', 'app')
             : path.join(target, 'resources', 'app');
@@ -526,7 +526,7 @@ function main() {
         fs.mkdirSync(path.dirname(d), { recursive: true });
         fs.copyFileSync(path.join(ROOT, from), d);
     }
-    // 共有マシン用の置き場。**空で入れる** ── ここに .lua を入れて配ると、
+    // 共有マシン用の置き場。**空で入れる。** ここに .lua を入れて配ると、
     // 初回だけ各人の ~/.config/cian に写される（写すのは main.js）。
     fs.mkdirSync(path.join(target, 'default-config'), { recursive: true });
     checkOut(target, appDir, platform);

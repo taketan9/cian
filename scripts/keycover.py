@@ -76,7 +76,7 @@ def documented() -> set[str]:
     for m in re.finditer(pattern, src):
         # `/` と `、` の両方で割る。ヘルプは「C 、Ctrl+Shift+P 、Ctrl+,」の
         # ように読点で三つ並べる書き方をしていて、そこを割らないと
-        # **その三つはどう押しても一致しない** ── 押していないのではなく、
+        # **その三つはどう押しても一致しない。** 押していないのではなく、
         # 数え方のせいで永久に未達だった。天井が誤っていると、割合も誤りになる。
         for part in re.split(r"\s*/\s*|\s*、\s*", m.group(1)):
             part = part.strip()
@@ -86,7 +86,7 @@ def documented() -> set[str]:
     if len(keys) < FLOOR:
         raise SystemExit(
             f"ヘルプから拾えたキーが {len(keys)} 種しかありません（下限 {FLOOR}）。\n"
-            "検査が壊れています ── ヘルプ行の書き方が変わったなら、"
+            "検査が壊れています。ヘルプ行の書き方が変わったなら、"
             "この正規表現を直してから数えてください。"
         )
     return keys
@@ -96,7 +96,7 @@ def driven() -> set[str]:
     """Every key gui/drive.js sends, in the spelling the help uses."""
     src = DRIVER.read_text(encoding="utf-8")
     sent: set[str] = set()
-    # 記号も拾う ── `Ctrl+]` や `Ctrl+,` は押しているのに、この正規表現が
+    # 記号も拾う。`Ctrl+]` や `Ctrl+,` は押しているのに、この正規表現が
     # 英字とF数字しか見ていなかったので「押していない」と数えられていた。
     token = (
         r"'((?:Ctrl\+|Shift\+|Alt\+|Mod\+)*"
@@ -130,7 +130,7 @@ def normalise(k: str) -> str:
 
 
 def main() -> int:
-    # 除外も綴りを揃えてから当てる ── `Esc ×3` と `Esc×3` が別物として
+    # 除外も綴りを揃えてから当てる。`Esc ×3` と `Esc×3` が別物として
     # 扱われて、除外したはずのものが未達に残っていた。
     skip = {normalise(k) for k in NOT_DRIVEN}
     want = {k for k in documented() if normalise(k) not in skip}

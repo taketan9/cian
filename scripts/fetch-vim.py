@@ -7,13 +7,13 @@
 資材に積むためのツールだ。
 
 `cian-src-win.zip` と `cian-source-offline.zip` の両方がこれを呼ぶ。
-**pwsh と bash で二度書かない** ── 片方を直したときに割れる。
+**pwsh と bash で二度書かない。** 片方を直したときに割れる。
 
 ## 何を残して、何を落とすか
 
 配布元の zip は gvim 込みで 20.6MB ある。cian が起動するのは**端末版の
 vim** だけで、GUI 版も右クリック拡張も要らない。`:help` と翻訳メッセージと
-綴り辞書も落とす ── 3つで 25MB あり、**無くても vim は動く**（`:help` が
+綴り辞書も落とす。3つで 25MB あり、**無くても vim は動く**（`:help` が
 「見つかりません」と言うだけ）。残るのは 8.3MB。
 
 落としたものが要るとわかったら、ここに足して数字を言い直す。**気づかれずに重く
@@ -22,7 +22,7 @@ vim** だけで、GUI 版も右クリック拡張も要らない。`:help` と�
 
 ## 版を上げるとき
 
-`VERSION` を書き換える。**ここでしか決めていない** ── 展開先の階の名前
+`VERSION` を書き換える。**ここでしか決めていない。** 展開先の階の名前
 （`vim92` など）は zip の中身そのままで、cian 側は名前で決め打ちせずに
 探している（`editor::vim_in`）ので、数字が上がっても実装は触らなくていい。
 """
@@ -35,8 +35,8 @@ import urllib.request
 import zipfile
 
 # **Windows の runner は stdout が cp1252 で、このツールの日本語が落ちる。**
-# 実際に v3.4.3 の梱包が1行目の print で転けた ── 落とす前に、言葉で。
-# 呼び出し側に `PYTHONIOENCODING` を立てさせない ── 次に別の場所から呼んだ
+# 実際に v3.4.3 の梱包が1行目の print で転けた。落とす前に、言葉で。
+# 呼び出し側に `PYTHONIOENCODING` を立てさせない。次に別の場所から呼んだ
 # ときに同じことが起きる。決めるのはここだ。
 for stream in (sys.stdout, sys.stderr):
     if hasattr(stream, "reconfigure"):
@@ -63,7 +63,7 @@ BINARIES = [
     "diff.exe",
 ]
 
-# ランタイム。**構文色分けとインデントはここにある** ── 落とすと vim は
+# ランタイム。**構文色分けとインデントはここにある。** 落とすと vim は
 # 動くが、白黒のメモ帳になる。vimmer に渡すものとしては意味が無い。
 RUNTIME_DIRS = [
     "syntax",
@@ -130,18 +130,18 @@ def main() -> int:
             total += info.file_size
 
     # **出口で検証する。** 落とし損ねても続くと、vim の入っていない zip が
-    # 気づかれないまま出る ── 気づくのは向こうの机の上になる。
+    # 気づかれないまま出る。気づくのは向こうの机の上になる。
     exe = None
     for root, _, files in os.walk(out):
         if "vim.exe" in files:
             exe = os.path.join(root, "vim.exe")
             break
     if exe is None:
-        print("vim.exe が残っていません ── 配布元の形が変わった可能性があります")
+        print("vim.exe が残っていません。配布元の形が変わった可能性があります")
         return 1
     for name in RUNTIME_DIRS:
         if not os.path.isdir(os.path.join(os.path.dirname(exe), name)):
-            print(f"{name}/ が残っていません ── 色分けの無い vim になります")
+            print(f"{name}/ が残っていません。色分けの無い vim になります")
             return 1
 
     print(f"  残した {kept} ファイル / {total / 1024 / 1024:.1f} MB")

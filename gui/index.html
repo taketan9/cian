@@ -200,7 +200,7 @@ html, body {
    on an 800px window left thirteen rows for a listing and three hundred
    pixels of empty terminal. */
 :root { --main-pct: 75%; --panes-pct: 50%; }
-/* キーの無いパネルの濃さ。ファイル一覧もシェルも同じ数を使う ── 「いまどこに
+/* キーの無いパネルの濃さ。ファイル一覧もシェルも同じ数を使う。「いまどこに
    いるか」は1つの問いで、答えがパネルごとに違う必要はない。 */
 :root { --off-tone: .45; }
 /* One hairline down the middle and nothing else. The listing is the window;
@@ -211,7 +211,7 @@ html, body {
    that key is Mission Control's. A hairline is not a target, so each handle
    is a few pixels of transparent hit area straddling the seam. */
 #grip-panes, #grip-main { position: fixed; z-index: 5; }
-/* パネルが嵌まっているあいだ、縦の境界はパネルの縁にある ── 掴み手（5）が
+/* パネルが嵌まっているあいだ、縦の境界はパネルの縁にある。掴み手（5）が
    パネル（10）の下だと、9px のうち半分がパネルに食われて、一覧側からしか
    掴めない。浮いているときは逆で、窓を覆うパネルの下に隠れているのが正しい
    （動かす境界が画面に無い）。**だから嵌まっているときだけ上げる。** */
@@ -348,7 +348,7 @@ html, body {
 }
 /* **サーバを見ているペインは、焦点があってもカーマイン。**
    上の焦点枠（3px・`z-index: 3`）が、`.pane.remote` の 2px のアウトラインを
-   完全に覆っていた ── リモートペインは「いま操作しているペイン」であることが
+   完全に覆っていた。リモートペインは「いま操作しているペイン」であることが
    ほとんどなので、実質いつもシアンに見えていた（2026-09-20、本人が実機で気づいた）。
    端末版は焦点に関わらずカーマインを描く（render.rs、`is_remote()` の分岐が
    焦点の分岐より後にある）。太さの差（3px か 2px か）が焦点を言い続けるので、
@@ -366,7 +366,7 @@ html, body {
 #work[data-mode="cmd"]     { --mode-accent: var(--m-command); }
 #work[data-mode="visual"]  { --mode-accent: var(--m-visual); }
 /* **シェルは金をやめた**（2026-09-06 の依頼 154）。「アクティブなパネルは
-   シアン」で、シェルパネルもパネルの1つ ── どちらに鍵があるかを言う色がパネルごとに
+   シアン」で、シェルパネルもパネルの1つ。どちらに鍵があるかを言う色がパネルごとに
    違うと、覚えることが1つ増えるだけになる。シェル用の上書きを1行まるごと
    落として、既定（`--cian`）に落ちるようにした。緑（検索）と紫（コマンド）は**何を
    しているか**を言う色なので、そちらは残す。 */
@@ -374,15 +374,15 @@ html, body {
    shade darker — the eye should land on the live one without being asked.
 
    **濃さは1か所で決める**（`--off-tone`）。パネルごとに数を書くと、片方だけ
-   直した日に「一覧は退くのにシェルは退かない」が生まれる ── 実際それが
+   直した日に「一覧は退くのにシェルは退かない」が生まれる。実際それが
    起きていて、シェルは焦点があってもなくても同じ色だった（本人、
    2026-10-06「アクティブパネルがどこか誤ってしまう」）。
    **0.62 → 0.45。** 一段落とした。これ以上暗くすると、反対の一覧を
-   読みながら作業する2画面ファイラの本分が削れる ── 退くのであって、
+   読みながら作業する2画面ファイラの本分が削れる。退くのであって、
    消えるのではない。 */
 /* **満額は、キーのあるパネルだけ。**
    最初はここが `.pane:not(.active)` だけで、シェルに移ったとき直前まで
-   操作していた一覧が満額のまま残った ── 枠はシェルを指しているのに、
+   操作していた一覧が満額のまま残った。枠はシェルを指しているのに、
    濃さは一覧を指す。実機で見つかった（本人、2026-10-06）。`.active` は
    「2つのうちどちらの一覧か」の答えで、「キーがそこにあるか」の答えでは
    ない。問いが2つあるのだから、条件も2つ要る。 */
@@ -401,7 +401,7 @@ html, body {
    carmine border for exactly this: the rows look like files, and mistaking
    somebody's server for your own disk is the one confusion worth spending a
    colour on. */
-/* `-3px`。焦点枠（3px）の枠線をちょうど外す ── `-2px` だと重なって、上に描かれる
+/* `-3px`。焦点枠（3px）の枠線をちょうど外す。`-2px` だと重なって、上に描かれる
    ほうに負ける（それが 2026-09-20 に「サーバの枠がシアン」になっていた正体だ）。
    色は `.pane.active.remote::after` でも直してあるので、これは二重の備え:
    どちらか片方が消えても、カーマインは残る。`.dropping` が最初から `-3px` な
@@ -409,7 +409,7 @@ html, body {
 /* **どちらの状態でも 3px。** リモートかどうかは「いまどちらのペインにいるか」
    とは無関係な事実なので、焦点で太さが変わるのは筋が通らない（本人、
    2026-09-23）。アクティブのときは焦点の枠（3px）がカーマインに染まるので、
-   内側の線は引っ込める ── 重ねると 6px になり、他のペインより太くなる。 */
+   内側の線は引っ込める。重ねると 6px になり、他のペインより太くなる。 */
 .pane.remote { outline: 3px solid var(--m-remote); outline-offset: -3px; }
 #work[data-focus="files"] .pane.active.remote { outline: none; }
 /* Where you are. The most-read line in a file manager, and it was set two
@@ -632,15 +632,15 @@ html, body {
    the editor should hide a list opened from inside it. */
 #view   { z-index: 10; }   /* a surface: it replaces the listing */
 #report { z-index: 11; }   /* a sheet: it is raised over whatever is beneath */
-/* 設定は、開いたら**それだけを表示する**パネル。エディタの上に出る ── エディタから
+/* 設定は、開いたら**それだけを表示する**パネル。エディタの上に出る。エディタから
    右クリックで開くことがあり、その回だけ裏に回るのではパネルが二つあるのと同じ。
    `#ask`（30）より下なのは、設定画面が出す確認に答える必要があるから。 */
 #settings { z-index: 13; }
 
-/* 設定画面。**分類ごとに畳む** ── 20 項目をフラットに並べない（crmaine は
+/* 設定画面。**分類ごとに畳む。** 20 項目をフラットに並べない（crmaine は
    45 項目でそれをやって、初めて使う人が上から順に読めなくなった）。 */
 /* **`min-height: 0` が要る。** 縦並びの flex では、子の最小の高さは中身の
-   大きさ（`auto`）なので、`overflow-y: auto` を付けても縮まない ── 本文が
+   大きさ（`auto`）なので、`overflow-y: auto` を付けても縮まない。本文が
    枠からあふれ、見出しの**下に潜って**スクロールした（実写: 「設定」と
    ファイルの説明が重なった）。`.vbody` の2行上に同じ註がある。 */
 #settings .sbody {
@@ -726,7 +726,7 @@ html, body {
   color: var(--text); white-space: pre-wrap;
 }
 #settings .sfoot { flex: 0 0 auto; }
-/* 保存が断られたときの一行。**色を持つ** ── 同じ場所に出る「◯件の変更を
+/* 保存が断られたときの一行。**色を持つ。** 同じ場所に出る「◯件の変更を
    書きます」と見分けがつかないと、断られたことが伝わらない。 */
 /* `--mark` は cian が「これは注意して見るもの」に使っている色（マーク、
    停滞した転送）。断られた保存も同じ種類の事実なので、色を増やさない。 */
@@ -820,7 +820,7 @@ html, body {
   display: flex; flex-direction: column; min-height: 0;
 }
 /* 状態はキーの居場所と別。シンクロ入力とログはこの上辺で、フォーカスに関係なく
-   いつでも見える ── 枠は「いまキーがここにある」だけを言う。 */
+   いつでも見える。枠は「いまキーがここにある」だけを言う。 */
 #shell.sync { border-top-color: var(--mark); }
 /* Recording. The terminal build turns the frame carmine for the same
    reason: a shell being written to a file must not look like one that
@@ -931,10 +931,10 @@ html, body {
 .spanes { flex: 1 1 auto; position: relative; overflow: hidden; }
 /* **シェルもキーが無ければ退く。** 一覧は前から退いていたのに、ここだけ
    焦点のあるなしで色が変わらず、3つのパネルのうち一つだけ「いつも手前」に見えて
-   いた ── どのパネルが生きているかを数秒考える羽目になる（本人、
+   いた。どのパネルが生きているかを数秒考える羽目になる（本人、
    2026-10-06）。退き方も一覧と同じ（同じ `--off-tone`、文字と中身だけ。
    枠は `#work[data-focus]` が別に言う）。
-   **`.spreview` は退かせない** ── カーソルを追って中身を表示しているパネルは、
+   **`.spreview` は退かせない。** カーソルを追って中身を表示しているパネルは、
    キーが一覧にあるときにこそ読むものだ。退かせたら、表示のために作ったパネルが
    いちばん読みにくくなる。 */
 #shell:not(.on) .vhead,
@@ -1112,12 +1112,12 @@ html, body {
    **端末版はこれが正で**（`viewer_dock`、render.rs:542）、ファイルを Enter で
    開いたら、その一覧のあった場所にパネルが嵌まる。左に一覧・右に本文・下に
    一覧・本文・シェルの3つのパネルがそのまま残り、キーは行ったり来たりできる。窓版はここだけ
-   ずっと違っていて、txt を開くと窓全部が本文になった ── 一覧もシェルも
+   ずっと違っていて、txt を開くと窓全部が本文になった。一覧もシェルも
    覆われ、戻るには閉じるしかなかった（本人、2026-10-02）。
    **最大化は F12 のほう。** こちらも端末版と同じ鍵で、`data-zoom` の既定の
    規則がそのまま効く（下の `:not(.active)` ひとつを足すだけ）。
    `position: fixed` をやめて `#panes` の子になるので、幅も高さも区切りの
-   パーセントが決める ── 測って置くと、境界を掴んで動かしたときに付いて
+   パーセントが決める。測って置くと、境界を掴んで動かしたときに付いて
    こないパネルがひとつ出る。測らないのがいちばん確かだ。 */
 #work[data-dock="left"] #panes > #view,
 #work[data-dock="right"] #panes > #view {
@@ -1131,12 +1131,12 @@ html, body {
 /* 左に嵌まったら、左ペインの幅を引き継ぐ（右ペインは `flex: 1 1 auto`）。 */
 #work[data-dock="left"] #panes > #view { flex: 0 0 var(--panes-pct); }
 /* 嵌まった側の一覧は退く。**`hidden` ではなく display で**、2つの id で
-   書く ── `#panes.one .pane.active { display: flex }` と同じ重みだと、
+   書く。`#panes.one .pane.active { display: flex }` と同じ重みだと、
    先に書いたほうが負ける（型③）。 */
 #work[data-dock="left"]  #panes .pane[data-pane="left"],
 #work[data-dock="right"] #panes .pane[data-pane="right"] { display: none; }
 /* F12 で広げたとき、埋めるのはキーのあるパネルだけ。一覧に焦点があるまま広げたら
-   パネルは引っ込む ── 既定の `.pane:not(.active)` と同じことを、ペインでは
+   パネルは引っ込む。既定の `.pane:not(.active)` と同じことを、ペインでは
    ないこのパネルにも言う。 */
 #work[data-zoom="files"] #panes > #view:not(.active) { display: none; }
 /* そして、キーのあるパネルは**窓を埋める**。
@@ -1145,13 +1145,13 @@ html, body {
    「広げました」と言っていた（この行は `drive.js` の「パネルが埋める」が
    見つけた。display だけ見ていた自分の目は通り抜けている）。 */
 #work[data-zoom="files"] #panes > #view.active { flex: 1 1 100%; }
-/* 一画面表示（詳細一覧）には並べる相手がいない ── 嵌まったパネルが窓を取る。
-   **左の幅を引き継ぐ行より重く書く**（`[data-dock="left"]` を添える）── 同じ
+/* 一画面表示（詳細一覧）には並べる相手がいない。嵌まったパネルが窓を取る。
+   **左の幅を引き継ぐ行より重く書く**（`[data-dock="left"]` を添える）。同じ
    `#view` に幅を言う規則が2つあり、軽いほうは一度も効かない。書いた本人が
    「効いているつもり」になる形なので、ここは重みを数えて書く（型③）。 */
 #work[data-dock="left"]  #panes.one > #view,
 #work[data-dock="right"] #panes.one > #view { flex: 1 1 100%; }
-/* キーがここにあることは、ペインとシェルとまったく同じ形で言う ── 3px の枠、
+/* キーがここにあることは、ペインとシェルとまったく同じ形で言う。3px の枠、
    `::after`、`inset: 0`（上の `.pane.active::after` と `#shell::after` の値を
    そのまま）。パネルごとに言い方が違うと、同じ問いに3つの答えが並ぶ。 */
 #work[data-focus="files"] #panes > #view.active::after {
@@ -1437,7 +1437,7 @@ html, body {
   flex: 0 0 var(--name-w); direction: ltr; text-align: left;
 }
 #report[data-align] .hit .sub { flex: 1 1 0; direction: rtl; unicode-bidi: plaintext; }
-/* 説明の一覧は折り返す ── パスの一覧と違って、切られて困るのは後半。 */
+/* 説明の一覧は折り返す。パスの一覧と違って、切られて困るのは後半。 */
 #report[data-wrap] .hit {
   height: auto; min-height: var(--cell-h); align-items: baseline;
   white-space: normal; padding-top: 5px; padding-bottom: 5px;
@@ -1575,7 +1575,7 @@ html, body {
   </div>
 
   <!-- 設定画面。右クリック / Shift+Enter のメニューから開く（2026-09-11 の依頼）。
-       **正は init.lua ひとつ** ── ここで直すのは、その init.lua そのもの。 -->
+       **正は init.lua ひとつ。** ここで直すのは、その init.lua そのもの。 -->
   <div id="settings" hidden>
     <div class="vhead"><span id="se-name"></span><span id="se-about"></span></div>
     <div class="sbody" id="se-body"></div>

@@ -197,7 +197,7 @@ def main() -> int:
         after = merge_sums(before, name, sha256(out))
         kept = [l for l in after.splitlines() if not l.endswith(f"  {name}")]
         if sorted(kept) != sorted(l for l in before.splitlines() if l.strip()):
-            sys.exit("✗ 既存の行が変わってしまった ── 中止")
+            sys.exit("✗ 既存の行が変わってしまった。中止")
         (work / SUMS).write_text(after)
         print(f"⑤ {SUMS} に1行追記（既存 {len(kept)} 行は無傷）")
 

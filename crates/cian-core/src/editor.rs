@@ -42,7 +42,7 @@ pub fn pick(
 
 /// The vim sitting next to the executable, if one is there.
 ///
-/// 会社の Windows には vim が無く、入れることもできない ── `:vim` が
+/// 会社の Windows には vim が無く、入れることもできない。`:vim` が
 /// 「PATH にありません」としか言えないのがそこだった。exe の隣に置いたものを
 /// 見つけて、入っていない機械でも使えるようにする。設定ファイルと同じ
 /// portable-first の置き方だ。
@@ -85,7 +85,7 @@ pub fn vim_in(dir: &std::path::Path) -> Option<PathBuf> {
     if is_executable(&dir.join(exe)) {
         return Some(dir.join(exe));
     }
-    // 読めない階は飛ばす ── ここで何も見つからなくても「同梱が無い」に
+    // 読めない階は飛ばす。ここで何も見つからなくても「同梱が無い」に
     // 落ちるだけで、PATH の vim は先に見終わっている。
     let mut kids: Vec<PathBuf> = std::fs::read_dir(dir)
         .ok()?
@@ -115,7 +115,7 @@ pub fn shell_word(w: &str) -> String {
 /// 名指しされたエディタの、実際に起動できる姿。
 ///
 /// PATH にあればその名前。無ければ、`vi` と `vim` に限って[隣に置いたもの]
-/// (beside_exe) を答える ── `nvim` は別のもので、名指ししたのと違うものが
+/// (beside_exe) を答える。`nvim` は別のもので、名指ししたのと違うものが
 /// 開くほうが悪い。どちらも無ければ `None`。
 ///
 /// **両前端がここを通る。** 端末版は `edit_in_new_tab`、窓版は engine の
@@ -127,7 +127,7 @@ pub fn named(name: &str) -> Option<String> {
 }
 
 /// [`named`] の、PATH もファイルシステムも要らない半分。[`pick`] と同じ形で
-/// 切ってある ── **世界を触る側と、何を選ぶかを決める側は別**にしておかないと、
+/// 切ってある。**世界を触る側と、何を選ぶかを決める側は別**にしておかないと、
 /// vim の入っている機械では同梱の枝を一度も通せない。
 pub fn choose(name: &str, found: impl Fn(&str) -> bool, beside: Option<&str>) -> Option<String> {
     if found(name) {
@@ -201,22 +201,22 @@ mod tests {
         assert_eq!(pick(Some("   "), None, None, |n| n == "vi", None), Some(vec!["vi".into()]));
     }
     /// 会社の Windows に vim が無い機械の話。**PATH に何も無いときだけ**
-    /// 隣のものに落ちる ── 自分で入れた vim があるなら、自分の `_vimrc` が
+    /// 隣のものに落ちる。自分で入れた vim があるなら、自分の `_vimrc` が
     /// 効くほうが勝つ。
     #[test]
     fn the_one_next_to_the_exe_is_the_last_resort() {
         let beside = Some("C:/cian/vim/vim92/vim.exe");
-        // PATH に何も無い ── 隣のものを使う
+        // PATH に何も無い。隣のものを使う
         assert_eq!(
             pick(None, None, None, |_| false, beside),
             Some(vec!["C:/cian/vim/vim92/vim.exe".into()])
         );
-        // PATH に vim がある ── そちらが勝つ
+        // PATH に vim がある。そちらが勝つ
         assert_eq!(
             pick(None, None, None, |n| n == "vim", beside),
             Some(vec!["vim".into()])
         );
-        // init.lua で名指ししてある ── いちばん強い
+        // init.lua で名指ししてある。いちばん強い
         assert_eq!(
             pick(Some("code -w"), None, None, |_| false, beside),
             Some(vec!["code".into(), "-w".into()])
@@ -247,13 +247,13 @@ mod tests {
         let want = put(&t.path().join("vim"));
         assert_eq!(vim_in(&t.path().join("vim")), Some(want));
 
-        // 版が2つ ── 新しいほうを採る
+        // 版が2つ。新しいほうを採る
         let t = tempfile::tempdir().unwrap();
         put(&t.path().join("vim").join("vim91"));
         let want = put(&t.path().join("vim").join("vim92"));
         assert_eq!(vim_in(&t.path().join("vim")), Some(want));
 
-        // 階はあるが中身が無い ── 「同梱が無い」に落ちる
+        // 階はあるが中身が無い。「同梱が無い」に落ちる
         let t = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(t.path().join("vim").join("vim92")).unwrap();
         assert_eq!(vim_in(&t.path().join("vim")), None);
@@ -279,12 +279,12 @@ mod tests {
 
         assert_eq!(beside(&app), Some(exe.clone()), "窓版のエンジンから2階上");
         assert_eq!(beside(&top), Some(exe), "端末版は隣で当たる");
-        // 4階上は見ない ── 登りすぎて他人のものを拾わないこと
+        // 4階上は見ない。登りすぎて他人のものを拾わないこと
         let deep = app.join("a").join("b");
         std::fs::create_dir_all(&deep).unwrap();
         assert_eq!(beside(&deep), None, "3階までで止まる");
     }
-    /// 名指しされたときの落ち方。**`nvim` は落とさない** ── 名指ししたのと
+    /// 名指しされたときの落ち方。**`nvim` は落とさない。** 名指ししたのと
     /// 違うものが開くほうが、開かないより悪い。
     #[test]
     fn a_named_editor_falls_back_to_the_bundled_one_only_when_it_is_vim() {
@@ -293,14 +293,14 @@ mod tests {
         assert_eq!(choose("vim", none, beside), Some("C:/cian/vim/vim92/vim.exe".into()));
         assert_eq!(choose("vi", none, beside), Some("C:/cian/vim/vim92/vim.exe".into()));
         assert_eq!(choose("nvim", none, beside), None, "nvim は vim ではない");
-        // PATH にあればそちらが勝つ ── 自分の _vimrc が効くほう
+        // PATH にあればそちらが勝つ。自分の _vimrc が効くほう
         assert_eq!(choose("vim", |n| n == "vim", beside), Some("vim".into()));
         // 隣にも無ければ断る
         assert_eq!(choose("vim", none, None), None);
     }
 
     /// 空白のある実行ファイル名。隣に置いた vim が `C:\\Program Files\\…`
-    /// に来たときだけ効く ── **両前端が同じ括り方をすること。**
+    /// に来たときだけ効く。**両前端が同じ括り方をすること。**
     #[test]
     fn a_word_with_a_space_in_it_is_quoted() {
         assert_eq!(shell_word("vim"), "vim");

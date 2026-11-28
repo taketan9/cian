@@ -205,7 +205,7 @@ impl App {
             // **AFXW のマスク。** `/` の絞り込みはディレクトリを移ると消える
             // （それが `/` の仕事）。こちらは付けたまま歩くもので、
             // 「今日はログを見ている」を画面に固定する。引数なしで解除し、
-            // 何が外れたかを言う ── 通知なしに全部出ると、直前に何を見ていたのか
+            // 何が外れたかを言う。通知なしに全部出ると、直前に何を見ていたのか
             // が分からなくなる。
             "mask" => self.cmd_mask(rest),
             // 二画面の同期移動。名前は本人が選んだ（`:sync` はシェルの
@@ -220,7 +220,7 @@ impl App {
             // words that did nothing. The window has its own `:view` and keeps
             // both looks; the terminal has one look and says so.
             // `classic` / `details` は窓版で `:view` の別名（表示モード）。
-            // 端末版は見た目が一つなので、**そのパネルが無いことを言う** ── 名前が
+            // 端末版は見た目が一つなので、**そのパネルが無いことを言う。** 名前が
             // 通らないのと、この端末には無いのとは別のことだ。
             "view" | "classic" | "details" => match (verb, rest) {
                 ("view", "") => self.look_inside(),
@@ -410,7 +410,7 @@ impl App {
             "remote" | "sftp" => self.start_scp(ScpDir::BrowsePane),
             // **AI の入口は2語**（2026-09-20、本人: 実務ではほぼ使わない、たまに
             // コマンドを訊くくらい）。`:ai` が引数で振り分け、`:aicmd` だけ別に
-            // 残る ── あれはシェル向けで、返るのが会話ではなく一行のコマンドだ
+            // 残る。あれはシェル向けで、返るのが会話ではなく一行のコマンドだ
             // から。古い名前（`:aierror` `:aidiff` `:ailog` `:aicommit`）は
             // 通るが、一覧には出さない。
             "ai" | "chat" => match rest {
@@ -461,7 +461,7 @@ impl App {
             // svn-only, so it says so in the name. `:up` in a file manager
             // reads as "go to the parent", which is not what it did.
             // **一語で両方**（2026-09-20）。svn にしか無い概念なので svn 専用の
-            // ままだが、名前から `svn` を落とした ── git のディレクトリで叩いた
+            // ままだが、名前から `svn` を落とした。git のディレクトリで叩いた
             // ときは、無いのではなく入れていないことを理由つきで言う。
             "update" | "svnupdate" => self.svn_update(),
             // Likewise. `:svncommit` names svn's, and the bare `:commit`
@@ -605,13 +605,13 @@ impl App {
             // 通るが、端末版はビューアの中の `:` にしか無かった。
             //
             // ビューアが答える語は、開いていればそのまま渡す。開いていなければ
-            // 「先に開いて」と言う ── unknown command と言われるより、何が
+            // 「先に開いて」と言う。unknown command と言われるより、何が
             // 足りないかが分かる。
             // 素の `:s` `:g` `:v` は窓版が持っている。**三つは別の機能だ** ──
             // `:s` は置換の入力欄、`:g` は一致した行を消す、`:v` は一致した行
             // だけ残す。ビューアの中では `s/…/…/` `g/…/d` の形でも打てる。
             "s" if matches!(self.popup, Popup::Viewer { .. }) => self.start_replace_bar(),
-            // 二つに分ける ── 一つの腕に並べると「同じ機能の別名」になり、
+            // 二つに分ける。一つの腕に並べると「同じ機能の別名」になり、
             // 実際は逆のことをする二つなので、機械にも人にも誤った表示になる。
             "g" if matches!(self.popup, Popup::Viewer { .. }) => self.viewer_line_filter(rest, false),
             "v" if matches!(self.popup, Popup::Viewer { .. }) => self.viewer_line_filter(rest, true),

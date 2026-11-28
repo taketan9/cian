@@ -27,7 +27,7 @@
 
 **8分かけて作った資材が、自分の名前を間違えていた。** 気づいたのは
 Mac から `grep -a` で exe の中の文字列を読んだからで、Windows が無くても
-できる検査だった ── だから機械にした。**Windows の exe を Mac から見られる**
+できる検査だった。だから機械にした。**Windows の exe を Mac から見られる**
 のがこの形の値段で、CI の中だけでなく、公開された資材を落としてそのまま
 当てられます:
 
@@ -84,7 +84,7 @@ def want_sha() -> str:
         text=True,
     )
     if out.returncode != 0:
-        raise SystemExit("git rev-parse が通りません ── git の中で走らせること")
+        raise SystemExit("git rev-parse が通りません。git の中で走らせること")
     return out.stdout.strip()
 
 
@@ -109,7 +109,7 @@ def baked(path: str) -> list[str]:
 def said(exe: str) -> str | None:
     """`--version` の1行目。持っていなければ None（`cian-server` がそれ）。"""
     # **止まることがある。** `--version` は端末を要らないはずだが、runner の上で
-    # 何かを待ったら検査が8分のジョブを道連れにする ── 待たない。中の文字列は
+    # 何かを待ったら検査が8分のジョブを道連れにする。待たない。中の文字列は
     # どちらにしても読めるので、ここで読めないことは落ちる理由にはしない。
     # **裸のファイル名を渡すと PATH を探しにいく。** CI は `cian-tui-macos.bin`
     # のように cwd のものを渡すので、絶対パスにしないと `--version` の側は
@@ -166,7 +166,7 @@ def main() -> int:
         stamps = baked(exe)
         line = said(exe)
         if line and line not in stamps:
-            # 焼かれた文字列と、走らせて聞いた答えが違うことはない ── 違ったら
+            # 焼かれた文字列と、走らせて聞いた答えが違うことはない。違ったら
             # どちらかの読み方を間違えているので、報告せずに通さない。
             stamps.append(line)
         if not stamps:

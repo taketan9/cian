@@ -441,7 +441,7 @@ fn run(inner: Arc<Inner>, job: Pending) {
             }
         }
         // **実行枠を空けてから `done` を言う。** 逆だと、`done` を受けて `:queue` を
-        // 読み直した前端に、終わった仕事がまだ「実行中」で見える ── 次の描画で
+        // 読み直した前端に、終わった仕事がまだ「実行中」で見える。次の描画で
         // 消えるので画面では一瞬だが、`done` が「もう並んでいない」の保証に
         // なっていない、ということでもある。`jobs::tests::
         // a_second_operation_waits_its_turn_and_then_runs` が CI の macOS で

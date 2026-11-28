@@ -1367,7 +1367,7 @@ pub fn state_get_in(text: &str, key: &str) -> Option<String> {
 /// Set one value, keeping the others. Returns where it was written.
 ///
 /// **通知なしに捨てない。** ここは長いあいだ「best-effort、書けなければ選択が
-/// 残らないだけ」だった ── そして実機で「`:theme` が次の起動で戻る」が出た
+/// 残らないだけ」だった。そして実機で「`:theme` が次の起動で戻る」が出た
 /// とき、**書けなかったのか、読めていないのか、誰にも分からなかった**
 /// （2026-09-14）。書けなかったことは、書けなかったと言えるようにする。
 /// 呼ぶ側が何も報告しないのは自由だが、何も報告しないと決められるのは呼ぶ側だけだ。
@@ -1405,7 +1405,7 @@ pub fn state_set(key: &str, value: &str) -> Result<PathBuf, String> {
             Ok(()) => return Ok(path),
             Err(e) => {
                 // 1224 = ERROR_USER_MAPPED_FILE。**誰が掴んでいるのかが
-                // 読む人に分からない**ので、そこだけは言葉を足す ── cian の
+                // 読む人に分からない**ので、そこだけは言葉を足す。cian の
                 // 不具合と読まれると、探す場所を間違える。
                 held = e.raw_os_error() == Some(1224);
                 last = e.to_string();

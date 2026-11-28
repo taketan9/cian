@@ -3320,7 +3320,7 @@ use crate::ai::StoredChatExt;
     /// 保存は、**そのファイルが持っていた終わり方**を変えない。
     ///
     /// ここは `join(sep) + sep` で必ず改行を足していて、改行で終わって
-    /// いないファイルを開いて保存しただけで1バイト増えた ── 窓版は
+    /// いないファイルを開いて保存しただけで1バイト増えた。窓版は
     /// `grepedit::write_text` を通るので元のままで、**同じファイルを2つの
     /// 前端で保存すると結果が違った**（2026-10-30、本人の裁定で「元のまま」）。
     ///
@@ -3353,7 +3353,7 @@ use crate::ai::StoredChatExt;
             app.active_pane_mut().unwrap().cursor = i;
             app.handle_key(code(KeyCode::Enter)).unwrap();
             assert!(matches!(app.popup, Popup::Viewer { .. }), "開いた: {}", name);
-            // 中身を変えずに保存する ── 足すか足さないかだけを見たい。
+            // 中身を変えずに保存する。足すか足さないかだけを見たい。
             for k in [':', 'w'] {
                 app.handle_key(key(k)).unwrap();
             }
@@ -7928,7 +7928,7 @@ use crate::ai::StoredChatExt;
     ///
     /// これが無いあいだ、git へのコミットは `:aicommit` の中にしか無かった。
     /// AI に届かない機械では git にコミットできない、ということでもあったので、
-    /// **AI を一切用意していない App** で通す ── その状態で通ることが、この
+    /// **AI を一切用意していない App** で通す。その状態で通ることが、この
     /// 機能の言いたいことそのもの。
     #[test]
     fn commit_writes_the_message_you_typed_without_asking_the_ai() {
@@ -8684,7 +8684,7 @@ use crate::ai::StoredChatExt;
 
     /// **説明の欄が、どの行でも同じ桁から始まること。**
     ///
-    /// 鍵の欄は `{:<19}` で詰められていた ── あれは19**字**であって19**桁**では
+    /// 鍵の欄は `{:<19}` で詰められていた。あれは19**字**であって19**桁**では
     /// ない。`Alt+← / Alt+h` の `←` は東アジア曖昧幅で2桁を取るので、その行だけ
     /// 説明が1桁ずれ、`drag in from Finder` は19字を超えるので詰め物が消えて
     /// 説明が鍵にくっついていた。英語の画面では**どちらも起きない**（字数と桁数が
@@ -8703,7 +8703,7 @@ use crate::ai::StoredChatExt;
 
     /// **説明が、どの行でも同じ桁から始まること。**
     ///
-    /// 鍵の欄は `{:<19}` / `{:<17}` で詰められていた ── あれは19**字**であって
+    /// 鍵の欄は `{:<19}` / `{:<17}` で詰められていた。あれは19**字**であって
     /// 19**桁**ではない。`Alt+← / Alt+h` の `←` は2桁を取る字で、その行だけ
     /// 説明がずれる。`drag in from Finder` や、字下げの付いた入れ子の行
     /// （`    :sort :rsort :uniq`）は字数の上限を超えるので詰め物が消え、説明が
@@ -8774,9 +8774,9 @@ use crate::ai::StoredChatExt;
                         "{which}／{lang:?}: 続きの行の説明が桁 {desc} から始まっていない\n  {follow}",
                     );
                 }
-                // 数えるものには下限を書く ── 拾えなくなったときに取りこぼしを報告するように。
+                // 数えるものには下限を書く。拾えなくなったときに取りこぼしを報告するように。
                 assert!(normal > 80, "{which}／{lang:?}: ふつうの行が {normal} 行しか無い");
-                assert!(wrapped > 0, "{which}／{lang:?}: 溢れた鍵が1行も無い ── 形が変わったか、数え損ねている");
+                assert!(wrapped > 0, "{which}／{lang:?}: 溢れた鍵が1行も無い。形が変わったか、数え損ねている");
             }
         }
     }
@@ -9038,7 +9038,7 @@ use crate::ai::StoredChatExt;
     }
 
     /// `y` と `Ctrl+V` がどちらも `paste_clip` へ行くこと。**見ているのは
-    /// 道筋であって、クリップボードの中身ではない** ── 中身の規則
+    /// 道筋であって、クリップボードの中身ではない。** 中身の規則
     /// （自前の register が OS より強い・切り取りは paste で尽きる・同じ
     /// ディレクトリへは貼らない）は `cian-core` の `clip::plan` が、OS 側を
     /// 差し替えられる形で持っている。
@@ -9052,7 +9052,7 @@ use crate::ai::StoredChatExt;
     ///
     /// 自前の register を埋めておけば OS 側は**引かれない**（`plan` は
     /// `own` が空のときだけ `os()` を呼ぶ）。行き先に既にある1本を入れて、
-    /// `AlreadyHere` の言葉が出ることで道筋を見る ── この言葉は
+    /// `AlreadyHere` の言葉が出ることで道筋を見る。この言葉は
     /// `paste_clip` からしか出ないので、コピーや転送に逸れれば落ちる。
     #[test]
     fn y_and_ctrl_v_both_paste() {
@@ -9061,7 +9061,7 @@ use crate::ai::StoredChatExt;
             let (_l, _r, mut app) = app_two_dirs(&["a.txt"], &[]);
             app.focus(FocusedPane::Right); // paste into the (empty) right pane
             // **行き先に在ることにする。** `plan` は親を見比べるだけで
-            // ディスクを見ないので、置く必要はない ── 右ペインは空のまま
+            // ディスクを見ないので、置く必要はない。右ペインは空のまま
             // でよく、`y` が「カーソルの行」に逸れる余地も残らない。
             //
             // 親は**ペインに訊く**。`TempDir` の `/var/…` と、ペインが持って
@@ -12488,7 +12488,7 @@ use crate::ai::StoredChatExt;
     /// ポップアップのボタンは**描かれた桁数**の箱に入る。
     ///
     /// `[ コピー ]` は7字だが10桁。字数で作った箱に入れると ratatui が7桁で
-    /// 切って `[ コピ` になる ── 実機の画面でそう出た。押せる幅も同じ箱なので、
+    /// 切って `[ コピ` になる。実機の画面でそう出た。押せる幅も同じ箱なので、
     /// 見えているボタンの右半分が押せていなかった。
     #[test]
     fn a_popup_button_is_as_wide_as_it_is_drawn() {
@@ -13452,13 +13452,13 @@ use crate::ai::StoredChatExt;
     }
 
     /// **同じ名前を1行に二度出さない。** シェルの `command not found: xyz` に
-    /// `xyz:` を被せていた ── 画面に出る言葉で、実機で読んで初めて気づいた。
+    /// `xyz:` を被せていた。画面に出る言葉で、実機で読んで初めて気づいた。
     /// 逆に終了コードしか返さない相手では、何が失敗したのかがこの行にしか
     /// 無いので頭を残す。
     #[test]
     fn a_failed_filter_names_the_command_only_when_the_shell_did_not() {
         use crate::viewer::filter_failure;
-        // シェルが名乗っている ── 頭は付けない
+        // シェルが名乗っている。頭は付けない
         assert_eq!(
             filter_failure("nosuch", "zsh:1: command not found: nosuch", false),
             "zsh:1: command not found: nosuch. nothing changed"
@@ -13569,7 +13569,7 @@ use crate::ai::StoredChatExt;
         // 起きない」になる。
         // **表そのものを除いてから探す。** viewer.rs の中で viewer.rs を
         // 探すと、表に誤った語を足してもその表自身に当たって緑のままになる
-        // （2026-09-21 に変異テストで見た ── `cellWidth` が自分を測って
+        // （2026-09-21 に変異テストで見た。`cellWidth` が自分を測って
         // いた件と同じ形）。
         let whole = include_str!("viewer.rs");
         let table_at = whole.find("pub(crate) const VIEWER_VERBS").expect("表がある");
@@ -13978,7 +13978,7 @@ use crate::ai::StoredChatExt;
     /// **`c` の「消す」と「打つ」は1つの変更。** vim では `ciwX<Esc>` の後の
     /// `u` は1回で元の単語に戻る。窓版の monaco-vim はここを2手に割っていて、
     /// 2026-09-22 に揃えた（renderer.js `vimUndo`）。端末版が正なので、こちらも
-    /// 同じ形で縛る ── 2つ重ねてから戻し、行き過ぎないことまで見る。
+    /// 同じ形で縛る。2つ重ねてから戻し、行き過ぎないことまで見る。
     #[test]
     fn a_change_and_what_is_typed_after_it_undo_as_one() {
         let (_d, mut app) = viewer_on("aa bb\n");

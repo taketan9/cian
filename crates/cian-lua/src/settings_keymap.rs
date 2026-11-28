@@ -29,7 +29,7 @@ use std::path::PathBuf;
 /// 縛れる動作ひとつ。
 ///
 /// **既定のキーは持たない。** 持つと、`keys.rs` の巨大な match と二つ目の
-/// 真実ができて、必ずずれる ── 画面が出すのは「あなたが縛ったキー」で、
+/// 真実ができて、必ずずれる。画面が出すのは「あなたが縛ったキー」で、
 /// 既定は `?` のキー一覧が答える。
 #[derive(Debug, Clone, Copy)]
 pub struct Bind {
@@ -119,7 +119,7 @@ pub fn keymap_head() -> String {
 
 /// 書いてある `cian.set_keymap("k", "action")` を、書いてある順に。
 ///
-/// コメントアウトされた行は数えない ── 同梱の見本は 40 行ぜんぶ
+/// コメントアウトされた行は数えない。同梱の見本は 40 行ぜんぶ
 /// コメントアウトされていて、それを「割り当て済み」と読むと画面が誤った表示になる。
 pub fn keymaps_in(text: &str) -> Vec<(String, String)> {
     text.lines().filter_map(binding_on).collect()
@@ -128,7 +128,7 @@ pub fn keymaps_in(text: &str) -> Vec<(String, String)> {
 /// その行が有効な `cian.set_keymap("k", "action")` なら `(キー, 動作)`。
 ///
 /// **行末の注を値に混ぜない。** 最初 `split(',')` で切って
-/// `"enter")   -- 入る` を動作の名前として読んだ ── 引用符の中だけを見る。
+/// `"enter")   -- 入る` を動作の名前として読んだ。引用符の中だけを見る。
 fn binding_on(line: &str) -> Option<(String, String)> {
     let t = line.trim_start();
     if t.starts_with("--") {
@@ -153,7 +153,7 @@ fn binding_on(line: &str) -> Option<(String, String)> {
                 }
                 lits.push(s);
             }
-            // 閉じ括弧より先には行かない ── その先は注。
+            // 閉じ括弧より先には行かない。その先は注。
             ')' => break,
             _ => {}
         }
@@ -168,7 +168,7 @@ fn binding_on(line: &str) -> Option<(String, String)> {
 /// その動作の割当を、足す・差し替える・消す。
 ///
 /// `key` が `None` なら、その動作に付いている**有効な行をコメントに戻す**
-/// （行は消さない ── 1行の設定と同じで、そこに説明が付いていることがある）。
+/// （行は消さない。1行の設定と同じで、そこに説明が付いていることがある）。
 pub fn set_keymap_in(text: &str, action: &str, key: Option<&str>) -> String {
     let (nl, mut lines) = crate::settings_edit::split_lines(text);
     let trailing = lines.last().map(|l| l.is_empty()).unwrap_or(false);

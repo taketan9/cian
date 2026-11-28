@@ -728,7 +728,7 @@ enum Popup {
     /// `dir` is the repo the staged diff came from; `stat` summarises the files;
     /// `editing` toggles between preview and typing into `buffer`.
     /// コミットメッセージの編集。`drafted` は AI が下書きしたものかどうかで、
-    /// 枠のタイトルだけが変わる ── 自分で書いた文に「生成」と出ると、誰が書いたのか
+    /// 枠のタイトルだけが変わる。自分で書いた文に「生成」と出ると、誰が書いたのか
     /// 分からなくなる。
     CommitMessage { buffer: String, stat: String, dir: PathBuf, editing: bool, drafted: bool },
     /// Proposed renames (old → new), each toggleable. Approving renames the
@@ -4301,7 +4301,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry(":sync", None, "synchronize: type into all panes at once (also right-click)", "シンクロ入力：全ペインへ一括入力（右クリックでも）"),
                 entry("Ctrl+Shift+Enter / :snip", None, "snippet launcher → send a saved command to the shell; works from the shell too (cian.snippets)", "スニペットランチャー → 定型コマンドをシェルへ送信；シェルからも可（cian.snippets）"),
                 entry("drag", None, "select text; it is copied to the clipboard on release", "テキスト選択；離すとクリップボードにコピー"),
-                entry("Shift+← / Shift+→", None, "select from the keyboard, wrapping across rows (Ctrl+C copies, Esc clears)", "キーボードで範囲選択（行をまたぐ）── Ctrl+C でコピー、Esc で解除"),
+                entry("Shift+← / Shift+→", None, "select from the keyboard, wrapping across rows (Ctrl+C copies, Esc clears)", "キーボードで範囲選択（行をまたぐ）。Ctrl+C でコピー、Esc で解除"),
                 entry("right-click", None, "menu: paste, log, SFTP, text encoding, color", "メニュー：貼り付け、ログ、SFTP、文字コード、色"),
                 entry("Esc", None, "back to files (full-screen apps keep it)", "ファイルに戻る（全画面アプリはEscを保持）"),
             ],
@@ -4406,7 +4406,7 @@ pub(crate) fn viewer_manual_lines(lang: Lang) -> Vec<String> {
         ("d", "cut the selection", "選択を切り取り"),
         (">>  <<", "shift lines by a tab stop (> and < on a selection)", "行をタブ幅ずらす（選択中は > と <）"),
         ("~", "swap the case under the cursor", "カーソル位置の大小を反転"),
-        ("jj  ｊｊ  っｊ", "leave insert mode — the last two are what a Japanese IME makes of pressing j twice", "挿入モードを抜ける ── 後ろ2つは、IME オンで j を2回押したときに出るもの"),
+        ("jj  ｊｊ  っｊ", "leave insert mode — the last two are what a Japanese IME makes of pressing j twice", "挿入モードを抜ける。後ろ2つは、IME オンで j を2回押したときに出るもの"),
         ("ZZ  ZQ", "save and close / close without saving", "保存して閉じる ／ 保存せずに閉じる"),
         ("u", "undo (Ctrl+Z)", "取り消し（Ctrl+Z）"),
         ("Ctrl+R", "redo (Ctrl+Y, :redo)", "やり直し（Ctrl+Y・:redo）"),
@@ -4487,7 +4487,7 @@ pub(crate) fn viewer_manual_lines(lang: Lang) -> Vec<String> {
         }
     }
     // 最後の2行も同じ道を通す。手で空白を置いていたので、この2行だけ説明が
-    // 他と違う桁から始まっていた ── 一覧の末尾は目が行くところで、そこが
+    // 他と違う桁から始まっていた。一覧の末尾は目が行くところで、そこが
     // ずれていると全体がずれて見える。
     out.push(String::new());
     manual_row(

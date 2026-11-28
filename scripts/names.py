@@ -79,7 +79,7 @@ def viewer_verbs() -> list[list[str]]:
     """ビューアの `:` が答える語。
 
     端末版はこれらを**一覧の `:` からも**受ける（2026-09-21、依頼221）ので、
-    「打てる名前」として数えます ── `commands.rs` の腕は `VIEWER_VERBS` を
+    「打てる名前」として数えます。`commands.rs` の腕は `VIEWER_VERBS` を
     見るガードで、名前が直接書いていないため、表のほうを読みます。
     """
     text = VIEWER.read_text(encoding="utf-8")
@@ -110,7 +110,7 @@ def main() -> int:
     gui = gui_commands()
     if len(tui) < 50 or len(gui) < 50:
         print("=" * 72)
-        print(f"  数える元が読めていません ── 端末版 {len(tui)} 個 / 窓版 {len(gui)} 個")
+        print(f"  数える元が読めていません。端末版 {len(tui)} 個 / 窓版 {len(gui)} 個")
         print("  `run_command` の match か `buildCommands()` の形が変わった可能性があります")
         print("=" * 72)
         return 1

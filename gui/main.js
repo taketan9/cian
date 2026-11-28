@@ -209,7 +209,7 @@ function installMenu() {
 /// possible — whatever the taskbar was showing, it was showing it twice.
 /// 共有マシンの初回だけ、みんなの設定を配る。
 ///
-/// **これは `run.bat` が持っていた仕事**だった ── Program Files に置いた
+/// **これは `run.bat` が持っていた仕事**だった。Program Files に置いた
 /// `default-config\*.lua` を、その人がまだ設定を持っていないときだけ
 /// `~/.config/cian` に写す。同梱版は `cian.exe` を直に叩くので run.bat を
 /// 通らず、この仕事だけが落ちる。**入口が増えたら、入口ごとに書かない。**
@@ -218,7 +218,7 @@ function installMenu() {
 /// 規則は一つ: **初回だけ**。あとは全部その人のもので、`ssh.lua` も含めて
 /// 二度と触らない。使っている最中に書き換わる設定は、信用できない設定になる。
 ///
-/// **写す先は `~/.config/cian`。** exe の隣には置かない ── cian は隣の設定を
+/// **写す先は `~/.config/cian`。** exe の隣には置かない。cian は隣の設定を
 /// 読み書き両方で優先するので、Program Files に置いた瞬間、全員のしおりが
 /// 書けない場所へ保存されに行く（`packaging/windows/DEPLOY.ja.txt`）。
 function seedConfig() {
@@ -262,7 +262,7 @@ app.whenReady().then(async () => {
     // **場所を渡さないときは、渡さない。** `os.homedir()` を埋めていたので、
     // `cian.set_option("home", …)` はエンジンに届く前に上書きされて消えて
     // いた（2026-09-06、`scripts/configcover.py` が見つけた）。引数が無ければ
-    // エンジンが init.lua の `home` → ホーム、の順で決める ── 端末版の
+    // エンジンが init.lua の `home` → ホーム、の順で決める。端末版の
     // `default_home` と同じ判断が、同じ1か所にある。
     const where = process.argv.slice(2).find((a) => !a.startsWith('-'));
     engine = new Engine(where || null);

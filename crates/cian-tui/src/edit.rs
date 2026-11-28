@@ -136,7 +136,7 @@ impl App {
         }
         // **二段の入れ替えは `ops::rename_batch` が持っている。**
         //
-        // ここに同じ処理が手書きで在って、窓版には無かった ── 同じ操作が
+        // ここに同じ処理が手書きで在って、窓版には無かった。同じ操作が
         // 前端で違う結果になるので、core の1か所に出して両方から呼ぶ
         // （2026-10-30）。断る条件（通行人の名前・同じ名前へ行く2件）も、
         // 巻き戻しも、あちらが持っている。
@@ -332,7 +332,7 @@ pub(crate) fn resolve_editor(config: &cian_lua::Config) -> Option<Vec<String>> {
 /// **語ごとに括る。** まとめて括ると `code -w` のような設定が「`code -w` と
 /// いう名前の1つの実行ファイル」になり、語ごとに括らないと
 /// `C:\Program Files\...\vim.exe` が2語に割れる。**隣に置いた vim で初めて
-/// 後者が起きる** ── 今まではどれも PATH 上の短い名前だった。
+/// 後者が起きる。** 今まではどれも PATH 上の短い名前だった。
 pub(crate) fn editor_command_line(words: &[String], path: &std::path::Path) -> String {
     let quoted: Vec<String> =
         words.iter().map(|w| cian_core::editor::shell_word(w)).collect();

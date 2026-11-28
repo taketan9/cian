@@ -5,7 +5,7 @@
 もっともで、`ssh.lua` の行き先を間違えたのはその日のうちだった。
 
 **画面に出ないものは、無いことにされる。** `Options` の 20 個と `cian.ai{}` と
-SSH ホストは触れるが、cian が読む設定はそれだけではない ── キー割当も
+SSH ホストは触れるが、cian が読む設定はそれだけではない。キー割当も
 ブックマークもマクロもテーマもある。画面がそれらに一言も触れなければ、
 「設定画面に無い＝設定できない」と読まれる。
 
@@ -131,7 +131,7 @@ def main() -> int:
     # 何割か」しか答えないので、一覧そのものが縮んだことは数では出ません。
     if len(api) < 10 or len(files) < 7 or not touched:
         print("=" * 72)
-        print(f"  数える元が読めていません ── API {len(api)} 個 / ファイル {len(files)} 個"
+        print(f"  数える元が読めていません。API {len(api)} 個 / ファイル {len(files)} 個"
               f" / 画面が触る {len(touched)} 個")
         print("  `cian.set(` の書き方か `cian_lua::CONFIG_FILES` が変わった可能性があります")
         print("=" * 72)

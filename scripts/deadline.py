@@ -94,7 +94,7 @@ def alive(text: str) -> list[tuple[int, str]]:
     """試験の中を落として、(行番号, 行) を返します。
 
     `#[cfg(test)]` の次に来る `mod ... {` から、対応する `}` までを飛ばします。
-    波括弧は素朴に数えます ── 文字列やコメントの中の括弧で狂いますが、狂う
+    波括弧は素朴に数えます。文字列やコメントの中の括弧で狂いますが、狂う
     方向は「多めに飛ばす」ではなく「少なめに飛ばす」ので、**見落としでは
     なく誤検出**の側に倒れます。
     """
@@ -163,7 +163,7 @@ def main() -> int:
                 opens.append((rel, f"{rel}:{n}", line.strip()[:70]))
 
     print("=" * 72)
-    print("  上限の無い待ちを数えます ── 総ざらいの第2段")
+    print("  上限の無い待ちを数えます。総ざらいの第2段")
     print("=" * 72)
     print(f"  読んだファイル {scanned} 枚（試験の中は見ていません）")
     print()
@@ -189,7 +189,7 @@ def main() -> int:
         bad.append(f"読んだファイルが {scanned} 枚しかありません（{LEAST_FILES} 枚以上のはず）")
     if len(waits) + allowed_waits < LEAST_WAITS:
         bad.append(f"待つところが {len(waits) + allowed_waits} 件しか見つかりません"
-                   f"（{LEAST_WAITS} 件以上のはず）── 探し方が壊れています")
+                   f"（{LEAST_WAITS} 件以上のはず）。探し方が壊れています")
     if len(opens) < LEAST_OPENS:
         bad.append(f"読む道が {len(opens)} 件しか見つかりません（{LEAST_OPENS} 件以上のはず）")
     if len(waits) > WAIT_CEILING:

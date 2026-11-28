@@ -10,7 +10,7 @@ cian — ウィンドウ版（Electron） Windows x64
                                        （Monaco・monaco-vim・mermaid・同梱フォント）
   cian-server.exe                      エンジン。前面はこれと話します
                                        （cian-src-win.zip から始めるときは
-                                       同梱されていません ── 別に落とした
+                                       同梱されていません。別に落とした
                                        cian-server-win-x64.exe.zip を展開し、
                                        cian-server.exe と名づけて gui\ の隣へ）
   run.bat                              Electron を探して起動する
@@ -25,7 +25,7 @@ cian — ウィンドウ版（Electron） Windows x64
   1. 好きな場所に展開する。右クリック →「すべて展開」でも、
        tar -xf cian-src-win.zip -C C:\cian
      でも構いません（`tar` は落としてきた印を中のファイルへ引き継ぎません）。
-     前面一式は展開した中の gui\ です ── この読み物は、そこから
+     前面一式は展開した中の gui\ です。この読み物は、そこから
      run.bat で起動する道のものです。cian.exe を作って配る道は
      SRC.ja.txt を見てください。
 
@@ -56,7 +56,7 @@ cian — ウィンドウ版（Electron） Windows x64
 
   **run.bat がやっていたことは飛びます。** Electron を探す・共有マシンで
   default-config を配る・「exe の隣に init.lua がある」と警告する・
-  cian-server.exe が無いと言う ── 一度うまく起動した機械では全部済んでいる
+  cian-server.exe が無いと言う。一度うまく起動した機械では全部済んでいる
   話なので、そこから先はショートカットで構いません。**初回は run.bat で
   起動して**、通ったらショートカットを作るのが安全です。
 
