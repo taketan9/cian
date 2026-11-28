@@ -111,6 +111,52 @@ def gate_exists(gate: str, tests: set[str]) -> tuple[bool, str]:
     return False, "関門に、実在を確かめられるものが書かれていない"
 
 
+# Windows のジョブが呼ぶ検査は、最低この数だけ見つかること。
+# 取り落として「所見なし」と言わないための下限です。
+LEAST_WIN_SCRIPTS = 2
+
+
+def cp1252_deaths() -> list[str]:
+    """Windows のジョブが呼ぶ Python が、cp1252 で落ちないか。
+
+    **Windows の runner の標準出力は cp1252 です。** 日本語を1行出した瞬間に
+    `UnicodeEncodeError` で落ち、「資材が悪い」ではなく**関門が壊れた**で
+    ジョブが赤くなります。2026-10-31 に `buildstamp.py` で踏み、直しをその
+    ファイルに書きました。**2026-11-28、新しい検査を足した日に同じ穴へ落ちま
+    した** ── 直しを書き写す必要を、誰も見張っていなかったためです。
+
+    見るのは「Windows で走るジョブが名指しした `scripts/*.py`」だけです。
+    手元でしか走らない検査に同じ作法を求めても、守る理由がありません。
+    """
+    import re
+
+    found, bad = 0, []
+    for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        text = wf.read_text(encoding="utf-8")
+        # ジョブごとに切って、`windows-latest` で走るものだけを見ます。
+        for chunk in re.split(r"\n  (?=[A-Za-z][\w-]*:\n)", text):
+            if "windows-latest" not in chunk:
+                continue
+            for name in sorted(set(re.findall(r"scripts/([\w-]+)\.py", chunk))):
+                at = ROOT / "scripts" / f"{name}.py"
+                if not at.is_file():
+                    bad.append(f"{wf.name} が呼ぶ scripts/{name}.py がありません")
+                    continue
+                found += 1
+                body = at.read_text(encoding="utf-8")
+                if "reconfigure(encoding=" not in body:
+                    bad.append(
+                        f"scripts/{name}.py は Windows のジョブが呼ぶのに、"
+                        "標準出力を utf-8 に直していません（cp1252 で落ちます）"
+                    )
+    if found < LEAST_WIN_SCRIPTS:
+        bad.append(
+            f"Windows のジョブが呼ぶ検査を {found} 本しか見つけられていません"
+            f"（下限 {LEAST_WIN_SCRIPTS}）── この検査が黙っています"
+        )
+    return bad
+
+
 def tmp_venvs() -> list[str]:
     """追跡ファイルのどれかが venv を `/tmp` に向けていないか。
 
@@ -174,6 +220,8 @@ def main() -> int:
     for line in tmp_venvs():
         bad.append(f"venv を `/tmp` に向けている ── 掃除で消える: {line}")
 
+    bad.extend(cp1252_deaths())
+
     if bad:
         print(f"\n  関門の無い規則・届かない関門が {len(bad)} 件あります。\n")
         for b in bad:
@@ -183,6 +231,7 @@ def main() -> int:
         return 1
     print(f"  規則 {len(rows)} 行、うち {gated} 行に実在する関門が付いています")
     print("  venv を `/tmp` に向けているファイルはありません")
+    print("  Windows のジョブが呼ぶ検査は、cp1252 で落ちません")
     print("=" * 72)
     return 0
 
