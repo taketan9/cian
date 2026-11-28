@@ -2184,14 +2184,23 @@ impl App {
                 if ctl.cancel.load(Ordering::Relaxed) {
                     break;
                 }
-                let p = cian_core::progress::Progress {
-                    files_done: i,
-                    files_total: total,
-                    current: path.display().to_string(),
-                    ..Default::default()
+                // **バイトでも言います。** 大きな1ファイルのチェックサムは、
+                // ファイルの数では1件のまま終わりまで動きません ── 帯は
+                // バイトから割合を出すので（`render.rs`）、0% のまま数十秒
+                // 止まって見えていました。SFTP の転送と同じ形です。
+                let cancel = ctl.cancel;
+                let shown = path.display().to_string();
+                let on = &mut *ctl.on_progress;
+                let mut watch = |done: u64, of: u64| {
+                    on(&cian_core::progress::Progress {
+                        files_done: i,
+                        files_total: total,
+                        bytes_done: done,
+                        bytes_total: of,
+                        current: shown.clone(),
+                    });
                 };
-                (ctl.on_progress)(&p);
-                match cian_core::attrs::hash_file(path, kind, ctl.cancel) {
+                match cian_core::attrs::hash_file_watching(path, kind, cancel, &mut watch) {
                     Ok(Some(sum)) => {
                         let name = path
                             .file_name()

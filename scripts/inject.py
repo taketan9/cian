@@ -13,21 +13,27 @@ Electron 版の画面は全体が応答しなくなります。待ちに上限�
     python3 scripts/inject.py fifo zero    名前を指定して
     python3 scripts/inject.py --keep       砂場を消さない
 
-## 合格の条件は3つだけです
+## 合格の条件は4つだけです
 
 1. 5秒以内に返ること（固まらないこと）
 2. 断るときは理由を返すこと
 3. その理由が本当のことを言っていること（存在するものを「ありません」と
    言わないこと）
+4. 裏に回した仕事は、裏で本当に終わること
 
 3 を機械で見られる場合は `wrong` に正規表現を書きます。見られない場合は
 所見として出すだけにします。
+
+**4 が無いと、この道具は何もしない実装に合格を出します。** 要求をすぐ返す
+だけなら 1 は必ず通るためです。`background` を書いた項目は、計算している間に
+別の要求へ答えるかと、終わりの知らせの中身（`want_row`）まで見ます。
 """
 
 from __future__ import annotations
 
 import json
 import os
+import queue
 import re
 import shutil
 import socket
@@ -52,7 +58,12 @@ def engine() -> Path:
 
 
 class Engine:
-    """エンジンを1つ立てて、要求を1件ずつ流します。"""
+    """エンジンを1つ立てて、要求を1件ずつ流します。
+
+    **返事以外の行も取っておきます。** 進捗や終わりの知らせは要求の返事とは
+    別の行で届くので、裏に回した仕事（チェックサムなど）は「返事が速いこと」
+    だけでは確かめられません ── 何もせずに返しても同じ速さになるためです。
+    """
 
     def __init__(self, cwd: Path, env: dict | None = None):
         e = dict(os.environ)
@@ -62,7 +73,24 @@ class Engine:
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             env=e, text=True, bufsize=1,
         )
-        self.reply: str | None = None
+        self.lines: queue.Queue = queue.Queue()
+        self.events: list[dict] = []
+        self.next_id = 1
+        threading.Thread(target=self._pump, daemon=True).start()
+
+    def _pump(self):
+        """stdout の行を1本の列に入れます。読む側がどれを待つかを決めます。"""
+        try:
+            while True:
+                line = self.p.stdout.readline()
+                if not line:
+                    return
+                try:
+                    self.lines.put(json.loads(line))
+                except ValueError:
+                    continue
+        except Exception:
+            return
 
     def point_at(self, name: str) -> int | None:
         """左のペインを一覧し、`name` の行番号を返します。
@@ -88,33 +116,46 @@ class Engine:
         「返りました」と報告します ── 実際にそれで `/dev/zero` の
         チェックサムを 0.03 秒で合格にしていました（本当は返りません）。
         """
-        want = 7
-        self.reply = None
-
-        def read():
-            try:
-                while True:
-                    line = self.p.stdout.readline()
-                    if not line:
-                        return
-                    try:
-                        obj = json.loads(line)
-                    except ValueError:
-                        continue
-                    if obj.get("id") == want:
-                        self.reply = obj
-                        return
-            except Exception:
-                return
-
-        t = threading.Thread(target=read, daemon=True)
-        t.start()
+        want = self.next_id
+        self.next_id += 1
         at = time.time()
         self.p.stdin.write(json.dumps({"id": want, "method": method, "params": params}) + "\n")
         self.p.stdin.flush()
-        t.join(deadline)
-        took = time.time() - at
-        return took, self.reply
+        while True:
+            left = deadline - (time.time() - at)
+            if left <= 0:
+                return time.time() - at, None
+            try:
+                obj = self.lines.get(timeout=left)
+            except queue.Empty:
+                return time.time() - at, None
+            if obj.get("id") == want:
+                return time.time() - at, obj
+            self.events.append(obj)
+
+    def wait_event(self, name: str, deadline: float, pred=None):
+        """`name` の知らせが届くまで待ちます。返り値は (経過, 知らせ or None)。
+
+        `pred` を渡した場合は、それに当たる知らせだけを待ちます ── 進捗の
+        知らせは何度も来るので、「バイトが動いた」のように**中身で選ぶ**
+        必要があるためです（最初の1件は 0 バイトです）。
+        """
+        want = pred or (lambda _: True)
+        at = time.time()
+        for i, obj in enumerate(self.events):
+            if obj.get("event") == name and want(obj):
+                return 0.0, self.events.pop(i)
+        while True:
+            left = deadline - (time.time() - at)
+            if left <= 0:
+                return time.time() - at, None
+            try:
+                obj = self.lines.get(timeout=left)
+            except queue.Empty:
+                return time.time() - at, None
+            if obj.get("event") == name and want(obj):
+                return time.time() - at, obj
+            self.events.append(obj)
 
     def close(self):
         self.p.kill()
@@ -180,17 +221,23 @@ def cases(d: Path, port: int) -> list[dict]:
         {"name": "fifo-peek", "what": "名前付きパイプの先頭だけ読む",
          "method": "peek", "params": {"path": str(d / "fifo.txt"), "arg": "-n 5"}},
         {"name": "fifo-hash", "what": "名前付きパイプのチェックサム",
-         "method": "hash", "params": {"pane": "left"}, "cursor_on": "fifo.txt"},
+         "method": "hash", "params": {"pane": "left"}, "cursor_on": "fifo.txt",
+         "background": "hash", "want_row": r"名前付きパイプ"},
         {"name": "zero", "what": "/dev/zero を読む",
          "method": "viewpath", "params": {"path": "/dev/zero"}},
         {"name": "zero-hash", "what": "/dev/zero のチェックサム（リンク経由）",
-         "method": "hash", "params": {"pane": "left"}, "cursor_on": "zero-link"},
+         "method": "hash", "params": {"pane": "left"}, "cursor_on": "zero-link",
+         "background": "hash", "want_row": r"デバイス"},
         {"name": "denied", "what": "読めないファイルを読む",
          "method": "viewpath", "params": {"path": str(d / "denied.txt")}},
         {"name": "huge", "what": "2GB の疎ファイルを読む",
          "method": "viewpath", "params": {"path": str(d / "huge.txt")}},
+        # **裏に回しました**（2026-11-28、本人の指示）。要求はすぐ返るので、
+        # ここで見るのは「返ったか」ではありません ── 計算している間もエンジンが
+        # 他の要求に答えるか、そして本当に計算されたかの2つです。
         {"name": "huge-hash", "what": "2GB の疎ファイルのチェックサム",
-         "method": "hash", "params": {"pane": "left"}, "cursor_on": "huge.txt"},
+         "method": "hash", "params": {"pane": "left"}, "cursor_on": "huge.txt",
+         "background": "hash", "stoppable": True},
         {"name": "loop", "what": "輪になったリンクの容量",
          "method": "du", "params": {"pane": "left"}, "cursor_on": "loop"},
         {"name": "many-list", "what": "5万件の一覧",
@@ -205,6 +252,95 @@ def cases(d: Path, port: int) -> list[dict]:
          "params": {"pane": "left", "user": "x", "host": "127.0.0.1", "port": port,
                     "path": ".", "password": "x"}},
     ]
+
+
+def in_the_background(eng: Engine, c: dict, reply: dict) -> tuple[str, str, list[str]]:
+    """裏に回した仕事を、3つの点で確かめます。返り値は (印, 言葉, 所見)。
+
+    1. **仕事として受け付けたか** ── 返事に操作番号（`op`）があること
+    2. **計算している間、エンジンが他の要求に答えるか** ── 窓が止まらない
+       という主張そのものです。1秒で切ります
+    3. **本当に計算されたか** ── 終わりの知らせが届き、行の中身が
+       `want_row` に当たること
+
+    **3 が無いと、この検査は何もしない実装に ok を返します。** 要求をすぐ
+    返すだけなら、どれほど速くても 1 と 2 は通ります。
+    """
+    bad: list[str] = []
+    ok = reply.get("ok") or {}
+    if "op" not in ok:
+        return "✗", "裏に回っていません（操作番号がありません）", [
+            f"{c['name']}: 返事に op がありません（仕事として受け付けていません）"
+        ]
+    # ② 計算している間に、別の要求へ答えるか。
+    busy, answer = eng.ask("list", {"pane": "left"}, 1.0)
+    if answer is None:
+        return "✗", "計算中、他の要求に答えません", [
+            f"{c['name']}: 裏に回したのに、計算中のエンジンが一覧に答えません"
+        ]
+    # ③ 本当に計算されたか。
+    #
+    # **終わるまで待たない道もあります。** 2GB の sha256 は debug ビルドで
+    # 100 秒を超え、待ち切りの秒数は機械の速さで変わります ── そこを基準に
+    # すると、遅い機械で落ちる検査になります。重いものは「進んでいること」と
+    # 「止められること」で測ります。どちらも、何もしない実装では通りません。
+    if c.get("stoppable"):
+        return stopped_halfway(eng, c, int(ok["op"]), busy)
+    job, ev = eng.wait_event(c["background"], c.get("job", DEADLINE * 2))
+    if ev is None:
+        return "✗", f"{job:.0f} 秒待っても終わりの知らせが来ません", [
+            f"{c['name']}: 裏に回した仕事が終わりを知らせません"
+        ]
+    rows = ev.get("rows") or []
+    if not rows:
+        return "✗", "終わりましたが、結果が空です", [f"{c['name']}: 結果の行がありません"]
+    got = str(rows[0].get("sum", ""))
+    want = c.get("want_row")
+    if want and not re.search(want, got):
+        return "✗", f"結果が期待と違います: {got[:40]}", [
+            f"{c['name']}: 行が「{got[:40]}」です（{want} を期待）"
+        ]
+    return "✓", f"裏で {job:.2f} 秒（計算中の一覧は {busy:.2f} 秒）: {got[:24]}", bad
+
+
+def stopped_halfway(eng: Engine, c: dict, op: int, busy: float) -> tuple[str, str, list[str]]:
+    """重い仕事を、進んでいることと止められることで測ります。
+
+    見るのは3つです。**どれも「番号だけ返して何もしない」実装では通りません。**
+
+    1. 進捗の知らせにバイトが乗ること（本当に読んでいること）
+    2. `:queue` にその番号が「実行中」で出ること（止める道があること）
+    3. `cancel` のあと、終わりの知らせが `cancelled` で届くこと
+    """
+    # **バイトが動いた知らせを待ちます。** 最初の1件は 0 バイト（帯に全体の
+    # 大きさを渡すためのもの）なので、それで合格にすると「読み始めてすぐ
+    # 止まった」を見逃します。
+    _, prog = eng.wait_event("progress", DEADLINE, lambda e: (e.get("bytes") or 0) > 0)
+    if prog is None:
+        return "✗", "計算が進んでいません（バイトが動きません）", [
+            f"{c['name']}: 裏に回したのに、読んだバイトが増えません"
+        ]
+    _, q = eng.ask("queue", {})
+    jobs = ((q or {}).get("ok") or {}).get("jobs") or []
+    mine = [j for j in jobs if j.get("op") == op]
+    if not mine or mine[0].get("state") != "running":
+        return "✗", f":queue に出ていません（{jobs}）", [
+            f"{c['name']}: 実行中の仕事が :queue に出ません（止める道がありません）"
+        ]
+    _, stop = eng.ask("cancel", {"op": op})
+    if not ((stop or {}).get("ok") or {}).get("stopping"):
+        return "✗", "止められません", [f"{c['name']}: cancel が効きません"]
+    took, ev = eng.wait_event(c["background"], 15.0)
+    if ev is None:
+        return "✗", "止めたあと、終わりの知らせが来ません", [
+            f"{c['name']}: 中止しても終わりを知らせません"
+        ]
+    if not ev.get("cancelled"):
+        return "✗", "中止したのに、中止と言いません", [
+            f"{c['name']}: 中止の知らせが cancelled を立てていません"
+        ]
+    return "✓", (f"裏で {prog['bytes'] // (1024 * 1024)}MB 読んだところで中止（"
+                 f"{took:.2f} 秒で返事・計算中の一覧は {busy:.2f} 秒）"), []
 
 
 def main() -> int:
@@ -233,25 +369,29 @@ def main() -> int:
                         continue
                     params["cursors"] = {"left": at, "right": 0}
                 took, reply = eng.ask(c["method"], params, c.get("deadline", DEADLINE))
+                if reply is None:
+                    print(f"  ✗ {c['name']:<12} {c['what']:<28} 5秒で返りませんでした")
+                    bad.append(f"{c['name']}: 固まりました（{c['method']}）")
+                    continue
+                err = reply.get("error")
+                mark = "✓"
+                note = f"断りました: {err}" if err else "返りました"
+                # **5秒を超えたものは、返っても固まっていた時間です。**
+                # 要求は1本ずつ処理されるので、その間ずっと窓は止まっています。
+                if took > DEADLINE:
+                    mark = "△"
+                    note = f"{note}（窓は {took:.0f} 秒止まります）"
+                    slowly.append(f"{c['name']}: {took:.1f} 秒かかります（5秒を超えています）")
+                if err and c.get("wrong") and re.search(c["wrong"], err):
+                    mark = "✗"
+                    note = f"理由が嘘です: {err}"
+                    bad.append(f"{c['name']}: 存在するものを「ありません」と断っています")
+                # 裏に回した仕事は、返事の速さでは測れません。
+                if c.get("background") and not err and mark == "✓":
+                    mark, note, more = in_the_background(eng, c, reply)
+                    bad.extend(more)
             finally:
                 eng.close()
-            if reply is None:
-                print(f"  ✗ {c['name']:<12} {c['what']:<28} 5秒で返りませんでした")
-                bad.append(f"{c['name']}: 固まりました（{c['method']}）")
-                continue
-            err = reply.get("error")
-            mark = "✓"
-            note = f"断りました: {err}" if err else "返りました"
-            # **5秒を超えたものは、返っても固まっていた時間です。**
-            # 要求は1本ずつ処理されるので、その間ずっと窓は止まっています。
-            if took > DEADLINE:
-                mark = "△"
-                note = f"{note}（窓は {took:.0f} 秒止まります）"
-                slowly.append(f"{c['name']}: {took:.1f} 秒かかります（5秒を超えています）")
-            if err and c.get("wrong") and re.search(c["wrong"], err):
-                mark = "✗"
-                note = f"理由が嘘です: {err}"
-                bad.append(f"{c['name']}: 存在するものを「ありません」と断っています")
             print(f"  {mark} {c['name']:<12} {c['what']:<28} {took:5.2f}s  {note[:60]}")
     finally:
         if keep:

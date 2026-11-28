@@ -947,6 +947,22 @@ function hideProg() {
     drawProg();
 }
 
+/// 経過の言い方。
+///
+/// **ミリ秒は短い仕事のためのものです。** 2GB のチェックサムが終わったとき、
+/// 状態行は「チェックサム 1 件（103262 ms）」と言いました ── 正しい数ですが、
+/// 読める形ではありません（2026-11-28）。1秒を超えたら秒で、1分を超えたら
+/// 分と秒で言います。`always` は帯の中の言い方で、始まったばかりでも
+/// 「0秒」と言います（刻みが ms と秒で跳ぶと、動いて見えないためです）。
+function tookText(ms, always = false) {
+    const n = Math.max(0, Math.round(ms || 0));
+    if (!always && n < 1000) return `${n} ms`;
+    const secs = Math.round(n / 1000);
+    return secs >= 60
+        ? tr(`${Math.floor(secs / 60)}m${secs % 60}s`, `${Math.floor(secs / 60)}分${secs % 60}秒`)
+        : tr(`${secs}s`, `${secs}秒`);
+}
+
 function drawProg() {
     if (!running || prog.hidden) { el.prog.hidden = true; return; }
     el.prog.hidden = false;
@@ -958,8 +974,7 @@ function drawProg() {
         ? running.bytes / running.bytesTotal
         : (running.total > 0 ? running.done / running.total : 0);
     el.pFill.style.width = `${Math.round(Math.min(1, frac) * 100)}%`;
-    const secs = Math.round((running.ms ?? 0) / 1000);
-    const elapsed = secs >= 60 ? tr(`${Math.floor(secs / 60)}m${secs % 60}s`, `${Math.floor(secs / 60)}分${secs % 60}秒`) : tr(`${secs}s`, `${secs}秒`);
+    const elapsed = tookText(running.ms ?? 0, true);
     const bytes = running.bytesTotal > 0
         ? `${human(running.bytes)} / ${human(running.bytesTotal)}   `
         : '';
@@ -9037,14 +9052,25 @@ async function cmdReadonly(onOff) {
     say(tr(`made ${r.changed} ${on ? 'read-only' : 'writable'}`, `${r.changed} 件を${on ? '読み取り専用に' : '書き込み可に'}しました`));
 }
 
+/// **A checksum is a job, not a reply.** The engine answers one request at a
+/// time, so waiting here for a sha256 of two gigabytes froze the window for
+/// as long as the disk took — the bar, the cursor and the other pane all
+/// stopped with it (所見 S3). The call now returns an operation number and
+/// the rows arrive in a `hash` event, which is also what makes Ctrl+C and
+/// `:queue` able to stop it.
 async function cmdHash(kind) {
     const k = /md5/i.test(kind || '') ? 'md5' : 'sha256';
-    say(tr(`computing ${k}…`, `${k} を計算中…`));
     const r = await ask('hash', { pane: state.focus, kind: k });
     if (!r) return;
-    show(tr(`Checksum (${r.kind})`, `チェックサム（${r.kind}）`), tr(`${r.rows.length} items`, `${r.rows.length} 件`),
-        r.rows.map((x) => ({ label: x.name, sub: x.sum })),
-        { foot: tr('Esc close', 'Esc 閉じる') });
+    // **動いている仕事の帯は奪いません。** 窓が追いかけられる仕事は1つで
+    // （`running` は1枠）、コピーの最中にチェックサムを頼むと帯がコピーの
+    // 進捗を映さなくなります。そのときは状態行で言うだけにし、結果は面が
+    // 開いたときに分かります。
+    if (running) {
+        say(tr(`computing ${k}…`, `${k} を計算しています`));
+        return;
+    }
+    beginOp(r, 'hash', tr('computing', '計算'));
 }
 
 async function cmdSearch(mode, needle) {
@@ -12709,10 +12735,33 @@ window.cian.onEvent(async (msg) => {
             // wrong without telling you what, which is the worst of both.
             else if (msg.errors.length) say(msg.errors.join('  /  '), true);
             else if (msg.skipped) say(tr(`${verb} ${msg.ok}, skipped ${msg.skipped}`, `${verb} ${msg.ok} 件、${msg.skipped} 件は飛ばしました`));
-            else say(tr(`${verb} ${msg.ok} (${msg.ms} ms)`, `${verb} ${msg.ok} 件（${msg.ms} ms）`));
+            else say(tr(`${verb} ${msg.ok} (${tookText(msg.ms)})`, `${verb} ${msg.ok} 件（${tookText(msg.ms)}）`));
             // The desktop is told too, for the job that outlasted your
             // attention — which is the only kind worth interrupting for.
             notifyDone(msg.ms ?? 0, status.msg);
+            return;
+        }
+
+        // The checksums, now that they exist. Whatever was computed is shown
+        // even when it was called off halfway: three sums out of ten are
+        // three sums, and the heading says how it ended.
+        case 'hash': {
+            if (running && running.op === msg.op) {
+                running = null;
+                hideProg();
+            }
+            const rows = msg.rows || [];
+            if (msg.cancelled && !rows.length) {
+                say(tr('checksum stopped', 'チェックサムを中止しました'), true);
+                return;
+            }
+            say(msg.cancelled
+                ? tr(`checksum stopped (${rows.length} done)`, `チェックサムを中止しました（${rows.length} 件は済み）`)
+                : tr(`${rows.length} checksums (${tookText(msg.ms)})`, `チェックサム ${rows.length} 件（${tookText(msg.ms)}）`));
+            show(tr(`Checksum (${msg.kind})`, `チェックサム（${msg.kind}）`),
+                tr(`${rows.length} items`, `${rows.length} 件`),
+                rows.map((x) => ({ label: x.name, sub: x.sum })),
+                { foot: tr('Esc close', 'Esc 閉じる') });
             return;
         }
 

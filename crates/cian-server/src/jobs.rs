@@ -108,6 +108,15 @@ struct Inner {
     /// the progress of each unreadable.
     running: Mutex<Option<Live>>,
     waiting: Mutex<VecDeque<Pending>>,
+    /// Long work that takes no seat in the queue above.
+    ///
+    /// A checksum only reads. Making it wait behind a copy would buy nothing
+    /// and cost the one thing the window cannot show — a job in line reports
+    /// no progress, so "計算しています" would sit there unmoving for as long
+    /// as the copy took. Listed and cancellable all the same: that is what
+    /// this is for, rather than letting such a job hold the single seat and
+    /// hide the copy that already had it.
+    side: Mutex<Vec<Live>>,
 }
 
 /// The operations in flight, so they can be numbered, listed and called off.
@@ -156,6 +165,16 @@ impl Jobs {
             }));
         }
         rows.extend(self.inner.waiting.lock().unwrap().iter().map(|j| j.line("waiting")));
+        rows.extend(self.inner.side.lock().unwrap().iter().map(|j| {
+            serde_json::json!({
+                "op": j.op,
+                "kind": j.kind,
+                "total": j.total,
+                "dest": j.dest,
+                "state": "running",
+                "stopping": j.cancel.load(Ordering::Relaxed),
+            })
+        }));
         rows
     }
 
@@ -170,6 +189,10 @@ impl Jobs {
                 j.cancel.store(true, Ordering::Relaxed);
                 return true;
             }
+        }
+        if let Some(j) = self.inner.side.lock().unwrap().iter().find(|j| j.op == op) {
+            j.cancel.store(true, Ordering::Relaxed);
+            return true;
         }
         let dropped = {
             let mut waiting = self.inner.waiting.lock().unwrap();
@@ -191,6 +214,125 @@ impl Jobs {
             }
             None => false,
         }
+    }
+
+    /// Checksums for the selection, off the thread that answers requests.
+    ///
+    /// **The engine answers one request at a time.** Computing a sha256 of
+    /// two gigabytes inside the handler held that thread for as long as the
+    /// disk took, and for all of it the window was unanswerable — the cursor
+    /// did not move and the other pane did not read (2026-11-28、所見 S3).
+    /// So this returns an operation number at once, as a copy does, and the
+    /// rows arrive afterwards in a `hash` event carrying that number. The
+    /// terminal build has run its own checksums on a worker since it grew
+    /// `start_op`; this is the same promise kept in the engine.
+    ///
+    /// Reports bytes as well as files, because the selection worth
+    /// checksumming is often one large file — for which a count of files
+    /// moves once, at the end.
+    pub fn start_hash(
+        &self,
+        paths: Vec<PathBuf>,
+        kind: cian_core::attrs::HashKind,
+        out: Out,
+    ) -> (u64, usize) {
+        use cian_core::attrs::{hash_file_watching, special, Special};
+
+        let op = self.inner.next.fetch_add(1, Ordering::Relaxed) + 1;
+        let total = paths.len();
+        let shown = match kind {
+            cian_core::attrs::HashKind::Md5 => "md5",
+            cian_core::attrs::HashKind::Sha256 => "sha256",
+        };
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.inner.side.lock().unwrap().push(Live {
+            op,
+            kind: "hash",
+            total,
+            dest: None,
+            cancel: Arc::clone(&cancel),
+        });
+        let inner = Arc::clone(&self.inner);
+        std::thread::spawn(move || {
+            out.event("started", serde_json::json!({ "op": op, "kind": "hash", "total": total }));
+            let began = std::time::Instant::now();
+            let mut last = std::time::Instant::now() - std::time::Duration::from_secs(1);
+            let mut rows: Vec<serde_json::Value> = Vec::new();
+            for (at, path) in paths.iter().enumerate() {
+                if cancel.load(Ordering::Relaxed) {
+                    break;
+                }
+                let name = path
+                    .file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                // **通常ファイル以外は、読む前に断ります。** 名前付きパイプは
+                // 書く側が現れるまで返らず、`/dev/zero` は終わりません。裏に
+                // 回したあとも、返らないものは返らないままです（所見 S1・S2）。
+                if let Some(what) = special(path) {
+                    rows.push(serde_json::json!({
+                        "name": name,
+                        "sum": match what {
+                            Special::Directory => "（ディレクトリ）",
+                            Special::Missing => "（ありません）",
+                            Special::Fifo => "（名前付きパイプ）",
+                            Special::Device => "（デバイス）",
+                            Special::Socket => "（ソケット）",
+                            Special::Other => "（通常ファイルではありません）",
+                        },
+                    }));
+                    continue;
+                }
+                let out_for_progress = out.clone();
+                let told = &mut last;
+                let mut tell = |done: u64, of: u64| {
+                    if told.elapsed().as_millis() < REPORT_EVERY_MS {
+                        return;
+                    }
+                    *told = std::time::Instant::now();
+                    out_for_progress.event(
+                        "progress",
+                        serde_json::json!({
+                            "op": op,
+                            "done": at,
+                            "total": total,
+                            "bytes": done,
+                            "bytes_total": of,
+                            "path": name,
+                            "ms": began.elapsed().as_millis() as u64,
+                        }),
+                    );
+                };
+                match hash_file_watching(path, kind, &cancel, &mut tell) {
+                    Ok(Some(sum)) => rows.push(serde_json::json!({ "name": name, "sum": sum })),
+                    // Cancelled mid-file. Whatever was already summed stays in
+                    // the rows: half an answer that says it is half is worth
+                    // more than nothing.
+                    Ok(None) => break,
+                    // **Per row, not per request.** One unreadable file used
+                    // to fail the whole call, so a selection of ten with one
+                    // locked file returned nine checksums to nobody.
+                    Err(e) => rows.push(serde_json::json!({
+                        "name": name,
+                        "sum": format!("（読めません: {}）", e.root_cause()),
+                    })),
+                }
+            }
+            // 席を空けてから知らせる。理由は上の経路と同じ ── `hash` を受けて
+            // `:queue` を読み直した前端に、終わった仕事が「実行中」で見える。
+            inner.side.lock().unwrap().retain(|j| j.op != op);
+            out.event(
+                "hash",
+                serde_json::json!({
+                    "op": op,
+                    "kind": shown,
+                    "rows": rows,
+                    "cancelled": cancel.load(Ordering::Relaxed),
+                    "ms": began.elapsed().as_millis() as u64,
+                }),
+            );
+        });
+        (op, 0)
     }
 }
 
@@ -653,6 +795,117 @@ mod tests {
             }
         }
         out
+    }
+
+    /// The first event of a kind, or nothing within the deadline.
+    fn wait_event(rx: &Receiver<Line>, name: &str) -> Option<serde_json::Value> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while std::time::Instant::now() < deadline {
+            match rx.recv_timeout(std::time::Duration::from_secs(30)) {
+                Ok(line) => {
+                    let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+                    if v["event"] == name {
+                        return Some(v);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn checksums_arrive_as_an_event_and_say_what_they_summed() {
+        // The failure this pins: a checksum computed inside the request
+        // handler held the engine, and the engine answers one request at a
+        // time — so the whole window stopped for as long as the disk took
+        // (2026-11-28). Moved to a worker, the rows have to come back by
+        // event, and they have to be the real sums: a job that returns an
+        // operation number and nothing else would look identical from the
+        // call side.
+        let root = std::env::temp_dir().join(format!("cian-hash-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let mut paths = Vec::new();
+        for i in 0..2 {
+            let at = root.join(format!("f{i}.bin"));
+            std::fs::write(&at, format!("contents {i}\n")).unwrap();
+            paths.push(at);
+        }
+        let (out, rx) = Out::piped();
+        let jobs = Jobs::default();
+        let kind = cian_core::attrs::HashKind::Sha256;
+
+        let (op, queued) = jobs.start_hash(paths.clone(), kind, out);
+        assert_eq!(queued, 0, "a checksum never waits in the copy queue");
+
+        let started = wait_event(&rx, "started").expect("it says it has started");
+        assert_eq!(started["op"], op);
+        assert_eq!(started["kind"], "hash");
+
+        let ev = wait_event(&rx, "hash").expect("the rows arrive");
+        assert_eq!(ev["op"], op);
+        assert_eq!(ev["kind"], "sha256");
+        assert_eq!(ev["cancelled"], false);
+        let rows = ev["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        let cancel = AtomicBool::new(false);
+        for (row, path) in rows.iter().zip(paths.iter()) {
+            let want = cian_core::attrs::hash_file(path, kind, &cancel).unwrap().unwrap();
+            assert_eq!(row["name"], path.file_name().unwrap().to_string_lossy().as_ref());
+            assert_eq!(row["sum"], want, "the sum is the file's own");
+        }
+        // Nothing left holding a place in `:queue`.
+        assert!(jobs.listing().is_empty());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_checksum_is_listed_and_stoppable_without_taking_the_copy_s_seat() {
+        // Two failures at once. A checksum that took the single seat would
+        // push the running copy out of `:queue` and out of reach of Ctrl+C;
+        // one registered nowhere could not be stopped at all. The margin is
+        // the same as the queue test above: these calls are microseconds
+        // apart and the copy takes tens of milliseconds.
+        let (root, to, big) = sandbox("side");
+        let (out, rx) = Out::piped();
+        let (undo, redo) = (Stack::default(), Stack::default());
+        let jobs = Jobs::default();
+
+        let (copy, _) = jobs.start(
+            Plan::of(Kind::Copy), big.clone(), Some(to.clone()),
+            out.clone(), undo, redo,
+        );
+        let (hash, _) =
+            jobs.start_hash(big.clone(), cian_core::attrs::HashKind::Sha256, out.clone());
+
+        let listing = jobs.listing();
+        let ops: Vec<u64> = listing.iter().map(|r| r["op"].as_u64().unwrap()).collect();
+        assert!(ops.contains(&copy), "the copy still holds its own place");
+        assert!(ops.contains(&hash), "and the checksum has one of its own");
+        assert!(jobs.cancel(hash), "a checksum can be called off");
+
+        // Both report, in whichever order they land — waiting for one and
+        // then the other would be a test that depends on which job is
+        // faster, and the first wait would swallow the other's event.
+        let (mut said_hash, mut said_copy) = (false, false);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while (!said_hash || !said_copy) && std::time::Instant::now() < deadline {
+            match rx.recv_timeout(std::time::Duration::from_secs(30)) {
+                Ok(line) => {
+                    let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+                    if v["event"] == "hash" {
+                        said_hash = true;
+                    }
+                    if v["event"] == "done" && v["op"] == copy {
+                        said_copy = true;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        assert!(said_hash, "the checksum reported its end");
+        assert!(said_copy, "and so did the copy it ran beside");
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[test]

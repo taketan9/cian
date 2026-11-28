@@ -146,12 +146,36 @@ pub fn special(path: &Path) -> Option<Special> {
 /// in the reader's own language before getting here; this is the backstop, so
 /// no future caller can hang the program by forgetting.
 pub fn hash_file(path: &Path, kind: HashKind, cancel: &AtomicBool) -> Result<Option<String>> {
+    hash_file_watching(path, kind, cancel, &mut |_, _| {})
+}
+
+/// The same, saying how far through the file it has got.
+///
+/// `watch` is handed (bytes read, bytes in the file) as the read goes on. A
+/// checksum of one two-gigabyte file is a single file as far as the counter
+/// behind a progress bar is concerned, so without this it reads "0 / 1" for
+/// as long as the disk takes and then jumps to the end — which is
+/// indistinguishable from a freeze, and freezing is the thing this was moved
+/// off the request thread to stop (2026-11-28).
+pub fn hash_file_watching(
+    path: &Path,
+    kind: HashKind,
+    cancel: &AtomicBool,
+    watch: &mut dyn FnMut(u64, u64),
+) -> Result<Option<String>> {
     if let Some(what) = special(path) {
         anyhow::bail!("not an ordinary file ({what:?}): {}", path.display());
     }
     let mut f = fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
+    // What the file says it holds. Only ever used to draw a bar, so a file
+    // that grows while it is being read is not an error here — the count of
+    // bytes actually hashed is the one that is true, and it is the one
+    // reported as done.
+    let total = f.metadata().map(|md| md.len()).unwrap_or(0);
     let mut buf = vec![0u8; 1024 * 1024];
     let mut hasher = Hasher::new(kind);
+    let mut read = 0u64;
+    watch(0, total);
     loop {
         if cancel.load(Ordering::Relaxed) {
             return Ok(None);
@@ -161,6 +185,8 @@ pub fn hash_file(path: &Path, kind: HashKind, cancel: &AtomicBool) -> Result<Opt
             break;
         }
         hasher.update(&buf[..n]);
+        read += n as u64;
+        watch(read, total.max(read));
     }
     Ok(Some(hasher.finish()))
 }
@@ -287,6 +313,39 @@ mod tests {
             hash_file(&f, HashKind::Sha256, &cancel).unwrap().unwrap(),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    #[test]
+    fn hashing_says_how_far_through_the_file_it_is() {
+        // The progress bar divides bytes done by bytes total, so a checksum
+        // that reported only files would leave it at 0% for the whole of a
+        // large file — which is what a freeze looks like, and the freeze is
+        // what moving this to a worker was for. Measured here as the counts
+        // themselves rather than through the bar: the same function the bar
+        // reads cannot check its own arithmetic.
+        let dir = std::env::temp_dir().join(format!("cian-watch-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("big.bin");
+        // Three chunks and a bit, so there is more than one report.
+        let size = 1024 * 1024 * 3 + 7;
+        fs::write(&f, vec![3u8; size]).unwrap();
+        let cancel = AtomicBool::new(false);
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let sum = hash_file_watching(&f, HashKind::Sha256, &cancel, &mut |done, of| {
+            seen.push((done, of))
+        })
+        .unwrap()
+        .unwrap();
+        assert_eq!(sum, hash_file(&f, HashKind::Sha256, &cancel).unwrap().unwrap());
+        assert!(seen.len() > 3, "it speaks more than once: {}", seen.len());
+        assert_eq!(seen.first().unwrap().0, 0, "it starts from nothing done");
+        assert_eq!(seen.last().unwrap(), &(size as u64, size as u64), "and ends full");
+        assert!(
+            seen.windows(2).all(|w| w[0].0 <= w[1].0),
+            "the count never goes backwards"
+        );
+        assert!(seen.iter().all(|(done, of)| done <= of), "nor past the end");
+        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

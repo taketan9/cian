@@ -322,6 +322,10 @@ def plan() -> list[tuple[str, list[Step]]]:
              ["node", "gui/drive.js", "--commands"], timeout=900),
         Step("窓版 値", "設定の値が画面に戻ってくるか",
              ["node", "gui/drive.js", "--values"], timeout=900),
+        # 裏に回した仕事は、返事ではなく知らせで返ります。受け口が無ければ
+        # 面が空のまま開くので、窓の側でも一度通します。
+        Step("窓版 チェックサム", "裏の仕事から結果が面に載るまで",
+             ["node", "gui/drive.js", "--hash"], timeout=900),
         Step("窓版 AI", "説明からコマンド生成を、答えが返る側まで",
              ["node", "gui/drive.js", "--ai"], timeout=900, env=mock,
              note="mock の設定で走ります（本物の接続先ではありません）"),

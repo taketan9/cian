@@ -433,6 +433,14 @@ async function main() {
         'fn main() {\n    let x = (1 + 2);\n    println!("hi");\n}\n');
     // A binary, for the hex editor.
     fs.writeFileSync(path.join(sand, 'from', 'z.bin'), Buffer.from('HELLO WORLD\u0000\u0001', 'latin1'));
+    // 大きな疎ファイル。**既定では作りません** ── 一巡やコマンドの掃引が
+    // これに当たると、チェックサムや容量で何十秒も計算することになります。
+    // 帯の絵を撮るときだけ `CIAN_DRIVE_BIG=2048`（MB）で作ります。
+    if (process.env.CIAN_DRIVE_BIG) {
+        const fd = fs.openSync(path.join(sand, 'from', 'big.bin'), 'w');
+        fs.ftruncateSync(fd, (Number(process.env.CIAN_DRIVE_BIG) || 0) * 1024 * 1024);
+        fs.closeSync(fd);
+    }
     // 差分送り（F7）のための一対。**離れた場所に三つだけ違う。**
     // まるごと違う二つを比べると差分は一塊になり、「次へ」が動いたのか
     // 動いていないのか区別がつかない。
@@ -502,7 +510,7 @@ async function main() {
         ['とても長い', 'x'.repeat(400)],
         ['タブ', 'a\tb'],
     ];
-    const keys = process.argv.slice(2).filter((a) => !['--commands', '--values', '--ai', '--ai-real'].includes(a));
+    const keys = process.argv.slice(2).filter((a) => !['--commands', '--values', '--ai', '--ai-real', '--hash'].includes(a));
     // `--commands` ── **辞書にある名前を、一つずつ全部打つ。**
     //
     // 端末版には `scripts/sweep.py` があって verb を全部叩く。窓版には
@@ -666,7 +674,37 @@ async function main() {
         [`want:(()=>{const t=${prompt()};return /[A-Za-z]/.test(t) && !/mock/i.test(t) && !t.includes('ファイルの一覧を出す')})()`, '本物の答えが載っている（echo ではない）'],
     ];
 
-    const round = process.argv.includes('--ai-real') ? aiRealRound()
+    // `--hash` ── **チェックサムが、裏の仕事から返ってくるところまで。**
+    //
+    // 2GB のファイルの sha256 は要求の処理の中で数十秒かかり、その間
+    // エンジンは次の要求を読まないので窓全体が止まっていた（所見 S3）。
+    // 裏に回したので結果は返事ではなく `hash` の知らせで届く ── つまり
+    // **受け口が無ければ面は空のまま開く**ので、この走行はその経路を測る。
+    // 本物の桁を見るのは、何もせずに番号だけ返す実装に ok を出さないため。
+    const sheet = () => '(report.rows[0] || {})';
+    const hashRound = () => [
+        // **置いた場所を確かめてから頼む。** 最初に書いたときは砂場に無い
+        // 名前（`Cargo.lock`）を探していて、カーソルは動かないまま偶然
+        // 乗っていた実ファイルが測られていた ── 走行は緑だった。
+        [`read:(()=>{const p=state[state.focus];const i=p.entries.findIndex((e)=>e.name==="z.bin");`
+            + `if(i<0)return "z.bin が一覧にありません";jumpTo(i);`
+            + `return "カーソル="+p.entries[p.cursor].name;})()`, 'カーソルを実ファイルへ'],
+        [`want:(state[state.focus].entries[state[state.focus].cursor] || {}).name === 'z.bin'`,
+            'カーソルは測るつもりのファイルにいる'],
+        ['read:(()=>{cmdHash("");return "頼みました";})()', ':hash'],
+        ['wait:4000', ''],
+        ['top:#report', '結果の面がいちばん上に見えている'],
+        [`read:'先頭の行: ' + JSON.stringify(${sheet()})`, ''],
+        [`want:${sheet()}.label === 'z.bin'`, '測ったのは、カーソルが指していたもの'],
+        [`want:/^[0-9a-f]{64}$/.test(String(${sheet()}.sub || ''))`,
+            '本物の sha256 が載っている（裏の仕事から返っている）'],
+        ['want:/チェックサム 1 件|1 checksums/.test(document.querySelector("#status").textContent)',
+            '「計算中」のままにならない'],
+        ['Esc', '閉じる'],
+    ];
+
+    const round = process.argv.includes('--hash') ? hashRound()
+        : process.argv.includes('--ai-real') ? aiRealRound()
         : process.argv.includes('--ai') ? aiRound()
         : process.argv.includes('--values') ? valueRound()
         : process.argv.includes('--commands') ? commandRound()

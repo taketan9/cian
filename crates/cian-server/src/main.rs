@@ -1454,46 +1454,29 @@ impl Session {
                 pane.reload()?;
                 Ok(serde_json::json!({ "changed": paths.len() }))
             }
-            // Checksums. Cancellable because a checksum of something large is
-            // the one "quick look" in here that is not quick.
+            // Checksums, on a worker. **A checksum of something large is the
+            // one "quick look" in here that is not quick**, and the engine
+            // answers one request at a time — so computing it here held the
+            // whole window for as long as the disk took (所見 S3). The call
+            // hands back an operation number; `jobs::start_hash` reports
+            // progress against it and ends with a `hash` event.
             "hash" => {
                 let which = req.params["pane"].as_str().unwrap_or("left").to_string();
                 let kind = match req.params["kind"].as_str() {
                     Some("md5") => cian_core::attrs::HashKind::Md5,
                     _ => cian_core::attrs::HashKind::Sha256,
                 };
-                let paths = self.targets(&which)?;
-                let stop = std::sync::atomic::AtomicBool::new(false);
-                let mut rows = Vec::new();
-                for p in paths.iter().take(200) {
-                    // A directory has no checksum, and saying so beats the
-                    // read error the caller would otherwise be handed.
-                    // **通常ファイル以外は、読む前に断ります。** 名前付きパイプは
-                    // 書く側が現れるまで返らず、`/dev/zero` は終わりません。
-                    // エンジンは要求を1本ずつ処理するので、**そこで窓全体が
-                    // 止まります**（2026-11-28、所見 S1・S2）。
-                    if let Some(what) = cian_core::attrs::special(p) {
-                        use cian_core::attrs::Special;
-                        rows.push(serde_json::json!({
-                            "name": p.file_name().map(|s| s.to_string_lossy().into_owned()),
-                            "sum": match what {
-                                Special::Directory => "（ディレクトリ）",
-                                Special::Missing => "（ありません）",
-                                Special::Fifo => "（名前付きパイプ）",
-                                Special::Device => "（デバイス）",
-                                Special::Socket => "（ソケット）",
-                                Special::Other => "（通常ファイルではありません）",
-                            },
-                        }));
-                        continue;
-                    }
-                    let sum = cian_core::attrs::hash_file(p, kind, &stop)?;
-                    rows.push(serde_json::json!({
-                        "name": p.file_name().map(|s| s.to_string_lossy().into_owned()),
-                        "sum": sum,
-                    }));
+                // The cap is the same as before, and it is on the selection
+                // rather than on the time: two hundred checksums is a list
+                // nobody reads, and the rows all travel in one event.
+                let paths: Vec<std::path::PathBuf> =
+                    self.targets(&which)?.into_iter().take(200).collect();
+                if paths.is_empty() {
+                    anyhow::bail!("ファイルが選択されていません");
                 }
-                Ok(serde_json::json!({ "kind": req.params["kind"].as_str().unwrap_or("sha256"), "rows": rows }))
+                let count = paths.len();
+                let (op, queued) = self.jobs.start_hash(paths, kind, self.out.clone());
+                Ok(serde_json::json!({ "op": op, "queued": queued, "count": count }))
             }
             // What is biggest here. On a worker with a cancel flag, because
             // pointed at a home directory it is minutes rather than seconds.
