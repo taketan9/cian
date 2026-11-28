@@ -103,7 +103,11 @@ impl App {
         };
         match res {
             Ok(()) => {
-                self.message = Some(format!("● added {} path(s)", paths.len()));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("● {} 件を追加しました", paths.len())
+                } else {
+                    format!("● added {} path(s)", paths.len())
+                });
                 self.invalidate_git();
                 self.reload_active();
             }
@@ -128,11 +132,19 @@ impl App {
         }
         match cian_core::git::unstage(&dir, &paths) {
             Ok(()) => {
-                self.message = Some(format!("unstaged {} path(s)", paths.len()));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("{} 件を取り消しました", paths.len())
+                } else {
+                    format!("unstaged {} path(s)", paths.len())
+                });
                 self.invalidate_git();
                 self.reload_active();
             }
-            Err(e) => self.message = Some(format!("git reset: {}", e)),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("git reset に失敗しました: {}", e)
+            } else {
+                format!("git reset: {}", e)
+            }),
         }
     }
 
@@ -253,7 +265,11 @@ impl App {
                 self.invalidate_git();
                 self.reload_active();
             }
-            Err(e) => self.message = Some(format!("svn resolve: {}", e)),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("svn resolve に失敗しました: {}", e)
+            } else {
+                format!("svn resolve: {}", e)
+            }),
         }
     }
 
@@ -284,7 +300,11 @@ impl App {
                 self.invalidate_git();
                 self.reload_active();
             }
-            Err(e) => self.message = Some(format!("svn update: {}", e)),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("svn update に失敗しました: {}", e)
+            } else {
+                format!("svn update: {}", e)
+            }),
         }
     }
 
@@ -327,11 +347,19 @@ impl App {
         }
         match cian_core::svn::commit(&dir, paths, message) {
             Ok(()) => {
-                self.message = Some(format!("● committed {} path(s)", paths.len()));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("● {} 件をコミットしました", paths.len())
+                } else {
+                    format!("● committed {} path(s)", paths.len())
+                });
                 self.invalidate_git();
                 self.reload_active();
             }
-            Err(e) => self.message = Some(format!("svn commit: {}", e)),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("svn commit に失敗しました: {}", e)
+            } else {
+                format!("svn commit: {}", e)
+            }),
         }
     }
 
@@ -449,7 +477,13 @@ impl App {
         };
         match diff {
             Some(d) if !d.trim().is_empty() => self.open_text_viewer(&format!("diff {} — {}", base, name), d),
-            Some(_) => self.message = Some(format!("{}: no changes vs {}", name, base)),
+            Some(_) => {
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("{}: {} との差分はありません", name, base)
+                } else {
+                    format!("{}: no changes vs {}", name, base)
+                })
+            }
             None => self.message = Some(tr(self.lang, "diff failed", "差分の取得に失敗しました").into()),
         }
     }

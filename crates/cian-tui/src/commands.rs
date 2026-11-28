@@ -330,7 +330,11 @@ impl App {
                         );
                     }
                     None => {
-                        self.message = Some(format!("{arg}? — :limit 2M | 500k | off"))
+                        self.message = Some(if self.lang == Lang::Ja {
+                            format!("{arg} は読めません。:limit 2M | 500k | off の形で指定してください")
+                        } else {
+                            format!("{arg}? use :limit 2M | 500k | off")
+                        })
                     }
                 },
             },
@@ -565,7 +569,13 @@ impl App {
                 let spec = if verb == "hash" { rest } else { verb };
                 match cian_core::attrs::HashKind::parse(spec) {
                     Some(k) => self.start_hash(k),
-                    None => self.message = Some(format!("unknown hash: {} (md5 or sha256)", spec)),
+                    None => {
+                        self.message = Some(if self.lang == Lang::Ja {
+                            format!("{} は扱えません。md5 か sha256 を指定してください", spec)
+                        } else {
+                            format!("unknown hash: {} (md5 or sha256)", spec)
+                        })
+                    }
                 }
             }
 
@@ -647,7 +657,13 @@ impl App {
                     .into(),
                 )
             }
-            other => self.message = Some(format!("unknown command: :{}", other)),
+            other => {
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("そのコマンドはありません: :{}", other)
+                } else {
+                    format!("unknown command: :{}", other)
+                })
+            }
         }
     }
 
@@ -928,7 +944,11 @@ impl App {
             Some(flag) => match cian_core::inspect::Unit::parse(flag) {
                 Some(u) => u,
                 None => {
-                    self.message = Some(format!("df: unknown flag {} (try -h -k -m -g)", flag));
+                    self.message = Some(if self.lang == Lang::Ja {
+                        format!("df: {} は扱えません。-h -k -m -g のいずれかを指定してください", flag)
+                    } else {
+                        format!("df: unknown flag {} (try -h -k -m -g)", flag)
+                    });
                     return;
                 }
             },
@@ -1004,7 +1024,14 @@ impl App {
     /// into the active pane's directory.
     pub(crate) fn cmd_tar(&mut self, args: &[&str], gz: bool) {
         let Some(name) = args.iter().copied().find(|a| !a.starts_with('-')) else {
-            self.message = Some(if gz { "usage: :targz <name>" } else { "usage: :tar <name>" }.into());
+            self.message = Some(
+                tr(
+                    self.lang,
+                    if gz { "usage: :targz <name>" } else { "usage: :tar <name>" },
+                    if gz { "使い方: :targz <名前>" } else { "使い方: :tar <名前>" },
+                )
+                .to_string(),
+            );
             return;
         };
         let sources = self.target_paths();

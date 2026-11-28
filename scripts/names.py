@@ -52,7 +52,12 @@ def tui_commands() -> list[list[str]]:
     """`run_command` の match の腕。各腕の名前を、書かれた順に。"""
     text = TUI.read_text(encoding="utf-8")
     start = text.index("match verb {")
-    end = text.index('other => self.message = Some(format!("unknown command', start)
+    # **文言ではなく「腕そのもの」で終わりを見つけます。** 以前は
+    # `other => self.message = Some(format!("unknown command` という1行に
+    # 合わせていたので、その知らせを日本語でも言えるように直した日に、
+    # この検査が例外で止まりました（2026-11-28）。知らせの書き方は変わる。
+    # 変わらないのは「`other =>` の腕がここで終わる」ことです。
+    end = text.index("other =>", start)
     body = text[start:end]
     out = []
     for line in body.splitlines():

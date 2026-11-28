@@ -6,6 +6,36 @@
 //! lib.rs as an `impl App` block.
 use super::*;
 
+/// クリップボードが使えなかったときの知らせ。3か所から呼びます。
+///
+/// **同じ失敗を同じ言葉で言うため**に1つにしました。写して回ると、片方だけ
+/// 直して言葉が割れます。
+fn clipboard_failed(lang: Lang, why: &str) -> String {
+    if lang == Lang::Ja {
+        format!("クリップボードを操作できません: {why}")
+    } else {
+        format!("clipboard error: {why}")
+    }
+}
+
+/// ショートカットを開けなかったときの知らせ。
+fn shortcut_failed(lang: Lang, why: &str) -> String {
+    if lang == Lang::Ja {
+        format!("ショートカットを開けません: {why}")
+    } else {
+        format!("shortcut failed: {why}")
+    }
+}
+
+/// コピーできなかったときの知らせ。
+fn copy_failed(lang: Lang, why: &str) -> String {
+    if lang == Lang::Ja {
+        format!("コピーできません: {why}")
+    } else {
+        format!("copy failed: {why}")
+    }
+}
+
 /// 配色を覚えた／覚えられなかった、の一行。**扉は1つにする** ── `:theme` と
 /// ギャラリーの2か所で同じことを言うので、片方だけ直すと食い違う。
 ///
@@ -185,7 +215,11 @@ impl App {
         let news = match cian_core::rename::plan_batch(pattern, &names, cian_core::rename::Numbering::default()) {
             Ok(v) => v,
             Err(e) => {
-                self.message = Some(format!("rename pattern: {}", e));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("名前の変換が読めません: {}", e)
+                } else {
+                    format!("rename pattern: {}", e)
+                });
                 return;
             }
         };
@@ -593,8 +627,14 @@ impl App {
         };
         let text = paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("\n");
         match cb.set_text(text) {
-            Ok(()) => self.message = Some(format!("◂ copied {} path(s) to clipboard", paths.len())),
-            Err(e) => self.message = Some(format!("clipboard error: {}", e)),
+            Ok(()) => {
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("◂ {} 件のパスをクリップボードにコピーしました", paths.len())
+                } else {
+                    format!("◂ copied {} path(s) to clipboard", paths.len())
+                })
+            }
+            Err(e) => self.message = Some(clipboard_failed(self.lang, &e.to_string())),
         }
     }
 
@@ -608,8 +648,20 @@ impl App {
             return;
         }
         match os_clipboard_file_refs(&paths) {
-            Ok(()) => self.message = Some(format!("◂ copied {} file ref(s) to clipboard", paths.len())),
-            Err(e) => self.message = Some(format!("file-ref clipboard failed: {}", e)),
+            Ok(()) => {
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("◂ {} 件のファイル参照をクリップボードにコピーしました", paths.len())
+                } else {
+                    format!("◂ copied {} file ref(s) to clipboard", paths.len())
+                })
+            }
+            Err(e) => {
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("ファイル参照をコピーできません: {}", e)
+                } else {
+                    format!("file-ref clipboard failed: {}", e)
+                })
+            }
         }
     }
 
@@ -621,8 +673,14 @@ impl App {
             return;
         };
         match cb.set_text(target.clone()) {
-            Ok(()) => self.message = Some(format!("◂ copied: {}", truncate(&target, 50))),
-            Err(e) => self.message = Some(format!("clipboard error: {}", e)),
+            Ok(()) => {
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("◂ コピーしました: {}", truncate(&target, 50))
+                } else {
+                    format!("◂ copied: {}", truncate(&target, 50))
+                })
+            }
+            Err(e) => self.message = Some(clipboard_failed(self.lang, &e.to_string())),
         }
     }
 
@@ -656,7 +714,7 @@ impl App {
         if is_app_bundle && path.exists() {
             match os_open(&path) {
                 Ok(()) => self.message = Some(format!("◂ {}", entry.name)),
-                Err(e) => self.message = Some(format!("shortcut failed: {}", e)),
+                Err(e) => self.message = Some(shortcut_failed(self.lang, &e.to_string())),
             }
             return Ok(());
         }
@@ -680,7 +738,7 @@ impl App {
         // Fallback: hand off the raw string to the OS opener (e.g. unknown protocols).
         match os_open(&target) {
             Ok(()) => self.message = Some(format!("◂ {}", entry.name)),
-            Err(e) => self.message = Some(format!("shortcut failed: {}", e)),
+            Err(e) => self.message = Some(shortcut_failed(self.lang, &e.to_string())),
         }
         Ok(())
     }
@@ -867,7 +925,13 @@ impl App {
         }
         let n = lines.len();
         self.run_in_shell(lines.join("\n"));
-        self.message = Some(if skipped > 0 {
+        self.message = Some(if self.lang == Lang::Ja {
+            if skipped > 0 {
+                format!("each: {n} 件のコマンドを送信し、{skipped} 件を飛ばしました")
+            } else {
+                format!("each: {n} 件のコマンドを送信しました")
+            }
+        } else if skipped > 0 {
             format!("each: sent {n} command(s), skipped {skipped}")
         } else {
             format!("each: sent {n} command(s)")
@@ -1116,7 +1180,11 @@ impl App {
                 }
                 // Named like an archive but unreadable as one: fall through to
                 // the viewer rather than refusing outright.
-                Err(e) => self.message = Some(format!("not a readable archive: {}", e)),
+                Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                    format!("書庫として読めません: {}", e)
+                } else {
+                    format!("not a readable archive: {}", e)
+                }),
             }
         }
         self.open_viewer_at(&entry.path, &entry.name, 0);
@@ -1233,7 +1301,11 @@ impl App {
                 // already taking text. Vim opens where vi opens.
                 self.sync_edit_style();
             }
-            Err(e) => self.message = Some(format!("cannot view: {}", e)),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("閲覧できません: {}", e)
+            } else {
+                format!("cannot view: {}", e)
+            }),
         }
     }
 
@@ -1304,7 +1376,11 @@ impl App {
                 };
                 self.sync_edit_style();
             }
-            Err(e) => self.message = Some(format!("cannot read document: {}", e)),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("文書を読み込めません: {}", e)
+            } else {
+                format!("cannot read document: {}", e)
+            }),
         }
     }
 
@@ -1387,7 +1463,11 @@ impl App {
                     find_input: None,
                 });
             }
-            Err(e) => self.message = Some(format!("cannot compare: {}", e)),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("比較できません: {}", e)
+            } else {
+                format!("cannot compare: {}", e)
+            }),
         }
     }
 
@@ -1811,7 +1891,7 @@ impl App {
             return;
         };
         if let Err(e) = std::fs::create_dir_all(dest_dir) {
-            self.message = Some(format!("copy failed: {}", e));
+            self.message = Some(copy_failed(self.lang, &e.to_string()));
             return;
         }
         match cian_core::ops::copy_one(src, dest_dir, Conflict::Overwrite) {
@@ -1819,7 +1899,7 @@ impl App {
                 let name = src.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
                 self.message = Some(format!("◂ copied {} → {}", name, dst.display()));
             }
-            Err(e) => self.message = Some(format!("copy failed: {}", e)),
+            Err(e) => self.message = Some(copy_failed(self.lang, &e.to_string())),
         }
     }
 
@@ -1956,8 +2036,14 @@ impl App {
         let Some(p) = self.active_pane_mut() else { return };
         let show = !p.show_hidden;
         p.set_show_hidden(show);
-        self.message =
-            Some(if show { "showing dotfiles".into() } else { "hiding dotfiles".to_string() });
+        self.message = Some(
+            tr(
+                self.lang,
+                if show { "showing dotfiles" } else { "hiding dotfiles" },
+                if show { "隠しファイルを表示します" } else { "隠しファイルを表示しません" },
+            )
+            .to_string(),
+        );
     }
 
     pub(crate) fn show_attributes(&mut self) {

@@ -232,7 +232,13 @@ impl App {
             "vim" | "vi" => self.set_edit_style(crate::EditStyle::Vim),
             "notepad" | "plain" => self.set_edit_style(crate::EditStyle::Notepad),
             "" => self.flip_edit_style(),
-            other => self.message = Some(format!("editstyle: vim | notepad (got {other:?})")),
+            other => {
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("editstyle は vim か notepad です。{other:?} は扱えません")
+                } else {
+                    format!("editstyle: vim | notepad (got {other:?})")
+                })
+            }
         }
     }
 

@@ -108,10 +108,18 @@ impl App {
             Some(p) => p,
             None if u.key_path().is_some() => String::new(),
             None => {
-                self.message = Some(format!(
-                    "no password or key set for {}@{} — a transfer needs one in init.lua",
-                    u.name, h.name
-                ));
+                // ダッシュでつながず2文に（`tr()` の doc の規則）。
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!(
+                        "{}@{} のパスワードも鍵も設定されていません。転送するには init.lua に設定してください",
+                        u.name, h.name
+                    )
+                } else {
+                    format!(
+                        "no password or key set for {}@{}. a transfer needs one in init.lua",
+                        u.name, h.name
+                    )
+                });
                 return;
             }
         };
@@ -203,7 +211,11 @@ impl App {
             self.message = Some(format!("→ {label}"));
         } else {
             self.pending_auth = Some(PendingAuth { secret: password, deadline: Instant::now() + AUTH_WINDOW });
-            self.message = Some(format!("→ {label} (sending password on prompt)"));
+            self.message = Some(if self.lang == Lang::Ja {
+                format!("→ {label}（パスワードの入力を求められたら送信します）")
+            } else {
+                format!("→ {label} (sending password on prompt)")
+            });
         }
     }
 
@@ -264,7 +276,11 @@ impl App {
                     Err(e) => {
                         self.popup = Popup::None;
                         self.scp_target = None;
-                        self.message = Some(format!("remote listing failed: {}", e));
+                        self.message = Some(if self.lang == Lang::Ja {
+                            format!("接続先の一覧を取得できません: {}", e)
+                        } else {
+                            format!("remote listing failed: {}", e)
+                        });
                     }
                 }
                 true
@@ -360,7 +376,11 @@ impl App {
         let side = self.remote_side();
         self.remote_targets[Self::side_idx(side)] = Some((target, label.clone()));
         self.focus(side);
-        self.message = Some(format!("⇅ connecting to {label} …"));
+        self.message = Some(if self.lang == Lang::Ja {
+            format!("⇅ {label} へ接続しています…")
+        } else {
+            format!("⇅ connecting to {label} …")
+        });
         self.remote_pane_ls_spawn(side, ".".to_string());
     }
 
@@ -580,12 +600,22 @@ impl App {
                 self.remote_mut = None;
                 match res {
                     Ok(what) => {
-                        self.message = Some(format!("remote: {what}"));
+                        self.message = Some(if self.lang == Lang::Ja {
+                            format!("接続先: {what}")
+                        } else {
+                            format!("remote: {what}")
+                        });
                         if let Some(cwd) = self.remote_cwd(side) {
                             self.remote_pane_ls_spawn(side, cwd);
                         }
                     }
-                    Err(e) => self.message = Some(format!("remote failed: {e}")),
+                    Err(e) => {
+                        self.message = Some(if self.lang == Lang::Ja {
+                            format!("接続先での操作に失敗しました: {e}")
+                        } else {
+                            format!("remote failed: {e}")
+                        })
+                    }
                 }
                 true
             }
@@ -1018,7 +1048,11 @@ impl App {
             let _ = tx.send(r);
         });
         self.remote_view = Some(RemoteView { rx, temp, name: name.clone() });
-        self.message = Some(format!("⇅ fetching {name} …"));
+        self.message = Some(if self.lang == Lang::Ja {
+            format!("⇅ {name} を取得しています…")
+        } else {
+            format!("⇅ fetching {name} …")
+        });
         true
     }
 
@@ -1034,7 +1068,13 @@ impl App {
                         self.message = None;
                         self.open_viewer_at(&temp, &name, 0);
                     }
-                    Err(e) => self.message = Some(format!("remote view failed: {e}")),
+                    Err(e) => {
+                        self.message = Some(if self.lang == Lang::Ja {
+                            format!("接続先のファイルを閲覧できません: {e}")
+                        } else {
+                            format!("remote view failed: {e}")
+                        })
+                    }
                 }
                 true
             }
@@ -1291,7 +1331,11 @@ impl App {
         let verify = self.verify_runtime.or(self.config.options.verify_transfers).unwrap_or(false);
         self.popup = Popup::None;
         if let Err(e) = std::fs::create_dir_all(&local_dir) {
-            self.message = Some(format!("cannot create {}: {}", local_dir.display(), e));
+            self.message = Some(if self.lang == Lang::Ja {
+                format!("{} を作成できません: {}", local_dir.display(), e)
+            } else {
+                format!("cannot create {}: {}", local_dir.display(), e)
+            });
             return;
         }
         self.message = Some(if self.lang == crate::theme::Lang::Ja {
@@ -1367,7 +1411,11 @@ impl App {
             Some(s) => {
                 self.pending_auth =
                     Some(PendingAuth { secret: s, deadline: Instant::now() + AUTH_WINDOW });
-                self.message = Some(format!("→ {} (sending password on prompt)", label));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("→ {}（パスワードの入力を求められたら送信します）", label)
+                } else {
+                    format!("→ {} (sending password on prompt)", label)
+                });
             }
             None => self.message = Some(format!("→ {}", label)),
         }

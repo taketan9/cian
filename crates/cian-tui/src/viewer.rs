@@ -1806,7 +1806,11 @@ impl App {
             format!("encoding: {}", enc.label())
         });
                         }
-                        Err(e) => self.message = Some(format!("re-diff failed: {}", e)),
+                        Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                            format!("差分を取り直せません: {}", e)
+                        } else {
+                            format!("re-diff failed: {}", e)
+                        }),
                     }
                 }
                 self.popup = *diff;
@@ -2311,10 +2315,11 @@ impl App {
             } else {
                 false
             };
-            self.message = Some(if changed {
-                format!("line endings → {} (Ctrl+S to write)", want.label())
-            } else {
-                format!("already {}", want.label())
+            self.message = Some(match (changed, self.lang == Lang::Ja) {
+                (true, true) => format!("改行コード → {}（Ctrl+S で書き込みます）", want.label()),
+                (true, false) => format!("line endings → {} (Ctrl+S to write)", want.label()),
+                (false, true) => format!("すでに {} です", want.label()),
+                (false, false) => format!("already {}", want.label()),
             });
             return;
         }
@@ -3377,7 +3382,11 @@ impl App {
                     path.extension().map(|e| format!("{}.", e.to_string_lossy())).unwrap_or_default()
                 ));
                 if let Err(e) = std::fs::copy(path, &bak) {
-                    self.message = Some(format!("backup failed, not saving: {e}"));
+                    self.message = Some(if self.lang == Lang::Ja {
+                        format!("控えを作れないので保存しません: {e}")
+                    } else {
+                        format!("backup failed, not saving: {e}")
+                    });
                     return;
                 }
                 (path.clone(), view.raw_bytes().to_vec())
@@ -3413,10 +3422,17 @@ impl App {
                 let lost = view.encoding.cannot_hold(&text);
                 if !lost.is_empty() {
                     // Not `&#128512;` in the file and "saved" on the screen.
-                    self.message = Some(format!(
-                        "not saved: Shift_JIS has no {}",
-                        lost.iter().collect::<String>()
-                    ));
+                    self.message = Some(if self.lang == Lang::Ja {
+                        format!(
+                            "保存しません。Shift_JIS に {} がありません",
+                            lost.iter().collect::<String>()
+                        )
+                    } else {
+                        format!(
+                            "not saved: Shift_JIS has no {}",
+                            lost.iter().collect::<String>()
+                        )
+                    });
                     return;
                 }
                 bytes.extend_from_slice(&view.encoding.encode(&text));
@@ -3443,6 +3459,10 @@ impl App {
                     *stamp = fresh;
                 }
                 self.message = Some(match self.arc_edits.get(&path) {
+                    Some((a, m)) if self.lang == Lang::Ja => format!(
+                        "{} の中に保存しました: {m}",
+                        a.file_name().map(|s| s.to_string_lossy()).unwrap_or_default()
+                    ),
                     Some((a, m)) => format!(
                         "saved into {}: {m}",
                         a.file_name().map(|s| s.to_string_lossy()).unwrap_or_default()
@@ -3455,7 +3475,11 @@ impl App {
                 // If this file was opened from a remote pane, push the edit back.
                 self.reupload_remote(&path);
             }
-            Err(e) => self.message = Some(format!("save failed: {}", e)),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("保存できません: {}", e)
+            } else {
+                format!("save failed: {}", e)
+            }),
         }
     }
 
@@ -3516,7 +3540,11 @@ impl App {
                 .unwrap_or_else(|| hit.rel.display().to_string());
             // open_viewer_at replaces the popup but leaves `find_return` intact.
             self.open_viewer_at(&hit.path, &name, lineno.saturating_sub(1));
-            self.message = Some(format!("{}  (Ctrl+n/N next/prev · Esc list)", hit.rel.display()));
+            self.message = Some(if self.lang == Lang::Ja {
+                format!("{}  （Ctrl+n/N で次と前、Esc で一覧）", hit.rel.display())
+            } else {
+                format!("{}  (Ctrl+n/N next/prev · Esc list)", hit.rel.display())
+            });
         }
     }
 
@@ -4845,7 +4873,11 @@ impl App {
         let want = crate::expand_path(name);
         let path = if want.is_absolute() { want } else { base.join(want) };
         if path.is_dir() {
-            self.message = Some(format!("{} is a folder", path.display()));
+            self.message = Some(if self.lang == Lang::Ja {
+                format!("{} はフォルダです", path.display())
+            } else {
+                format!("{} is a folder", path.display())
+            });
             return;
         }
         if let Some(parent) = path.parent() {
@@ -4925,7 +4957,11 @@ impl App {
         }
         let dir = std::env::temp_dir().join("cian-mermaid");
         if let Err(e) = std::fs::create_dir_all(&dir) {
-            self.message = Some(format!("cannot create temp dir: {e}"));
+            self.message = Some(if self.lang == Lang::Ja {
+                format!("作業用のフォルダを作成できません: {e}")
+            } else {
+                format!("cannot create temp dir: {e}")
+            });
             return;
         }
         // Prefer a local mermaid.min.js (offline); copy it next to the page.
@@ -4941,7 +4977,11 @@ impl App {
         let html = cian_core::mermaid::page(&blocks, &script);
         let page = dir.join("diagram.html");
         if let Err(e) = std::fs::write(&page, html) {
-            self.message = Some(format!("cannot write page: {e}"));
+            self.message = Some(if self.lang == Lang::Ja {
+                format!("ページを書き出せません: {e}")
+            } else {
+                format!("cannot write page: {e}")
+            });
             return;
         }
         match os_open(&page) {
@@ -4953,7 +4993,11 @@ impl App {
             format!("opened {} mermaid block(s) in the browser ({how})", blocks.len())
         });
             }
-            Err(e) => self.message = Some(format!("open failed: {e}")),
+            Err(e) => self.message = Some(if self.lang == Lang::Ja {
+                format!("開けません: {e}")
+            } else {
+                format!("open failed: {e}")
+            }),
         }
     }
 }

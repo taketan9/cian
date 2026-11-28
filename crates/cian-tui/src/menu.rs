@@ -450,7 +450,11 @@ impl App {
             // Say where they came from, so "paste" is never ambiguous about
             // which of the two clipboards it just used.
             self.message =
-                Some(format!("pasted {} item(s) from the system clipboard", report.ok));
+                Some(if self.lang == Lang::Ja {
+                    format!("クリップボードから {} 件を貼り付けました", report.ok)
+                } else {
+                    format!("pasted {} item(s) from the system clipboard", report.ok)
+                });
             return Ok(());
         }
         self.show_op_report(&report);

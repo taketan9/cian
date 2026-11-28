@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use cian_core::archive::Member;
 
-use crate::{tr, App};
+use crate::{theme::Lang, tr, App};
 
 // The two pure ones live in cian-core: the GUI's engine browses the same zips,
 // and two front ends disagreeing about what is inside one would be strange.
@@ -51,7 +51,11 @@ impl App {
         let members = match self.archive_members(&archive) {
             Ok(m) => m,
             Err(e) => {
-                self.message = Some(format!("not a readable archive: {e}"));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("書庫として読めません: {e}")
+                } else {
+                    format!("not a readable archive: {e}")
+                });
                 return;
             }
         };
@@ -165,7 +169,11 @@ impl App {
             &mut ctl,
         );
         if let Some(err) = report.errors.first() {
-            self.message = Some(format!("view member: {err}"));
+            self.message = Some(if self.lang == Lang::Ja {
+                format!("書庫の中のファイルを閲覧できません: {err}")
+            } else {
+                format!("view member: {err}")
+            });
             return;
         }
         let base = member.rsplit('/').next().unwrap_or(member);

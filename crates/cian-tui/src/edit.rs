@@ -9,7 +9,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{tr, App, Popup};
+use crate::{theme::Lang, tr, App, Popup};
 
 /// A queued edit: the file the editor opens, and what to do when it returns.
 pub(crate) struct PendingEdit {
@@ -112,7 +112,11 @@ impl App {
         let edited = match std::fs::read_to_string(list) {
             Ok(s) => s,
             Err(e) => {
-                self.message = Some(format!("bulk rename: {e}"));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("一括リネームに失敗しました: {e}")
+                } else {
+                    format!("bulk rename: {e}")
+                });
                 return;
             }
         };

@@ -993,7 +993,11 @@ impl App {
                     Some(s) => s.write_input(text.as_bytes()),
                     None => self.pending_shell_input = Some(text),
                 }
-                self.message = Some(format!("{} path(s) → shell", drag.paths.len()));
+                self.message = Some(if self.lang == Lang::Ja {
+                    format!("{} 件のパスをシェルへ渡しました", drag.paths.len())
+                } else {
+                    format!("{} path(s) → shell", drag.paths.len())
+                });
             }
             dest_pane => {
                 let dest = match dest_pane {
