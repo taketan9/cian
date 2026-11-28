@@ -1808,7 +1808,7 @@ function clearPalette() {
     delete document.documentElement.dataset.dark;
 }
 
-/// How the listing is laid out. **窓版だけの話** ── 端末版は 2026-09-06 に
+/// How the listing is laid out. **窓版だけの話。** 端末版は 2026-09-06 に
 /// `:view` の引数ごと落とした（フラグを立てるだけで誰も読まなかった）。
 /// アイコンモードは 2026-09-02 に入口を閉じ、描く側も 2026-09-06 に消した。
 // モードの順番はここ一つ。`モード ▸` も T トグルの巡回も `表示 ▸` も
@@ -1848,7 +1848,7 @@ function setView(mode, remember = true) {
 /// 「そのパネルはいま無い」を言う3つ。同じ行を6回・4回・4回書いていた。
 ///
 /// **括ったのは文言のためではなく、答えが1つであるため。** 同じ問いに同じ
-/// 言葉で答える場所が10か所あると、いつか1か所だけ別の言い方になる ──
+/// 言葉で答える場所が10か所あると、いつか1か所だけ別の言い方になる。
 /// `audit.py` の②が数え続けていたのはそれ。
 ///
 /// 呼び方は `if (!needViewer()) return;`。真偽を返すのは、`return null` の
@@ -1874,7 +1874,7 @@ function needTargets(what) {
 /// いまどのシェルタブに居るか。タブを動かす4つが同じ行を書いていた。
 ///
 /// **この関数自身が5つ目になっていた。** 括るときに同じ文字列を一括置換して、
-/// 中身まで `sayShellTab()` に置き換わり、呼ぶと自分を呼び続けた ──
+/// 中身まで `sayShellTab()` に置き換わり、呼ぶと自分を呼び続けた。
 /// `node --check` は通り、audit は「きれいです」になり、記録ファイルも通った。
 /// `node gui/drive.js` の例外欄だけが「Maximum call stack size exceeded」と
 /// 言った。**括ったあとは動かす。**
@@ -3276,7 +3276,7 @@ function helpRows() {
         ['f  →  n / N', tr("search this listing, next, previous", 'この一覧を検索・次・前')],
         ['/', tr("narrow this listing", 'この一覧を絞り込み')],
         ['/ /  、Ctrl+P', tr("fuzzy-find a file anywhere below here", 'この下のどこかにあるファイルをあいまい検索')],
-        ['Shift+F', tr("find by name, through the whole tree. :find", '名前で探す（この下すべて）── :find')],
+        ['Shift+F', tr("find by name, through the whole tree. :find", '名前で探す（この下すべて）。:find')],
         ['Ctrl+F / Ctrl+G', tr("search inside files (:grep)", 'ファイルの中を探す（:grep）')],
         [tr('  p on the results', '  結果で p'), tr("load the hits into a pane and use the ordinary keys on them", '一覧に読み込んで、いつものキーで操作する')],
         [tr('  r on the results', '  結果で r'), tr("replace across every matched file, confirming line by line", 'マッチした全ファイルを一括置換（1行ずつ確認）')],
@@ -3394,7 +3394,7 @@ function helpRows() {
         [tr("  the bytes", '  渡すもの'), tr("the file's own encoding, both ways. a command that fails changes nothing", 'ファイルの文字コードのまま渡して読み戻します。失敗したときは何も変えません')],
         // cian-tui's words for this pair, and its default: vim is what cian
         // was built around, notepad is the one you hand to a colleague.
-        [tr("Editor keys", 'エディタのキー操作'), tr("vim (the default) / notepad. back in the listing, inside T\u2019s menu (:editstyle vim / :notepad too)", 'notepad / vim（既定）── 一覧に戻って T のメニューの中（:editstyle vim / :notepad でも）')],
+        [tr("Editor keys", 'エディタのキー操作'), tr("vim (the default) / notepad. back in the listing, inside T\u2019s menu (:editstyle vim / :notepad too)", 'notepad / vim（既定）。一覧に戻って T のメニューの中（:editstyle vim / :notepad でも）')],
         [tr("  in vim style", '  vim のとき'), tr("opens in normal mode. :w saves, :q closes, :wq both", 'ノーマルモードで開く。:w 保存 :q 閉じる :wq 両方')],
         ['  % ', tr("to the matching bracket (monaco-vim's)", '対応する括弧へ（monaco-vim のもの）')],
         ['  ]] / [[', tr("next / previous heading", '次 / 前の見出しへ')],
@@ -3826,7 +3826,7 @@ function pressSpec(e) {
 
 /// `:key` — 何が届いているかを見る。**どこにいても。**
 ///
-/// これは一覧のキー処理の中にあった。つまり**一覧でしか効かなかった** ──
+/// これは一覧のキー処理の中にあった。つまり**一覧でしか効かなかった**。
 /// エディタでは viewer の capture が先に止め、シェルではシェルの capture が
 /// 先に止めるので、いちばん知りたい二つの場所で答えが出なかった。
 /// 「押しても何も起きない」を追うためのツールが、押しても何も起きない場所で
@@ -4169,7 +4169,7 @@ document.addEventListener('keydown', (e) => {
 /// asked: "summarise this file" reads better than the file, but a follow-up
 /// about line 30 needs the file. Showing the payload would make the transcript
 /// unreadable; sending the label would make the follow-up meaningless.
-/// 設定画面。**正は `init.lua` ひとつ**（2026-09-11、本人の判断）── ここで
+/// 設定画面。**正は `init.lua` ひとつ**（2026-09-11、本人の判断）。ここで
 /// 直すのは、その `init.lua` そのものだ。別の設定ファイルを増やせば「どちらが
 /// 勝つか」が生まれ、cian で最頻のバグ（設定を直したのに効かない）に新しい
 /// 水源を足すことになる。
@@ -4354,7 +4354,7 @@ function drawSettings() {
         if (f.kind === 'bool') {
             input = pick([['true', tr('on', '入')], ['false', tr('off', '切')]]);
         } else if (f.kind === 'choice') {
-            // `{ value, label }` ── シェルだけは二つが違う（書くのは
+            // `{ value, label }`：シェルだけは二つが違う（書くのは
             // `powershell.exe`、出すのは「Windows PowerShell」）。
             input = pick(f.choices.map((c) => [c.value, c.label]));
         } else {
@@ -4525,7 +4525,7 @@ function drawSettings() {
         const cur = t2.has(key) ? (t2.get(key) || {}) : s;
         const gone = t2.has(key) && t2.get(key) === null;
         // **コマンドは複数行。** エンジンは受け取った字をそのままシェルへ
-        // 書くので、`cd` してから `tail` のような二行がそのまま動く ──
+        // 書くので、`cd` してから `tail` のような二行がそのまま動く。
         // 一行の欄しか出していなかったので、書ける形になっていなかった。
         const f = (k, label, ph, many) => `<div class="srow"><div class="slabel">${esc(label)}</div>`
             + '<div class="sin">'
@@ -5254,7 +5254,7 @@ function show(title, about, rows, opts = {}) {
     if (report.checks) for (const r of rows) if (r.on === undefined) r.on = true;
     // **開いた場所は「いま選ばれているもの」。** 既定の0行目のままだと、配色の
     // 一覧が白磁にカーソルを置いて開くのに画面は別の配色、という食い違いが
-    // 出る（2026-09-14、実機）── 一覧の中で一度離れて戻らないと、自分が
+    // 出る（2026-09-14、実機）。一覧の中で一度離れて戻らないと、自分が
     // どこに居るのか分からない。
     report.at = Math.max(0, Math.min(rows.length - 1, Number.isInteger(opts.at) ? opts.at : 0));
     report.pick = opts.pick || null;
@@ -5622,7 +5622,7 @@ function applyDock() {
     if (el.view.parentElement !== parent) {
         // 戻すときは**元の隣**へ。重ね順は `z-index` で決まっているとはいえ、
         // 同じ数のペインが並んだときに決めるのは文書順だ（型⑧で3ラウンド溶かした
-        // のはそれ）── 末尾に足して済ませない。
+        // のはそれ）。末尾に足して済ませない。
         if (viewerDock) el.panes.appendChild(el.view);
         else viewHome.parent.insertBefore(el.view, viewHome.next);
     }
@@ -5663,13 +5663,13 @@ function dockForOpen() {
     // いるペインが移動するのは、リンクを選択した人が頼んでいないことだ。
     if (viewer.on) return viewerDock;
     // シェルにキーがあるなら浮かせる。端末版も同じ条件で嵌めない
-    // （viewer.rs:4801 `if self.focused != FocusedPane::Shell`）── 一覧から
+    // （viewer.rs:4801 `if self.focused != FocusedPane::Shell`）。一覧から
     // 開いたのでなければ、嵌める先の「その場所」が無い。
     if (term.on && term.focused) return null;
     return state.focus;
 }
 
-/// 浮いているときの `#view` の居場所。**起動時の形を覚えておく** ──
+/// 浮いているときの `#view` の居場所。**起動時の形を覚えておく**。
 /// `#work` の外の兄弟で、`#chat` の手前（`z-index` は 10 と 12）。
 const viewHome = { parent: el.view.parentElement, next: el.view.nextElementSibling };
 
@@ -6445,7 +6445,7 @@ function armVimGrammar() {
     vim.defineAction('cianFold', () => { const ed = vimEditor(); if (ed) ed.trigger('cian', 'editor.toggleFold'); });
     vim.mapCommand('za', 'action', 'cianFold');
     vim.mapCommand('zA', 'action', 'cianFold');
-    // `it` / `at` ── タグの中身と、タグごと。monaco-vim は `t` の対象を
+    // `it` / `at`：タグの中身と、タグごと。monaco-vim は `t` の対象を
     // 持っているが、探すのを CodeMirror の xml-fold に任せていて、Monaco
     // の上にはそれが無い（`tagObject` の註）。
     // eslint-disable-next-line no-undef
@@ -6453,7 +6453,7 @@ function armVimGrammar() {
     // eslint-disable-next-line no-undef
     MonacoVim.VimMode.findMatchingTag = () => undefined;
     // `i{` `i(` `i[` `i<` とその別名 ── 行をまたぐ内側を vim と同じ形に
-    // （`innerBlock` の註）。**文脈は normal だけ** ── 演算子の後はここに
+    // （`innerBlock` の註）。**文脈は normal だけ。** 演算子の後はここに
     // 当たり、ビジュアルの `vi{` は今までどおり monaco-vim に任せる。
     // ふつうの `i`（挿入）は完全一致が先に決まるので、次の字を待たない。
     // 割り当ては表の先頭に積まれるので、立て直すたびに足さない。
@@ -6663,7 +6663,7 @@ async function closeView(ask_first = true) {
     scratch.on = false;
     if (pair.vims) { for (const v of pair.vims) v.dispose(); pair.vims = null; }
     if (pair.ed) { pair.ed.dispose(); pair.ed = null; }
-    // **落とした複製は、閉じたら消す**（本人、2026-09-23）── 大きさに関係なく。
+    // **落とした複製は、閉じたら消す**（本人、2026-09-23）。大きさに関係なく。
     // 保存せずに閉じたなら複製ごと捨てる。単体で開いたリモートのファイルも同じ。
     if (pair.base || remoteMember.on || comparing) ask('dropfetched', {}).catch(() => {});
     comparing = false;
@@ -6830,7 +6830,7 @@ document.addEventListener('keydown', (e) => {
     //
     // vim の `H` `L` は画面の上端・下端、`J` は行の連結だが、**窓の鍵のほうを
     // 採る**のは端末版がそう決めたから。連結は `:combine` が持っている。
-    // **vim の流儀で、読んでいるときだけ** ── notepad の流儀はいつでも文字を
+    // **vim の流儀で、読んでいるときだけ。** notepad の流儀はいつでも文字を
     // キー入力を受けているペインなので、`Shift+H` は大文字の H だ（端末版も `editing: false`
     // を要求している）。
     if (viewerDock && viewer.vim && !vimTyping() && !hex.editing && !viewer.zPending
@@ -7774,7 +7774,7 @@ async function cmdAiLog() {
 ///
 /// 送るのは Enter を押したとき。何がこの機械から出ていくかを最後に見るのは
 /// 本人で、それは F3 の要約を鍵の後ろに置いてあるのと同じ理由だ（2026-09-20）。
-/// 端末版も同じ（`new_ai_chat_with`）── ここだけ即送信だと、同じ一行が前端に
+/// 端末版も同じ（`new_ai_chat_with`）。ここだけ即送信だと、同じ一行が前端に
 /// よって「下書き」だったり「送信」だったりすることになる。
 async function cmdAiAsk(question) {
     openChat(tr('Chat', 'チャット'));
@@ -8037,7 +8037,7 @@ async function cmdSshPicker() {
         return;
     }
     const rows = sshRows(r.hosts);
-    show('SSH', tr(`${rows.length} hosts (init.lua’s cian.ssh). opens a shell`, `${rows.length} 件（init.lua の cian.ssh）── シェルで開きます`), rows, {
+    show('SSH', tr(`${rows.length} hosts (init.lua’s cian.ssh). opens a shell`, `${rows.length} 件（init.lua の cian.ssh）。シェルで開きます`), rows, {
         filter: true,
         hint: tr('type to narrow (host or user)', 'フィルタ（ホスト名・ユーザー）'),
         foot: tr('type to narrow   Enter connect   Esc close', 'フィルタ   Enter 接続   Esc 閉じる'),
@@ -8485,7 +8485,7 @@ async function cmdOutline() {
 /// （`getAlternativeVersionId`、取り消すと前の値に戻る番号）を履歴に記録し、
 /// その直後の `u` は前の版まで一度に戻す。`Ctrl+R` はその逆。
 ///
-/// 履歴はモデルごと。**ふつうの編集が入ったら「やり直し」の側は捨てる** ──
+/// 履歴はモデルごと。**ふつうの編集が入ったら「やり直し」の側は捨てる**。
 /// Monaco の redo の山が消えるのと同じ規則で、捨てないと、戻った先で
 /// Ctrl+R が関係の無い手を何手も進める。
 let innerBlockMapped = false;
@@ -8575,7 +8575,7 @@ function noteVimMode(e, ed = viewer.ed) {
 /// **行き過ぎない。** 版の番号は新しい状態ほど大きく、取り消すと小さくなる。
 /// だから取り消しは「目標以下になったら止まる」で、下回っていたら1手だけ
 /// やり直す（やり直しはその逆）。手が混ざって目標ちょうどに止まれないとき、
-/// **戻り足りないほうが、戻りすぎるより安全だ** ── 戻りすぎは人の書いたものを
+/// **戻り足りないほうが、戻りすぎるより安全だ。** 戻りすぎは人の書いたものを
 /// 通知なしに消す。
 function vimStepTo(to, how, ed = viewer.ed) {
     const model = ed.getModel();
@@ -8589,7 +8589,7 @@ function vimStepTo(to, how, ed = viewer.ed) {
     if (back ? v() < to : v() > to) ed.trigger('vim', back ? 'redo' : 'undo', null);
 }
 
-/// `ci{` `di(` ── 行をまたぐ括弧の内側を、本物の vim と同じ形に切る。
+/// `ci{` `di(`：行をまたぐ括弧の内側を、本物の vim と同じ形に切る。
 ///
 /// **monaco-vim は括弧を1行につないでいた。** `joined() {` / `return …;` / `}`
 /// の中で `ci{` を打つと `joined() {X}` になる。本物の vim（9.1 で確かめた）は
@@ -8602,7 +8602,7 @@ function vimStepTo(to, how, ed = viewer.ed) {
 ///   1. 始まりは開きの直後。開きが行末なら**次の行の頭**
 ///   2. 終わりは閉じから1字戻り、字下げの中にいる間は戻り続ける。閉じが行頭か、
 ///      前が字下げだけなら「行頭の閉じ」（`sol`）で、終わりは次の字（＝行頭）
-///   3. `sol` のときは排他の規則（`:help exclusive`）── 始まりが行の最初の
+///   3. `sol` のときは排他の規則（`:help exclusive`）。始まりが行の最初の
 ///      非空白以前なら**行単位**、そうでなければ前の行の終わりまで
 ///
 /// `{ a;` のように開きの後ろに字がある形、`b; }` のように閉じの前に字がある
@@ -8680,7 +8680,7 @@ function innerBlock(cm, head, motionArgs, vim) {
 /// 閉じタグが来たときに対の開きまで降りて読み捨てる。`<br/>`・註・宣言は
 /// 中身を持たないので数えない。
 ///
-/// 返すのは CodeMirror の位置（0 始まりの `{line, ch}`）── monaco-vim がそのまま
+/// 返すのは CodeMirror の位置（0 始まりの `{line, ch}`）。monaco-vim がそのまま
 /// 使う形。`cm` は monaco-vim の adapter で、位置の換算はそちらに任せる。
 function tagObject(cm, head) {
     const model = cm.editor.getModel();
@@ -9471,7 +9471,7 @@ async function cmdCompare() {
     // saying how many went past.
     const glyph = { same: ' ', changed: '~', removed: '-', added: '+', skipped: '⋯' };
     const rows = r.rows.map((x) => {
-        if (x.kind === 'skipped') return { n: '⋯', label: tr(`── ${x.lines} identical lines ──`, `── 同じ ${x.lines} 行 ──`), sub: '' };
+        if (x.kind === 'skipped') return { n: '⋯', label: tr(`：${x.lines} identical lines ──`, `：同じ ${x.lines} 行 ──`), sub: '' };
         return {
             n: `${glyph[x.kind]} ${x.ln ?? ''}`.trim(),
             label: x.left ?? '',
@@ -9958,7 +9958,7 @@ async function cmdDedup() {
 async function cmdView(arg, invokedAs) {
     const mode = (arg || invokedAs || '').trim();
     // `grid` と `icons` はアイコンモードのこと。**引退させたのは彼の判断**
-    // （2026-09-05）── クラシックが基本、Explorer/Finder ふうが要るなら詳細
+    // （2026-09-05）。クラシックが基本、Explorer/Finder ふうが要るなら詳細
     // 一覧で足りる。描く側も 2026-09-06 に消したので、もう戻せる分岐は無い。
     // それでも打った人を「そんなモードは無い」で突き放さず、詳細一覧へ案内する。
     const map = { grid: 'details', icons: 'details', finder: 'details' };
@@ -10375,7 +10375,7 @@ function cmdPaneTheme() {
 
 /// 表示の桁で切って詰める。**字数ではなく桁数。**
 ///
-/// `padEnd` は UTF-16 の単位で数えるので、全角の名前は詰まりが足りない ──
+/// `padEnd` は UTF-16 の単位で数えるので、全角の名前は詰まりが足りない。
 /// `:blame` の欄は1行ごとに幅が決まるので、日本語のコミッタ名の行だけ
 /// コードが右へずれて、欄がぎざぎざになる。
 ///
@@ -10383,10 +10383,10 @@ function cmdPaneTheme() {
 /// 並べていて、**端末版の `unicode-width` と 11350 個の符号点で食い違って
 /// いた**（2026-09-15 に全符号点を突き合わせて数えた）。目に見えたのは2つ:
 ///
-///   ・`ｶﾞ` ── 半角カナの濁点 `U+FF9E` を1桁と数えていた。エンジンは0桁
+///   ・`ｶﾞ`：半角カナの濁点 `U+FF9E` を1桁と数えていた。エンジンは0桁
 ///     （前の字にくっつく印）なので、シェルのカーソルが**打った字の途中**
 ///     に落ちた（`ｶﾞｷﾞｸﾞ` で3字ぶん手前）
-///   ・`✅` ── `U+2705` を1桁と数えていた。エンジンは2桁なので、カーソルが
+///   ・`✅`：`U+2705` を1桁と数えていた。エンジンは2桁なので、カーソルが
 ///     1桁**右**へ流れた。絵文字の範囲は手書きの表が半分しか覆っていない
 ///
 /// どちらも「全角と半角が混ざった行」でしか出ない。**桁の話は、桁のある
@@ -10782,7 +10782,7 @@ document.addEventListener('keydown', (e) => {
     e.stopPropagation();
 }, true);
 
-/// `u` と `Ctrl+R` ── 挿入1回ぶんを1手として取り消す（`vimUndo` の註）。
+/// `u` と `Ctrl+R`：挿入1回ぶんを1手として取り消す（`vimUndo` の註）。
 ///
 /// **横取りするのは、何も打ちかけていないときだけ。** `ru` は「u に置き換え」、
 /// `fu` は「u を探す」、`2u` は「2手戻す」で、どれも monaco-vim に任せる。
@@ -11348,7 +11348,7 @@ async function cmdLimit(spec) {
 /// `:aicommit` — the staged diff in, a Conventional Commits message out,
 /// **shown, not committed**. Enter commits with it; Esc walks away. The
 /// model drafts; the person signs.
-/// `:commit` ── ステージ済みの変更を、自分で書いたメッセージでコミットする。
+/// `:commit`：ステージ済みの変更を、自分で書いたメッセージでコミットする。
 ///
 /// これが無いあいだ、git へのコミットは `:aicommit` からしか行けなかった。AI に
 /// 下書きを作らせてからでないと確定に辿り着けないので、**社内の endpoint に
@@ -12502,7 +12502,7 @@ document.addEventListener('keydown', (e) => {
     }
     // **Ctrl+Q は中断。** `Ctrl+C` をコピーに割り当てた人は、走っているものを
     // 止める手が右クリックのメニューしか無くなる（2026-09-15、本人）。
-    // 送るのは `Ctrl+C` と同じ `\x03` ── シェルにとっては同じ1バイトで、
+    // 送るのは `Ctrl+C` と同じ `\x03`：シェルにとっては同じ1バイトで、
     // 端末が持つ「止めろ」はこれひとつ。
     //
     // 端末の流れ制御（XOFF/XON）の `Ctrl+Q` は、ここで止めるので届かない。
@@ -13018,7 +13018,7 @@ el.gripMain.addEventListener('mousedown', (e) => startGripDrag('main', e));
 // **Monaco が「やめた」と言うのは、壊れたという意味ではない。**
 //
 // 差分を閉じると、まだ走っていた差分計算が捨てられる。Monaco はそれを
-// `Canceled` という拒否で表し、誰も受けないので未処理の拒否になる ──
+// `Canceled` という拒否で表し、誰も受けないので未処理の拒否になる。
 // ページは何も壊れていないのに、外から見ると例外が1つ出たことになる
 // （`drive.js` は CDP の `Runtime.exceptionThrown` を数えるので、これが
 // 混ざると「例外 0 件」という基準が当てにならなくなる）。

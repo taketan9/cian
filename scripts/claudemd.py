@@ -35,7 +35,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# 下限 ── 表が縮んだら、通さずに失敗する
+# 下限：表が縮んだら、通さずに失敗する
 LEAST_RULES = 12
 LEAST_GATES = 8
 
@@ -50,7 +50,7 @@ def table_rows(text: str) -> list[tuple[str, str]]:
     """規則の章にある「ルール | 検査」の表だけを読む。
 
     CLAUDE.md には2列の表が他にもある（「手元で確かめられないこと」）。
-    最初に全部の表を読んでいて、そちらの行を検査の無い規則として並べた ──
+    最初に全部の表を読んでいて、そちらの行を検査の無い規則として並べた。
     **読む範囲を言わない検査は、別のものを測る。**
     """
     lines = text.splitlines()
@@ -152,7 +152,7 @@ def cp1252_deaths() -> list[str]:
     if found < LEAST_WIN_SCRIPTS:
         bad.append(
             f"Windows のジョブが呼ぶ検査を {found} 本しか見つけられていません"
-            f"（下限 {LEAST_WIN_SCRIPTS}）── この検査が何も報告していません"
+            f"（下限 {LEAST_WIN_SCRIPTS}）。この検査が何も報告していません"
         )
     return bad
 

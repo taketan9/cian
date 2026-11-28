@@ -40,7 +40,7 @@ pub enum Kind {
 /// どちらの前端で効くか。
 ///
 /// **効かない設定を、効くふりをして並べない。** cian で最頻のバグは
-/// 「設定を直したのに効かない」で、設定画面は放っておくとその水源になる ──
+/// 「設定を直したのに効かない」で、設定画面は放っておくとその水源になる。
 /// `Options` の全部を並べれば、窓版が読みもしない `nerd_fonts` にも欄が付く。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Applies {
@@ -68,7 +68,7 @@ pub struct Field {
     pub default_value: Option<&'static str>,
     /// どちらの前端で効くか。
     pub applies: Applies,
-    /// **何も書かなかったときどうなるか**を、人の言葉で。値ではない ──
+    /// **何も書かなかったときどうなるか**を、人の言葉で。値ではない。
     /// `home` の既定は「デスクトップ、無ければ作業ディレクトリ」で、
     /// 字面にできない。
     pub default_en: &'static str,

@@ -170,7 +170,7 @@ function checkEngine(platform) {
     const at = path.resolve(given);
     if (fs.existsSync(at)) return;
     console.error(`NG: エンジンが見つかりません: ${at}`);
-    // **在るものを言う。** 実機で起きたのはこれだった（2026-10-06）── 落とした
+    // **在るものを言う。** 実機で起きたのはこれだった（2026-10-06）。落とした
     // ものが `cian-server-win-x64.exe.zip` のままで、`.exe` はまだ中に居た。
     // 「無い」とだけ言われた人は道を疑うが、答えは「隣に在る」だった。
     // 機械が知っていることを報告しないのがいちばん高くつく。
@@ -197,7 +197,7 @@ function layApp(appDir, platform) {
     const engine = engineFile(platform);
     if (engine) {
         // **名前は中で決める。** `engine.js` が探すのは `cian-server[.exe]` の
-        // 一つだけなので、リリースの資材をそのまま渡せるようにする ──
+        // 一つだけなので、リリースの資材をそのまま渡せるようにする。
         // 落としたものは `cian-server-win-x64.exe` という名前で、素直に写すと
         // 「エンジンが無い」で組み立てが止まる。ビルドしないで済ませたい人
         // （エンジンは焼くのに Rust が要る）がいちばん通る道がこれ。
@@ -505,14 +505,14 @@ function main() {
     console.log(`Electron: ${dist}`);
     // `force` は「無いときに怒らない」だけで、掴まれているものには効かない。
     // Windows では前に組んだ `cian.exe` が走っていると、その実体ファイルが
-    // ロックされていて消せない（EBUSY）── 実機で発生した（2026-10-06）。
+    // ロックされていて消せない（EBUSY）。実機で発生した（2026-10-06）。
     // 数回待てば解けることが多いので待ち、それでも駄目なら**誰が掴んで
     // いそうか**を言う。node の生のスタックには、それが書いていない。
     try {
         fs.rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     } catch (e) {
         if (e.code !== 'EBUSY' && e.code !== 'EPERM' && e.code !== 'ENOTEMPTY') throw e;
-        console.error(`NG: ${target} を消せません（${e.code}）── 中のファイルを何かが開いています。`);
+        console.error(`NG: ${target} を消せません（${e.code}）。中のファイルを何かが開いています。`);
         console.error('  ・前に組んだ cian.exe がまだ走っていませんか（cian-server.exe / cian-tui.exe も）');
         console.error('  ・エクスプローラでその階を開いていませんか（プレビュー ウィンドウが掴みます）');
         console.error('  ・その中を作業ディレクトリにしている端末はありませんか');

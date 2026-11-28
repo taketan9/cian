@@ -7,7 +7,7 @@
 | Windows で窓版を使いたい | `cian-src-win.zip`（18MB）と `cian-server-win-x64.exe.zip`（3MB）。展開して `node gui\pack.js` を1回叩くと `cian.exe` ができます。`npm install` も Rust も要りません。手順は同梱の `packaging\windows\SRC.ja.txt` |
 | エンジンだけ差し替えたい | `cian-server-win-x64.exe.zip`。前面は JavaScript なので、更新はたいていこれ1つで足ります |
 | 端末で使いたい（端末版） | `cian-tui-win-x64.exe.zip`（5MB）。一本の実行ファイルで、Electron も書体も要りません。お使いの端末（WezTerm・Windows Terminal）で走らせます |
-| 壊れずに届いたかの確認 | `SHA256SUMS` ── `sha256sum -c SHA256SUMS` / `Get-FileHash` |
+| 壊れずに届いたかの確認 | `SHA256SUMS`：`sha256sum -c SHA256SUMS` / `Get-FileHash` |
 | エンジンごとソースから作りたい | `cian-source-offline.zip`（約180MB）。毎回は出していません。Actions から `release` を everything = true で手動実行すると並びます |
 
 ### 社内での組み立て
@@ -56,9 +56,9 @@ crmaine はこの資材を取り寄せて組み直しています。**名前・�
 
 以前は13点ありました。
 
-- `cian-win-x64.zip`（123MB）── CI が焼いていた同梱版。社内で `pack.js` が同じ
+- `cian-win-x64.zip`（123MB）。CI が焼いていた同梱版。社内で `pack.js` が同じ
   ものを作ります
-- `cian-gui-win-x64.zip`（14MB）── 前面だけの zip。`cian-src-win.zip` が同じ中身を
+- `cian-gui-win-x64.zip`（14MB）。前面だけの zip。`cian-src-win.zip` が同じ中身を
   リポジトリの形で持っています（`pack.js` はその形でしか叩けません）
 - 裸の `.exe` 2つ。`.exe` の直接ダウンロードを止める網があり、zip なら通ります
 - Mac の5点 ── ビルドは今も毎回走っていて、成果物（Actions）から取れます

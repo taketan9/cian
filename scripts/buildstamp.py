@@ -135,11 +135,11 @@ def judge(line: str, ver: str, sha: str) -> list[str]:
         bad.append(f"版が {got_ver}、`Cargo.toml` は {ver}")
     if got_sha.endswith("-dirty"):
         bad.append(
-            f"`-dirty` と名乗っています（{got_sha}）── ビルドの前に"
+            f"`-dirty` と名乗っています（{got_sha}）。ビルドの前に"
             "作業ツリーへ書いたものがあります。CI なら `$RUNNER_TEMP` へ逃がす"
         )
     elif got_sha == "unknown":
-        bad.append("SHA が `unknown` ── git の無いところで建てた資材です")
+        bad.append("SHA が `unknown`：git の無いところで建てた資材です")
     elif got_sha != sha:
         bad.append(f"SHA が {got_sha}、いまの HEAD は {sha}")
     return bad

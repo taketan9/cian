@@ -758,7 +758,7 @@ mod tests {
         let on = set_check(text, 1, true);
         assert_eq!(on, "- [ ] 牛乳\n- [x] 珈琲\n");
         assert_eq!(set_check(&on, 1, false), text);
-        // 行がずれていた・そこは箇条書きだった、のときは何もしない ──
+        // 行がずれていた・そこは箇条書きだった、のときは何もしない。
         // 画面とファイルが食い違っているのに書き込むのが一番悪い。
         assert_eq!(set_check(text, 9, true), text);
         assert_eq!(set_check("- ふつう\n", 0, true), "- ふつう\n");

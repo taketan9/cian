@@ -13,7 +13,7 @@ crmaine の `TestDesignRulesPointAtRealThings` / `TestFeatureMapPointsAtRealCode
   ① `名前()` と書いた関数が、`crates/` か `gui/` か `scripts/` に実在すること
   ② `パス` と書いたファイル・ディレクトリが実在すること
   ③ 文書どうしのリンク先が実在すること
-  ④ **数えた件数が下限を下回らないこと** ── 取りこぼして「所見なし」になるのを
+  ④ **数えた件数が下限を下回らないこと。** 取りこぼして「所見なし」になるのを
      防ぐためです（`keycover.py` が対象を取り落として2種しか見ないまま百分率を
      出し続けた型）
 
@@ -30,7 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 
-# 下限 ── 取りこぼしたときに取りこぼしを報告するため
+# 下限：取りこぼしたときに取りこぼしを報告するため
 LEAST_FUNCS = 20
 LEAST_PATHS = 12
 

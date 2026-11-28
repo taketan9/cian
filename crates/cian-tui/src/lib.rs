@@ -4158,7 +4158,7 @@ fn manual_sections() -> Vec<((&'static str, &'static str), Vec<ManualEntry>)> {
                 entry(":each", None, "run a shell command per marked file — {} = path (:each grep -l foo {})", "マーク各ファイルにコマンド実行 — {} = パス（:each grep -l foo {}）"),
                 entry("F5", None, "refresh now (:refresh)", "今すぐ再読み込み（:refresh）"),
                 entry("f", Some(Search), "search in this folder", "このディレクトリ内を検索"),
-                entry("Shift+F", None, "find by name, whole tree below here (:find)", "名前で検索（ここ以下のツリー全体）── :find でも"),
+                entry("Shift+F", None, "find by name, whole tree below here (:find)", "名前で検索（ここ以下のツリー全体）。:find でも"),
                 entry("Ctrl+F / Ctrl+G", Some(Action::GrepRecursive), "grep inside files, whole tree below here (:grep too)", "ファイル内をgrep（ここ以下のツリー全体）— Ctrl+G（サクラと同じ）や :grep でも可"),
                 entry("  patterns", None, "bare text = literal; /re/ = regex, /re/i ignores case; grep also reads SJIS", "裸の文字列=そのまま、/re/=正規表現（/re/i で大小無視）、grep は SJIS も読む"),
                 entry("  p in results", None, "panelize: load the find/grep matches into the pane to mark & operate on", "検索結果を p でペイン化：マークして一括操作できます"),
@@ -5253,7 +5253,7 @@ fn run_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>
                 // 答えが 2 秒で返らないと crossterm は
                 // 「The cursor position could not be read within a normal
                 // duration」を返し、それを `?` で上げると **cian が落ちる**。
-                // 答えない端末は珍しくないし、細い回線の向こうならなお遅い ──
+                // 答えない端末は珍しくないし、細い回線の向こうならなお遅い。
                 // **cian はサーバ相手に使うツール**なので、画面を消せないことが
                 // 終了の理由になってはいけない。消せなければ塗り直す。
                 //

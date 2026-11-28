@@ -1,4 +1,4 @@
-# 動作検証の計画 ── 何を、どのツールで、どの順で確かめるか
+# 動作検証の計画：何を、どのツールで、どの順で確かめるか
 
 この文書は、cian が実際に動くかどうかを確かめる**手順**です。確かめた結果は
 ここには書きません。見つけたものは [sweep-findings.ja.md](sweep-findings.ja.md) に、
@@ -89,7 +89,7 @@ python3 scripts/verify.py
 | `gui/drive.js --commands` | 同上。パレットのコマンドを一つずつ | 押す道が無いコマンド |
 | `gui/drive.js --values` | 同上。設定の値 | 設定が画面に戻らないところ |
 | `gui/drive.js --ai` | mock の AI（網も鍵も使いません） | 説明からコマンドを生成する経路 |
-| `gui/drive.js --ai-real` | **本物のモデル** ── Claude CLI か Ollama | 答えが返り、プロンプトに載るまで |
+| `gui/drive.js --ai-real` | **本物のモデル。** Claude CLI か Ollama | 答えが返り、プロンプトに載るまで |
 | `~/workspace/edge-vm` の仮想環境 | **本物の Windows 11** | Windows でしか出ないもの（起動そのものを含みます） |
 
 **リモートペインは、手元で本物のサーバー相手に通せます。** macOS には `sshd` と

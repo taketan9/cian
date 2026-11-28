@@ -18,9 +18,9 @@ settings cian-tui reads — silently, which is the worst way to ignore a config*
 
 ## 何と何を比べているか
 
-* **送る側** ── `crates/cian-server/src/main.rs` の `"cfg": { … }`。窓版が
+* **送る側。** `crates/cian-server/src/main.rs` の `"cfg": { … }`。窓版が
   設定について知れることの全部で、ここに無いものは窓版には届かない
-* **読む側** ── `gui/renderer.js` の中の `c.<名前>`（`const c = s.cfg` の
+* **読む側。** `gui/renderer.js` の中の `c.<名前>`（`const c = s.cfg` の
   `c`）と、`cfg.<名前>`（menu の出し分けに使う保存先）
 
 **下限を書いてある。** `keycover.py` は窓版を `tr()` に通した回に 72 → 2 種へ
@@ -99,7 +99,7 @@ def engine_uses() -> set[str]:
     """
     src = ENGINE.read_text(encoding="utf-8")
     # **`"cfg"` の中は数えない。** そこは `"lang": cfg.options.lang` のように
-    # 窓へ**渡している**だけで、エンジンが使っている証拠にはならない ──
+    # 窓へ**渡している**だけで、エンジンが使っている証拠にはならない。
     # 数えていた最初の版は、送っている名前なら何でも免除を通した（`lang` を
     # でっちあげて確かめた）。
     at, end = cfg_block()

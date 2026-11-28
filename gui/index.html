@@ -667,7 +667,7 @@ html, body {
   border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px;
 }
 #settings .shelp { color: var(--dim); font-size: 0.9em; margin: 0 0 4px 14px; }
-/* **全角空白で離さない。** `　` を挟んだら Nerd Font がそこに箱を描いた ──
+/* **全角空白で離さない。** `　` を挟んだら Nerd Font がそこに箱を描いた。
    字間は字ではなく余白で作る。 */
 #settings .sdef { margin-left: 1.2em; opacity: 0.8; }
 /* 片方でしか効かない設定の印。 */
@@ -701,14 +701,14 @@ html, body {
   border: 1px solid var(--line); border-radius: 4px;
 }
 #settings .shelp code { color: var(--text); opacity: 0.8; }
-/* 押して決めるキーの欄。**入力欄ではなくボタン** ── 打つのではなく押す。 */
+/* 押して決めるキーの欄。**入力欄ではなくボタン。** 打つのではなく押す。 */
 #settings .skey {
   width: 100%; font: inherit; text-align: left; cursor: pointer;
   background: var(--pane-off); color: var(--text);
   border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px;
 }
 #settings .skey:hover { border-color: var(--accent); }
-/* 複数行の欄。**等幅で** ── シェルへ送る字なので、桁が見えるほうがいい。 */
+/* 複数行の欄。**等幅で。** シェルへ送る字なので、桁が見えるほうがいい。 */
 #settings .sin textarea {
   font-family: var(--mono, monospace); resize: vertical; line-height: 1.4;
 }
@@ -788,7 +788,7 @@ html, body {
    own scrollbars and grids cannot paint over it. */
 /* **3px。ファイル枠と同じ太さ。** ここだけ 2px で、実機で「シェルの枠が
    若干細く見える」と指摘された（2026-09-14）。枠が「キーがどちらにあるか」
-   を言うツールである以上、パネルごとに太さが違うと、太い方が強く見える ──
+   を言うツールである以上、パネルごとに太さが違うと、太い方が強く見える。
    言っていることは同じなのに。上の `.pane.active::after` と同じ値にする。 */
 #work[data-focus="shell"] #shell::after {
   content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none;
@@ -1121,7 +1121,7 @@ html, body {
    こないパネルがひとつ出る。測らないのがいちばん確かだ。 */
 #work[data-dock="left"] #panes > #view,
 #work[data-dock="right"] #panes > #view {
-  /* `relative` ── 下の焦点枠（`::after`）がこれにぶら下がる。 */
+  /* `relative`：下の焦点枠（`::after`）がこれにぶら下がる。 */
   position: relative; inset: auto;
   flex: 1 1 auto; min-width: 0; min-height: 0;
   /* 左（0）と右（2）のあいだ。嵌まる側がどちらでも、残った一覧との前後が合う

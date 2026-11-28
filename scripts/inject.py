@@ -190,28 +190,28 @@ def sandbox() -> Path:
     d = Path(tempfile.mkdtemp(prefix="cian-inject-"))
     (d / "ok.txt").write_text("ordinary\n", encoding="utf-8")
 
-    # ① 名前付きパイプ ── 読むと、書く側が現れるまで返りません
+    # ① 名前付きパイプ：読むと、書く側が現れるまで返りません
     os.mkfifo(d / "fifo.txt")
 
-    # ② 読めないファイル ── 権限で断られます
+    # ② 読めないファイル：権限で断られます
     (d / "denied.txt").write_text("secret\n", encoding="utf-8")
     os.chmod(d / "denied.txt", 0o000)
 
-    # ③ 2GB の疎ファイル ── 丸ごと読むと終わりません
+    # ③ 2GB の疎ファイル：丸ごと読むと終わりません
     with open(d / "huge.txt", "wb") as f:
         f.truncate(2 * 1024 * 1024 * 1024)
 
-    # ④ 輪になったリンク ── 辿ると終わりません
+    # ④ 輪になったリンク：辿ると終わりません
     os.symlink(d / "loop", d / "loop")
 
-    # ⑤ 壊れた UTF-8 の名前 ── 表示と受け渡しで落ちやすいところです
+    # ⑤ 壊れた UTF-8 の名前：表示と受け渡しで落ちやすいところです
     try:
         os.rename(d / "ok.txt", os.fsdecode(bytes(d) + b"/broken-\xff\xfe.txt"))
         (d / "ok.txt").write_text("ordinary\n", encoding="utf-8")
     except OSError:
         pass
 
-    # ⑥ /dev/zero へのリンク ── 一覧に出すためです。際限なく読めるものが
+    # ⑥ /dev/zero へのリンク：一覧に出すためです。際限なく読めるものが
     #    ペインの中にある状態を作ります
     try:
         os.symlink("/dev/zero", d / "zero-link")
@@ -233,7 +233,7 @@ def sandbox() -> Path:
         encoding="utf-8",
     )
 
-    # ⑧ たくさんの項目 ── 一覧と容量が返るかどうかです
+    # ⑧ たくさんの項目：一覧と容量が返るかどうかです
     many = d / "many"
     many.mkdir()
     for i in range(50_000):
@@ -257,7 +257,7 @@ def cases(d: Path, port: int) -> list[dict]:
          "method": "viewpath", "params": {"path": str(d / "fifo.txt")},
          "wrong": WRONG_GONE},
         # **カーソルを置いてから流します。** `peek` も `path` を見ないので、
-        # 置かずに流していた間は `many`（ディレクトリ）を測っていました ──
+        # 置かずに流していた間は `many`（ディレクトリ）を測っていました。
         # 「断りました: many はディレクトリです」で緑になっていたのが証拠です。
         {"name": "fifo-peek", "what": "名前付きパイプの先頭だけ読む",
          "method": "peek", "params": {"arg": "-n 5"}, "cursor_on": "fifo.txt",
@@ -316,10 +316,10 @@ def cases(d: Path, port: int) -> list[dict]:
 def in_the_background(eng: Engine, c: dict, reply: dict) -> tuple[str, str, list[str]]:
     """裏に回した仕事を、3つの点で確かめます。返り値は (印, 言葉, 所見)。
 
-    1. **仕事として受け付けたか** ── 返事に操作番号（`op`）があること
-    2. **計算している間、エンジンが他の要求に答えるか** ── 窓が止まらない
+    1. **仕事として受け付けたか。** 返事に操作番号（`op`）があること
+    2. **計算している間、エンジンが他の要求に答えるか。** 窓が止まらない
        という主張そのものです。1秒で切ります
-    3. **本当に計算されたか** ── 終わりの知らせが届き、行の中身が
+    3. **本当に計算されたか。** 終わりの知らせが届き、行の中身が
        `want_row` に当たること
 
     **3 が無いと、この検査は何もしない実装に ok を返します。** 要求をすぐ

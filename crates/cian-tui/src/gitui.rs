@@ -187,7 +187,7 @@ impl App {
     }
 
     /// `svn resolve --accept working` the selection (svn only).
-    /// `:commit` ── ステージ済みの変更を、自分で書いたメッセージでコミットする。
+    /// `:commit`：ステージ済みの変更を、自分で書いたメッセージでコミットする。
     ///
     /// これが無いあいだ、git へのコミットは `:aicommit` からしか行けなかった。
     /// AI に下書きを作らせてから確定する道しか無いので、**社内の endpoint に

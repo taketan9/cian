@@ -32,7 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOC = ROOT / "UNREACHED.ja.md"
 
-# 下限 ── 章がまるごと読めなくなったら、通さずに失敗する
+# 下限：章がまるごと読めなくなったら、通さずに失敗する
 LEAST_SECTIONS = 2
 
 NONE_MARKS = ("無し", "なし")

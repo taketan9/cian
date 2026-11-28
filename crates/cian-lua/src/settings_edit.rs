@@ -6,7 +6,7 @@
 //! 値から組み直せば、その説明も、`if` も、書き手が付けた並び順も消える。
 //!
 //! crmaine の設定画面が同じところで一度転けている（`gui/settings.js` の
-//! `save`）── 画面が知っている項目だけで JSON を組み直して上書きした結果、
+//! `save`）。画面が知っている項目だけで JSON を組み直して上書きした結果、
 //! 手で書き足した項目が消え、「書いてある既定値」（`useDb = false` は
 //! 「設定があっても使わない」という**明示**）まで既定と同じだからと落とされ、
 //! 機能が勝手に戻った。読めないファイルを既定値で塗り潰して 5,399 バイトが
@@ -55,7 +55,7 @@ struct Seen {
 /// **賢くしない。** Lua の構文解析はしない。ここが当てにならない大きさに
 /// 育つと、設定ファイルを壊すツールになる。見るのは「行頭（`--` を除く）が
 /// `cian.set_option("name"` で始まるか」だけで、それ以外の書き方
-/// （変数に入れてから呼ぶ、`for` で回す）は**見つからないほうが正しい** ──
+/// （変数に入れてから呼ぶ、`for` で回す）は**見つからないほうが正しい**。
 /// 見つからなければ末尾に足すので、書き手の書いた行は無傷で残る。
 fn look(line: &str, at: usize, name: &str) -> Option<Seen> {
     let indent_len = line.len() - line.trim_start().len();
@@ -442,7 +442,7 @@ fn append_block(lines: &mut Vec<String>, call: &str, key: &str, value: &str) {
 
 /// `init.lua` を読む。返すのは（場所、中身、Lua として読めなかった理由）。
 ///
-/// **読めなかったら、設定画面は保存させない。** crmaine はここで転けている ──
+/// **読めなかったら、設定画面は保存させない。** crmaine はここで転けている。
 /// JSON に書き間違いがあると読み込みが通知なしに既定へ落ち、設定画面はまっさらな
 /// 状態で開き、保存を押した瞬間に元の設定が消えた（5,399 バイト → 64 バイト）。
 /// 中身は必ず返すので、画面は「読めません」と言ったうえで**そのまま見せられる**。
@@ -465,7 +465,7 @@ pub fn syntax_error(text: &str) -> Option<String> {
     }
     let lua = mlua::Lua::new();
     // **名前を付ける。** 付けないと mlua は読んだ場所の名で呼ぶので、
-    // 「`crates/cian-lua/src/settings_edit.rs:454: unexpected symbol』」と出る ──
+    // 「`crates/cian-lua/src/settings_edit.rs:454: unexpected symbol』」と出る。
     // 自分の設定を直そうとしている人に、cian の中のファイルを見せることになる。
     match lua.load(text).set_name("init.lua").into_function() {
         Ok(_) => None,

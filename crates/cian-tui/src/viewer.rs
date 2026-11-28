@@ -4251,7 +4251,7 @@ impl App {
 
     /// `:g/re/d` — drop every line that matches (or, for `:v`, every line
     /// that does not). One undo step, and it says how many went.
-    /// `:g <正規表現>` / `:v <正規表現>` ── 一致した行を消す／一致した行だけ
+    /// `:g <正規表現>` / `:v <正規表現>`：一致した行を消す／一致した行だけ
     /// 残す。窓版が名前で持っているもので、ビューアの中の `g/…/d` と同じ仕事。
     pub(crate) fn viewer_line_filter(&mut self, pattern: &str, keep: bool) {
         if pattern.trim().is_empty() {

@@ -29,7 +29,7 @@ from pathlib import Path
 # **Windows の runner の標準出力は cp1252。** 日本語を1行出した瞬間に
 # `UnicodeEncodeError` で落ち、「資材が悪い」ではなく「検査が壊れた」で
 # ジョブが赤くなる。`scripts/buildstamp.py` が 2026-10-31 に発生した同じ原因に、
-# **この検査を足した日にもう一度落ちた**（2026-11-28）── 同じ直しを別の
+# **この検査を足した日にもう一度落ちた**（2026-11-28）：同じ直しを別の
 # ファイルに書き写す必要があることを、どの検査も監視していなかった。
 # いまは `scripts/claudemd.py` が監視する。
 for stream in (sys.stdout, sys.stderr):
@@ -38,7 +38,7 @@ for stream in (sys.stdout, sys.stderr):
     except (AttributeError, OSError):
         pass
 
-# 素の Windows に無いもの ── 入れるには再頒布可能パッケージが要ります。
+# 素の Windows に無いもの：入れるには再頒布可能パッケージが要ります。
 REDIST = ("vcruntime", "msvcp", "concrt", "vcomp", "vcamp", "mfc")
 
 # 読み取れた取り込み先の下限。0 件を「きれい」と読まないためです。

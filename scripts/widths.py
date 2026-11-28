@@ -22,10 +22,10 @@
 
 ## 何を疑っているか
 
-* **Rust** ── `chars().count()` を `u16` にしているもの。ratatui の座標は
+* **Rust**：`chars().count()` を `u16` にしているもの。ratatui の座標は
   `u16` なので、そのキャストは「これは画面の桁だ」と言っているのと同じ。
   高さは `Vec::len()` で数えるので、ここには出てこない
-* **JS** ── `padEnd` / `padStart` で見た目を揃えているものと、`.length` を
+* **JS**：`padEnd` / `padStart` で見た目を揃えているものと、`.length` を
   桁の予算として比べているもの。数字を0詰めする `String(n).padStart(2, '0')`
   は桁の話ではないので除く
 
@@ -110,10 +110,10 @@ RUST_SUSPECT = re.compile(
 )
 # **`as u16` が同じ行に無い字数。** 2026-09-10 に、この形で2件出た:
 #
-#   * トグルのメニュー ── `pad = w - (2 + label.chars().count() + …)` で右詰めして
+#   * トグルのメニュー：`pad = w - (2 + label.chars().count() + …)` で右詰めして
 #     いたので、**日本語ではどのスイッチも ON / OFF が一つも見えていなかった**
 #     （枠の外へ押し出されていた）。英語では出ない
-#   * マクロの一覧 ── `widest = names.map(chars().count()).max()` を**次の行で**
+#   * マクロの一覧：`widest = names.map(chars().count()).max()` を**次の行で**
 #     `as u16` していたので、上の regex に掛からなかった
 #
 # だから `render.rs` の中だけは、`chars().count()` をひとしく疑う。ここは
@@ -121,7 +121,7 @@ RUST_SUSPECT = re.compile(
 # **文字の位置**（カーソルの桁、選択の範囲、伏字の数）は桁の話ではないので、
 # 下の WAIVED に**行そのものと理由**を書いて外す。
 DRAW = ROOT / "crates" / "cian-tui" / "src" / "render.rs"
-# `chars().take(n)` も同じ ── **桁の予算を字で切っている**。`render.rs:7351` の
+# `chars().take(n)` も同じ：**桁の予算を字で切っている**。`render.rs:7351` の
 # blame 欄はこれで「11桁のつもりの欄が22桁」になり、註だけ残して直してあった
 # のに、`draw_git_log` の author と subject は同じ形のまま残っていた。
 DRAW_SUSPECT = re.compile(r"chars\(\)\.count\(\)|chars\(\)\.take\(")
@@ -129,7 +129,7 @@ DRAW_SUSPECT = re.compile(r"chars\(\)\.count\(\)|chars\(\)\.take\(")
 # 7 件出て**そのどれも桁の話ではなかった**。当てにならない指摘が7件並ぶ検査は、
 # 読まれなくなる検査。
 #
-# 代わりに、桁の予算を `.length` で切っている形を1つだけ足した ──
+# 代わりに、桁の予算を `.length` で切っている形を1つだけ足した。
 # `truncateMiddle` が `text.length <= max` で切っていて、端末版の
 # `truncate_middle`（「全角は2つぶん」）と**同じパスを違う長さに詰めていた**。
 JS_SUSPECT = re.compile(

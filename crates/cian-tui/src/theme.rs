@@ -276,7 +276,7 @@ pub(crate) fn modern_terminal() -> bool {
 /// all `PseudoConsoleWindow`, which is what a console attached through a
 /// pseudoconsole gets — means some other program is drawing: Windows
 /// Terminal, an editor's panel, a session over ssh.
-// Windows でしか呼ばれませんが、**規則そのものは全部の環境で試せます** ──
+// Windows でしか呼ばれませんが、**規則そのものは全部の環境で試せます**。
 // 窓の種類の名前を渡すだけの関数にしてあるのはそのためです。
 #[cfg_attr(all(not(windows), not(test)), expect(dead_code, reason = "規則は Windows のものだが、試験は全環境で走る"))]
 pub(crate) fn host_is_legacy(class: &str) -> bool {

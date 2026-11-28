@@ -510,7 +510,7 @@ impl Session {
         Ok(Ok(at))
     }
 
-    /// 落とした複製を片付ける。**閉じたら消す**（本人、2026-09-23）── 保存せずに
+    /// 落とした複製を片付ける。**閉じたら消す**（本人、2026-09-23）。保存せずに
     /// 閉じたなら複製ごと捨てる。大きさに関係なく残さない。
     fn drop_fetched(&mut self) {
         for at in self.fetched.keys() {
@@ -1366,7 +1366,7 @@ impl Session {
                 let path = path.clone();
                 self.open = Some((path.clone(), file, st));
                 // 比べるために落としてきたものなら、同じ手でサーバへ戻す。
-                // **名乗るのは向こうの名前** ── 一時ファイルの名前を出しても、
+                // **名乗るのは向こうの名前。** 一時ファイルの名前を出しても、
                 // どのファイルを保存したのか読む人には分からない。
                 let name = self.remote_name(&path).unwrap_or(name);
                 self.put_back(&path)?;
@@ -2470,7 +2470,7 @@ impl Session {
             // **Named `shellfilter`, not `filter`** — that one is the listing's
             // `/`, and two things called filter in one dispatcher is how the
             // wrong one gets called.
-            // `:vi` / `:vim` / `:nvim` ── 名指しされたエディタの居場所。
+            // `:vi` / `:vim` / `:nvim`：名指しされたエディタの居場所。
             //
             // 窓版はこれまで `vim %f` という文字列をシェルに打つだけで、
             // vim が入っていない機械では `command not found` で終わっていた。
@@ -4091,7 +4091,7 @@ impl Session {
             // 「どちらが勝つか」が生まれ、cian で最頻のバグ（設定を直したのに
             // 効かない）に新しい水源を足すことになる。
             //
-            // 項目の表は `cian_lua::settings_schema` ── `Options` と1対1で
+            // 項目の表は `cian_lua::settings_schema`：`Options` と1対1で
             // あることを検査が見ているので、設定を足した日に取り残されない。
             "settings_read" => {
                 let (path, text, bad) = cian_lua::settings_edit::read_init();
@@ -4100,7 +4100,7 @@ impl Session {
                     .map(|f| {
                         use cian_lua::settings_schema::Kind;
         // 選ぶ欄は `(init.lua に書く値, 画面に出す名前)`。**二つに分けて
-        // あるのはシェルのため** ── 画面は「Windows PowerShell」、書くのは
+        // あるのはシェルのため。** 画面は「Windows PowerShell」、書くのは
         // `powershell.exe`。
                         let (kind, choices) = match f.kind {
                             Kind::Text => ("text", vec![]),
@@ -4299,7 +4299,7 @@ impl Session {
                             serde_json::json!({
                                 "action": b.action,
                                 "label": { "en": b.label_en, "ja": b.label_ja },
-                                // **いま縛ってあるキー。** 既定のキーは出さない ──
+                                // **いま縛ってあるキー。** 既定のキーは出さない。
                                 // 出すには `keys.rs` の巨大な match を写すことに
                                 // なり、二つ目の真実ができて必ずずれる。既定は
                                 // `?` のキー一覧が答える。
@@ -4467,7 +4467,7 @@ impl Session {
                     anyhow::bail!("init.lua の書き込み先が分かりません");
                 };
                 let mut out = text;
-                // `[{ "name": "tab_width", "value": "8" }]` ── value が null
+                // `[{ "name": "tab_width", "value": "8" }]`：value が null
                 // なら、その行をコメントに戻す。
                 for change in req.params["set"].as_array().cloned().unwrap_or_default() {
                     let Some(name) = change["name"].as_str() else { continue };
@@ -6257,7 +6257,7 @@ fn sweep_old_fetches() {
 
 fn main() -> anyhow::Result<()> {
     sweep_old_fetches();
-    // 開く場所。**引数が無いときは init.lua の `home`** ── 端末版の
+    // 開く場所。**引数が無いときは init.lua の `home`。** 端末版の
     // `default_home` と同じ順で、書いてあるものが先。窓版は場所を渡さずに
     // 起こすことがあり（`main.js` がフォルダを与えられなかったとき）、
     // そこで `home` が通知なしに落ちていた。無ければホーム、それも無ければ

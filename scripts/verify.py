@@ -231,7 +231,7 @@ def prepare(quiet=False) -> list[str]:
         if not quiet:
             print(f"  {'ok' if ok else '✗ '} {pad(what, 34)} {how}")
 
-    # ① pty の venv と pyte ── 端末版を本物の pty で動かすために要ります
+    # ① pty の venv と pyte：端末版を本物の pty で動かすために要ります
     py = VENV / "bin" / "python"
     if not py.exists():
         subprocess.call([sys.executable, "-m", "venv", str(VENV)])
@@ -246,7 +246,7 @@ def prepare(quiet=False) -> list[str]:
     if not ok:
         missing.append("pty の venv（端末版の検査が走りません）")
 
-    # ② 窓版の依存 ── electron が無いと窓版は1行も動きません
+    # ② 窓版の依存：electron が無いと窓版は1行も動きません
     ok = (ROOT / "gui" / "node_modules" / "electron" / "package.json").exists()
     if not ok:
         subprocess.call(["npm", "install", "--silent"], cwd=ROOT / "gui")
@@ -255,7 +255,7 @@ def prepare(quiet=False) -> list[str]:
     if not ok:
         missing.append("窓版の依存（窓版の検査が走りません）")
 
-    # ③ AI の mock 設定 ── 網も鍵も要らずに、AI の経路を端まで通せます
+    # ③ AI の mock 設定：網も鍵も要らずに、AI の経路を端まで通せます
     MOCK.mkdir(parents=True, exist_ok=True)
     (MOCK / "init.lua").write_text(
         'cian.ai {\n'
@@ -266,7 +266,7 @@ def prepare(quiet=False) -> list[str]:
         '}\n', encoding="utf-8")
     say(True, "AI の mock 設定", str(MOCK / "init.lua"))
 
-    # ④ エンジンと端末版 ── 窓版・注入・リモートはビルド済みの実体を使います
+    # ④ エンジンと端末版：窓版・注入・リモートはビルド済みの実体を使います
     #
     # **`-p cian-tui` では端末版の実行ファイルは建ちません。** `cian-tui` という
     # 名前の実行ファイルは `cian-bin`（パッケージ名は `cian`）が作り、

@@ -26,10 +26,10 @@
 
 ## 項目① 英語しか言えない知らせ
 
-**端末版の既定の言語は日本語です**（`Lang::from_opt` ── 設定が無ければ日本語）。
+**端末版の既定の言語は日本語です**（`Lang::from_opt`。設定が無ければ日本語）。
 それなのに `self.message` と `Popup::Notice` の文字列には、`tr()` を通らず
 英語だけのものが並んでいます。`copy failed: {}`、`backup failed, not saving`、
-`no password or key set for {}@{}` ── **失敗の知らせほどここに多い**。
+`no password or key set for {}@{}`。**失敗の知らせほどここに多い**。
 
 `i18n.py` は逆向き（日本語しか言えないもの）しか数えていないので、これは
 **どの基準にも映っていませんでした**。
@@ -60,7 +60,7 @@
 ## 項目③ 型どおりの言い回し
 
 「AI っぽい」の正体は、**書き手が一度も声に出していない言い回し**です。
-いまは 0 件 ── だからこの項目は**監視**で、天井は 0。増えた日に失敗します。
+いまは 0 件です。だからこの項目は**監視**で、天井は 0。増えた日に失敗します。
 
 **辞書に足すときは変異テストを。** 「指摘が消えた」ではなく「検査が何も報告しなかった」を
 cian では5回やっています（`keycover.py` が 72 → 2 種に落ちたまま百分率を
@@ -117,12 +117,12 @@ ENGLISH_ONLY_CEILING = 2  # 端末版。既定が日本語なのに英語しか�
 #   英語のままなのは窓版の裏返しの同じ不具合だった。残りは案内文と記録用
 ENGLISH_ONLY_JS_CEILING = 0  # 窓版。片付いた（2026-11-28、`:view` の使い方案内が最後の1本）
 DASH_CEILING_RS = 0        # 端末版。`tr()` の両方の言葉ぶんを数えるので、報せの数のほぼ倍
-#   124 → 125（2026-09-12）。**文章が増えたのではなく、見る場所が増えた** ──
+#   124 → 125（2026-09-12）。**文章が増えたのではなく、見る場所が増えた。**
 #   エンジン（`cian-server`）の断りの言葉を読むようにしたら、そこに1本あった
 #   （`中身が違います — 手元 … ≠ 向こう …`）。数え上げの天井を上げるのは
 #   これだけが理由で、書き手が増やしたぶんは**一つも入っていない**
 DASH_CEILING_JS = 0        # 窓版
-#   156 → 155（2026-09-12）。`vim（既定）／ メモ帳 ── …` を `notepad / vim` に
+#   156 → 155（2026-09-12）。`vim（既定）／ メモ帳。…` を `notepad / vim` に
 #   書き直したときにダッシュが1本減った。**直したら天井も下げる**
 # 硬い言い方。**ここは 0 を目指す。** 数が少なく、直し方が一つに決まる。
 STIFF_CEILING = 0
@@ -339,7 +339,7 @@ def dashes():
 # タイトルを「題」。読めるが、**その人が声に出して言わない言い方**で、それが
 # 「機械が書いた」と感じさせる。
 #
-# 難しいのは、cian には**わざと一字の言葉がある**こと ── 枠・桁・ペイン・
+# 難しいのは、cian には**わざと一字の言葉がある**ことである。枠・桁・ペイン・
 # パネルは別のものを指す言葉で、揃えて「きれいに」すると意味が死ぬ
 # （`skills/massara-check` に書いてある）。だから見るのは
 # **「ふつうの日本語アプリが別の言い方をするもの」だけ**にする。
@@ -594,7 +594,16 @@ COINED_OK = {
 # 辞書の範囲だけとし、下の2行の間だけを読み飛ばす。
 # 免除するのは2つの辞書の範囲である。`STIFF` は画面の字を探す鍵なので、
 # 古い言葉そのものを持っていなければならない。
-DICT_SPANS = (("COINED = {", "COINED_FILES = ("), ("STIFF = {", "def doc_words"))
+# **目印は行頭で探す。** `DICT_SPANS` の中の文字列そのものに当たらないよう、
+# 改行を付けて探す。付けずに書いていたとき、`PROSE_JOIN` の範囲がこの表の位置から
+# 始まってしまい、検査が自分の正規表現を指摘し続けた。
+DICT_SPANS = (
+    ("COINED = {", "COINED_FILES = ("),
+    ("STIFF = {", "def doc_words"),
+    # ②と⑥が探す正規表現そのもの。ダッシュの字を持っていなければ探せない。
+    ("DASH = re.compile", "WAIVED = {"),
+    ("PROSE_JOIN = re.compile", "def prose_dashes"),
+)
 
 
 def without_dictionary(rel: str, text: str) -> str:
@@ -602,7 +611,7 @@ def without_dictionary(rel: str, text: str) -> str:
     if not rel.endswith("scripts/kotoba.py"):
         return text
     for begin, end in DICT_SPANS:
-        a, b = text.find(begin), text.find(end)
+        a, b = text.find("\n" + begin), text.find("\n" + end)
         if a < 0 or b < 0 or b < a:
             raise SystemExit(
                 f"kotoba.py の辞書の範囲（{begin}）が読めない。免除の目印が"
@@ -663,6 +672,40 @@ def coined_words():
             for pat, better in COINED.items():
                 for _ in re.finditer(pat, line):
                     out.append((rel, n, line.strip(), better))
+    return out
+
+
+# ── 項目⑥ コメントと文書のダッシュ ──────────────────────────────────
+#
+# **画面の字と同じ規則を、画面の外にも当てる。** 文の関係（理由・条件・言い換え）
+# が読み取れないため、ダッシュでつながず文を分ける。出どころは crmaine の
+# `docs/source-style.md` である。
+#
+# 数えないものが2つある。コードをまとめる見出しの飾り（行頭のダッシュ）と、
+# cian が出力する区切り（mermaid の見出し・スライドの区切り）である。どちらも
+# 文をつなぐ用法ではない。
+PROSE_JOIN = re.compile(r"(?<![─―])[─―]{2}(?![─―])")
+PROSE_DECO = re.compile(r"[─―]{7,}")
+PROSE_BANNER = re.compile(r"^\s*(?://+!?|///|#|--|\*|<!--)\s*[─―]{2}\s")
+PROSE_DATA = re.compile(r'(?:format!\(|== )"[^"]*[─―]{2}|"[─―]{2}')
+
+# 1,473 件から下げてきた数である。**ここから下げる。**
+PROSE_DASH_CEILING = {"rs": 57, "py": 43, "js": 60, "doc": 58, "other": 7}
+
+
+def prose_dashes():
+    """ダッシュで文をつないだコメントと文書。"""
+    out = []
+    for rel in tracked_text_files():
+        try:
+            text = (ROOT / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for n, line in enumerate(without_dictionary(rel, text).splitlines(), 1):
+            if PROSE_DECO.search(line) or PROSE_BANNER.match(line) or PROSE_DATA.search(line):
+                continue
+            for _ in PROSE_JOIN.finditer(line):
+                out.append((rel, n, line.strip()))
     return out
 
 
@@ -763,6 +806,22 @@ def main() -> int:
     for g, top in COINED_CEILING.items():
         if by.get(g, 0) > top:
             bad.append(f"⑤ {g} が {by[g]} 件に増えました（天井 {top}）")
+
+    prose = prose_dashes()
+    pby = {}
+    for rel, *_ in prose:
+        g = coined_group(rel)
+        pby[g] = pby.get(g, 0) + 1
+    print("\n  ⑥ コメントと文書のダッシュ " + "  ".join(
+        f"{g} {pby.get(g, 0)} 件（天井 {PROSE_DASH_CEILING[g]}）" for g in ("rs", "py", "js", "doc")))
+    print("     画面の字と同じ規則。見出しの飾りと、出力される区切りは数えない")
+    if prose and listing:
+        for rel, n, line in prose:
+            print(f"    {rel}:{n}")
+            print(f"      {line[:80]}")
+    for g, top in PROSE_DASH_CEILING.items():
+        if pby.get(g, 0) > top:
+            bad.append(f"⑥ {g} が {pby[g]} 件に増えました（天井 {top}）")
 
     print()
     print("=" * 72)

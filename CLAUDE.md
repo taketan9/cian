@@ -17,7 +17,7 @@ cian-core` の片方向依存を保つ**。対応は macOS と Windows の2つ�
 
 ---
 
-## ⛔ 開発のルール ── **どれも検査が監視する**
+## ⛔ 開発のルール：**どれも検査が監視する**
 
 **ルールは書いただけでは守られない。** pty の仮想環境を `/tmp` に置かない規則が
 記憶にありながら、**実際に手順を指示する4か所がすべて `/tmp` のまま**だった。
@@ -26,27 +26,27 @@ cian-core` の片方向依存を保つ**。対応は macOS と Windows の2つ�
 
 | ルール | 検査 |
 | --- | --- |
-| **依頼を実装したら `gui/REQUESTS.ja.md` に1行**（何を頼まれ、どこで満たしたか） | `scripts/requests.py` ── **lint ではなく契約。落ちたら直す前に訊く** |
-| **作った言い回しを使わない。** たとえ（旗・札・写し・口・合言葉・扉・皿）・擬人化（黙る・鳴る）・経験談（踏んだ・転ぶ）・口語の強調。**画面の文言も、文書も、コメントも、検査の出力も同じ**。言い換えの表は `scripts/kotoba.py` の `COINED` ひとつ（正本は crmaine の `docs/source-style.md`） | `scripts/kotoba.py` の項目⑤ ── **天井は全部 0**。辞書が縮んだら下限で失敗する |
+| **依頼を実装したら `gui/REQUESTS.ja.md` に1行**（何を頼まれ、どこで満たしたか） | `scripts/requests.py`（**lint ではなく契約。失敗したら直す前に訊く**） |
+| **作った言い回しを使わない。** たとえ（旗・札・写し・口・合言葉・扉・皿）・擬人化（黙る・鳴る）・経験談（踏んだ・転ぶ）・口語の強調。**画面の文言も、文書も、コメントも、検査の出力も同じ**。言い換えの表は `scripts/kotoba.py` の `COINED` ひとつ（正本は crmaine の `docs/source-style.md`） | `scripts/kotoba.py` の項目⑤と⑥（**作った言い回しの天井は全部 0**。ダッシュは 1,473 件から下げている最中で、辞書が縮んだら下限で失敗する） |
 | **画面に出る文言はハウススタイルに従う**（英語は小文字始まり／日本語は敬体／末尾に句点を打たない／ダッシュでつながず2文に／「今のところ」と言わない）。全文は `crates/cian-tui/src/theme.rs` の `tr()` の doc コメント | `nothing_cian_says_ends_in_a_full_stop` ＋ `scripts/kotoba.py` |
 | **マニュアル・パレット・README は、実在するコマンドだけを名乗る** | `the_manual_never_names_a_command_that_does_not_exist` |
 | **画面の幅を字数で測らない。** 日本語で桁がずれる | `scripts/widths.py` |
 | **両前端は、同じものを同じ言葉で呼ぶ** | `scripts/parity.py` |
-| **両前端は、同じ機能を同じ名前で打たせる**（言葉の揃いとは別物 ── 打てる名前の食い違いはこちらにしか出ない） | `scripts/names.py` |
+| **両前端は、同じ機能を同じ名前で打たせる**（言葉の揃いとは別の検査である。打てる名前の食い違いはこちらにしか出ない） | `scripts/names.py` |
 | **`init.lua` に足した設定は、窓版も読む** | `scripts/configcover.py` |
 | **設定は `init.lua` ひとつが正。** 設定画面はその複製 | `scripts/settingscover.py` |
 | **窓版の文言は、両方の言葉で言える** | `scripts/i18n.py` |
 | **マニュアルが名前を挙げるキーは、一度は押されている** | `scripts/keycover.py` |
 | **辿り着けないコマンド・メニュー項目を残さない**（関数が生きていても、押す道が無ければ死んでいる） | `scripts/audit.py` |
-| **開いているものは、別のものを開いても通知なしに消えない**（`self.popup` は1枠しかなく、未保存ごと消えた） | `scripts/states.py` ── 8軸を2つずつ掛け合わせる。**覆われただけの組と、本当に消えた組を分ける**（B を閉じて A が戻るか） |
+| **開いているものは、別のものを開いても通知なしに消えない**（`self.popup` は1枠しかなく、未保存ごと消えた） | `scripts/states.py`（8軸を2つずつ掛け合わせる）。**覆われただけの組と、本当に消えた組を分ける**（B を閉じて A が戻るか） |
 | **テストは全部通す**（本数は走らせれば出る） | `cargo test --workspace` |
 | **警告を1つも出さない** | `cargo clippy --workspace --all-targets -- -D warnings`（CI と同じ基準） |
-| **資材は、自分がどのビルドかを名乗る。** `--version` の `<版> (<SHA>)` が `Cargo.toml` といまの HEAD と一致し、`-dirty` でも `unknown` でもない | `scripts/buildstamp.py` ── CI が staging の直後、上げる前に当てる。**走らせずに読むので、落とした Windows の exe にも当てられる** |
-| **配る Windows の exe は、素の Windows で起動する。** 再頒布可能パッケージ（`VCRUNTIME140.dll`）を当てにしない | `scripts/winstart.py` ── **走らせずに読む**ので、落とした exe にも当てられる。CI が資材を上げる前に当てる |
-| **pty の venv は `~/.cache/cian-tui-env`** ── `/tmp` は macOS の掃除で消える（2回発生した） | `scripts/claudemd.py` |
-| **子プロセスを待つところには上限を置く。** 上限の無い待ちは増やさない（返らない `password_cmd` で窓が止まった） | `scripts/deadline.py` ── **天井と下限の両方を持つ**（増えたら落ち、探し方が壊れても落ちる） |
-| **設計書は、実在する名前だけを名乗る**（`docs/*.ja.md` の関数・パス・リンク） | `scripts/designdoc.py` ── **数に下限がある**（取りこぼして「所見なし」になるのを防ぐ） |
-| **Windows のジョブが呼ぶ検査は、cp1252 で落ちない。** 日本語を1行出すと`UnicodeEncodeError` で、検査自身が失敗する | `scripts/claudemd.py` ── 2026-10-31 に`buildstamp.py` で発生し、**2026-11-28 に新しい検査で同じ原因により再発した**（同じ修正を書き写す必要を、どの検査も監視していなかった） |
+| **資材は、自分がどのビルドかを名乗る。** `--version` の `<版> (<SHA>)` が `Cargo.toml` といまの HEAD と一致し、`-dirty` でも `unknown` でもない | `scripts/buildstamp.py`（CI が staging の直後、資材を上げる前に実行する）。**走らせずに読むので、落とした Windows の exe にも当てられる** |
+| **配る Windows の exe は、素の Windows で起動する。** 再頒布可能パッケージ（`VCRUNTIME140.dll`）を当てにしない | `scripts/winstart.py`（**走らせずに読む**ので、落とした exe にも当てられる）。CI が資材を上げる前に当てる |
+| **pty の仮想環境は `~/.cache/cian-tui-env` に置く。** `/tmp` は macOS の掃除で消える（2回発生した） | `scripts/claudemd.py` |
+| **子プロセスを待つところには上限を置く。** 上限の無い待ちは増やさない（返らない `password_cmd` で窓が止まった） | `scripts/deadline.py`（**天井と下限の両方を持つ**）（増えたら落ち、探し方が壊れても落ちる） |
+| **設計書は、実在する名前だけを名乗る**（`docs/*.ja.md` の関数・パス・リンク） | `scripts/designdoc.py`（**数に下限がある**）（取りこぼして「所見なし」になるのを防ぐ） |
+| **Windows のジョブが呼ぶ検査は、cp1252 で落ちない。** 日本語を1行出すと`UnicodeEncodeError` で、検査自身が失敗する | `scripts/claudemd.py`（2026-10-31 に`buildstamp.py` で発生し、**2026-11-28 に新しい検査で同じ原因により再発した**（同じ修正を書き写す必要を、どの検査も監視していなかった） |
 | **この表が名乗る検査は実在する** | `scripts/claudemd.py` |
 | **版を切ったら、手元から届かなかったところを `UNREACHED.ja.md` に書く**（Windows・彼の JIS と IME・社内の経路・彼の目。**無ければ「無し」の1行**） | `scripts/unreached.py` |
 | **検査を入れたら、わざと壊して検知されることを確かめる** | （手順。「検査が何も報告しなくなった」を5回起こしている） |
@@ -72,8 +72,8 @@ cian-core` の片方向依存を保つ**。対応は macOS と Windows の2つ�
   「どのビルドか」が答えられなくなる
 - **版を切ったら、ひとつ前の資材は残す**（戻る先が要る）。それより古いのは消して
   よく、**タグとリリースページは必ず残す**。消すのは彼が言ってから
-- 資材を Asset に上げるのは **`scripts/release-asset.py`** ── 手でやらない
-- **掃除で消してよいのは run の資材と cache だけ** ── しかも **直近2つの release run は
+- 資材を Asset に上げるのは **`scripts/release-asset.py`** を使う。手でやらない
+- **掃除で消してよいのは run の資材と cache だけである。** しかも **直近2つの release run は
   残す**（**Mac の資材はリリースに付かないので、そこからしか取れない**）。
   タグ・リリースページ・`git fsck` に出る dangling object は消さない
 
@@ -117,8 +117,8 @@ Mac で通っても JIS では外れる）。
 ここに一覧を書かない。**同じ一覧を2か所に置くと、片方が古くなる**
 （実際にずれて、`settingscover.py` が片方から落ちていた）。
 
-- **`skills/itsumono-check`** ── 壊れていないか。リリース前に毎回通す全部
-- **`skills/massara-check`** ── これで人に渡せるか。文言・桁・断られたときの
+- **`skills/itsumono-check`**：壊れていないか。リリース前に毎回通す全部
+- **`skills/massara-check`**：これで人に渡せるか。文言・桁・断られたときの
   見え方。`itsumono-check` が全部緑でもここは素通りする
 
 ---
@@ -148,7 +148,7 @@ Mac で通っても JIS では外れる）。
   設計の根拠に「あふではこう」を持ち出さない。vim / helix / yazi の慣習を優先
 - **GUI のキーは端末版のキー表から写す。** 記憶で書かない（過去のズレ: ソートは
   `s` ではなく `,`／配色は `T` の中／ペイン移動は `Ctrl+h` / `Ctrl+l`）
-- **設定は portable-first** ── exe の隣のコピーが `~/.config/cian` より読み書き
+- **設定は portable-first である。** exe の隣のコピーが `~/.config/cian` より読み書き
   両方で勝つ。だから「設定を直したのに効かない」が起きる。**`:where` で診断**
 - **パレットは `cian-core/src/theme.rs`。** 窓が独自に色計算をしない。
   `is_light()` は名前ではなく**背景の輝度**で判定

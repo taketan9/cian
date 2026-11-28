@@ -26,7 +26,7 @@
     python3 scripts/remote.py           # 立てて、通して、片付ける
     python3 scripts/remote.py --keep    # 終わってもサーバを残す（自分で叩く用）
 
-Windows では動かない（`sftp-server` が無い）。**CI の3-OS には入れていない** ──
+Windows では動かない（`sftp-server` が無い）。**CI の3-OS には入れていない**。
 Windows で必ず落ちる検査は、落ちても誰も見なくなる。
 """
 import glob
@@ -292,7 +292,7 @@ def main():
     server = Server(home)
     server.start()
 
-    # `init.lua` から引いた接続 ── 窓の `:remote` が使う道。手で打つ形
+    # `init.lua` から引いた接続：窓の `:remote` が使う道。手で打つ形
     # （`host=`/`key=` をそのまま渡す）だけを通していたので、**設定に鍵を書いた
     # ユーザ**という一番普通の形が一度も走っていなかった。
     who = os.environ.get("USER") or os.environ.get("LOGNAME")
@@ -377,7 +377,7 @@ def main():
         check("鍵のユーザは「入る物がある」", [u["stored"] for u in users], [True, True, False])
         check("鍵と保存パスワードを取り違えない", [u["keyed"] for u in users], [True, True, False])
         # パスワードを **渡さずに** 繋ぐ。窓は欄を出さないので、これが窓の送る形。
-        # **`r` を潰さないこと** ── 上の接続の返事を後の検査がまだ読んでいる。
+        # **`r` を潰さないこと**：上の接続の返事を後の検査がまだ読んでいる。
         keyed = e.connect(pane="right", preset_host=0, preset_user=0, path=root)
         check("パスワード無しで繋がる", keyed.get("need_password"), None)
         check("繋いだ先が読める",
@@ -556,7 +556,7 @@ def main():
         check("断ったなら落としていない", after, before)
 
         # **次の比較を始めたら、前の複製は消えている。** 窓が閉じ損ねても
-        # 溜まり続けないための二重の備え ── 実機の一時領域に、サーバから
+        # 溜まり続けないための二重の備え：実機の一時領域に、サーバから
         # 落とした CSV が残っていた（2026-09-28、「2つは同一です」で終わった
         # ときに誰も消していなかった）。
         # **別のファイルで比べ直す。** 同じものだと同じ名前で落ち直すので、

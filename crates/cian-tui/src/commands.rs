@@ -469,7 +469,7 @@ impl App {
             // **`:commit` は git と svn のどちらでも同じ語**（2026-09-20、本人）。
             // どちらのリポジトリかはディレクトリが知っていて、バッジも状態行も
             // すでにそう言っている。`:svncommit` は手が覚えているので残すが、
-            // 一覧には出さない。取り返しのつかなさの差は訊く画面が言う ──
+            // 一覧には出さない。取り返しのつかなさの差は訊く画面が言う。
             // `commit_prompt` の註にある。
             "commit" | "svncommit" => self.commit_prompt(),
             "resolve" | "svnresolve" => self.svn_resolve(),
