@@ -1605,6 +1605,18 @@ async function main() {
             'cian.set_option("notify_min_secs", 7)\n', 'utf8');
     }
 
+    // **エンジンを建ててから起こします**（2026-11-28 に足しました）。
+    // `gui/engine.js` は「いちばん新しい実行ファイル」を選びます ── 製品の
+    // 起こし方としては正しいのですが、検査がそれに乗ると、直した直後のコードで
+    // はなく前のビルドを測ります。`scripts/inject.py` で実際に2回踏み、「2.9 秒」
+    // と緑で答え続けました。変わっていなければ cargo は何もしません。
+    const built = require('node:child_process').spawnSync(
+        'cargo', ['build', '-q', '-p', 'cian-server'], { cwd: ROOT, stdio: 'inherit' });
+    if (built.status !== 0) {
+        console.error('エンジンを建てられませんでした: cargo build -p cian-server');
+        process.exit(1);
+    }
+
     const el = spawn(process.env.CIAN_ELECTRON
         || path.join(__dirname, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'),
         [__dirname, path.join(sand, 'from'), `--remote-debugging-port=${PORT}`],

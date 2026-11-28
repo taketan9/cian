@@ -50,6 +50,7 @@ import pty
 import select
 import shutil
 import struct
+import subprocess
 import sys
 import tempfile
 import unicodedata
@@ -102,6 +103,9 @@ KEYS = {
 
 CORNERS = {"╭", "╮", "╰", "╯", "┌", "┐", "└", "┘", "╔", "╗", "╚", "╝"}
 
+# 1回の走行で建てるのは1度だけ（`binary()` は窓を立てるたびに呼ばれます）。
+_BUILT: list[bool] = []
+
 
 def binary() -> str:
     """新しいほうの cian-tui。release を優先しない。
@@ -110,6 +114,16 @@ def binary() -> str:
     残っているあいだに午後の `cargo build` は debug へ入り、古いほうと話し
     続けることになる。
     """
+    # **建ててから選びます**（2026-11-28 に足しました）。選ぶだけだった間は、
+    # 直した直後のコードではなく前のビルドを動かしていました ── `inject.py`
+    # では同じ穴で、直した `viewer.rs` ではなく前のものを2回測りました。
+    # 「直っていない」で3ラウンド失ったのも同じ形です。1回の走行で建てるのは
+    # 1度だけで、変わっていなければ cargo は何もしません。
+    if not _BUILT:
+        done = subprocess.run(["cargo", "build", "-q", "--bin", "cian-tui"], cwd=ROOT)
+        if done.returncode != 0:
+            raise SystemExit("cian-tui を建てられませんでした: cargo build --bin cian-tui")
+        _BUILT.append(True)
     found = []
     for profile in ("debug", "release"):
         at = os.path.join(ROOT, "target", profile, "cian-tui")

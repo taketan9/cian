@@ -46,6 +46,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DEADLINE = 5.0
+BUILT: list[Path] = []
 
 # 「存在しない」と嘘をついている断り方。
 #
@@ -56,12 +57,27 @@ WRONG_GONE = r"\bnot found\b|(?<!読み終わり)がありません|not an ordin
 
 
 def engine() -> Path:
-    """いちばん新しいエンジン。`gui/engine.js` と同じ選び方です。"""
-    out = [ROOT / "target" / d / "cian-server" for d in ("release", "debug")]
-    out = [p for p in out if p.exists()]
-    if not out:
-        sys.exit("エンジンがありません。`cargo build -p cian-server` を実行してください")
-    return max(out, key=lambda p: p.stat().st_mtime)
+    """測るエンジンを自分で建ててから返します（release 版）。
+
+    **建てずに「いちばん新しい実行ファイル」を選んでいました。** 2026-11-28、
+    `viewer.rs` を直した直後に2回続けて、直す前のコードを測りました ── 道具は
+    「2.9 秒」と緑で答え続けていて、どちらも観測ではありませんでした。
+    測るものは自分で建てます。
+
+    **debug 版で時間を測るのは、製品の時間を測っていません。** 2GB の疎
+    ファイルの返事は 21MB あり、debug 版ではその組み立てだけで数秒かかります。
+    本人が答えた5秒の上限が、正当な1操作でほぼ埋まってしまい、機械の混み方で
+    赤くなります（同じ要求が release 版では 0.4 秒です）。
+    """
+    out = ROOT / "target" / "release" / "cian-server"
+    # 1回の走行で建てるのは1度だけです（項目ごとにエンジンを立て直します）。
+    if not BUILT:
+        print("  エンジンを建てています（release 版）", flush=True)
+        done = subprocess.run(["cargo", "build", "--release", "-q", "-p", "cian-server"], cwd=ROOT)
+        if done.returncode != 0 or not out.exists():
+            sys.exit("エンジンを建てられませんでした。`cargo build --release -p cian-server` を見てください")
+        BUILT.append(out)
+    return out
 
 
 class Engine:

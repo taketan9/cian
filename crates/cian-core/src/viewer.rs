@@ -368,19 +368,55 @@ impl View {
 }
 
 /// One `offset  hex bytes  |ascii|` line of the dump (16 bytes).
+///
+/// **1行あたり 17 回の `format!` を呼んでいました。** 4MB の16進は 262,144 行
+/// なので、2GB のファイルを開くと ―― 読むのは先頭 4MB だけなのに ――
+/// 組み立てだけで 1.8 秒かかっていました（所見 S7、2026-11-28）。
+/// 桁を自分で書き出します。出す字は1字も変えていません
+/// （`the_fast_hex_line_says_exactly_what_the_plain_one_said` が縛ります）。
 fn hex_dump_line(index: usize, chunk: &[u8]) -> String {
-    let mut hex = String::with_capacity(48);
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    // 位置 8 桁 ＋ 空白 2 ＋ 16進の欄 49 ＋ 縦棒2本 ＋ ascii
+    let mut s = String::with_capacity(8 + 2 + 49 + 2 + chunk.len());
+
+    // `{:08x}` と同じ ―― 下限 8 桁で、桁が増えればその分だけ伸びます。
+    let mut digits = [b'0'; 16];
+    let mut n = index * 16;
+    let mut k = 0;
+    while n > 0 {
+        digits[k] = HEX[n & 0xf];
+        n >>= 4;
+        k += 1;
+    }
+    k = k.max(8);
+    for i in (0..k).rev() {
+        s.push(digits[i] as char);
+    }
+
+    s.push(' ');
+    s.push(' ');
+    let mut width = 0;
     for (j, b) in chunk.iter().enumerate() {
         if j == 8 {
-            hex.push(' ');
+            s.push(' ');
+            width += 1;
         }
-        hex.push_str(&format!("{:02x} ", b));
+        s.push(HEX[(*b >> 4) as usize] as char);
+        s.push(HEX[(*b & 0x0f) as usize] as char);
+        s.push(' ');
+        width += 3;
     }
-    let ascii: String = chunk
-        .iter()
-        .map(|b| if b.is_ascii_graphic() || *b == b' ' { *b as char } else { '.' })
-        .collect();
-    format!("{:08x}  {:<49}|{}|", index * 16, hex, ascii)
+    // `{:<49}` の左詰め。16 バイト揃っていれば 49 桁でちょうど埋まります。
+    for _ in width..49 {
+        s.push(' ');
+    }
+
+    s.push('|');
+    for b in chunk {
+        s.push(if b.is_ascii_graphic() || *b == b' ' { *b as char } else { '.' });
+    }
+    s.push('|');
+    s
 }
 
 /// `offset  hex bytes  |ascii|`, sixteen bytes to a line.
@@ -391,6 +427,45 @@ fn hex_dump(bytes: &[u8]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 素直な `format!` の版。**速い道が、遅い道と1字でも違ってはいけません。**
+    /// 位置の桁・空白の数・8バイト目の余分な空白・左詰めの 49 桁・ascii 欄は
+    /// どれも画面の桁に出ます。比べる相手を別の書き方で持っておきます ――
+    /// 同じ関数で測り直す検査は、その関数自身の誤りに ok を返し続けます。
+    fn plainly(index: usize, chunk: &[u8]) -> String {
+        let mut hex = String::new();
+        for (j, b) in chunk.iter().enumerate() {
+            if j == 8 {
+                hex.push(' ');
+            }
+            hex.push_str(&format!("{:02x} ", b));
+        }
+        let ascii: String = chunk
+            .iter()
+            .map(|b| if b.is_ascii_graphic() || *b == b' ' { *b as char } else { '.' })
+            .collect();
+        format!("{:08x}  {:<49}|{}|", index * 16, hex, ascii)
+    }
+
+    #[test]
+    fn the_fast_hex_line_says_exactly_what_the_plain_one_said() {
+        // 全 256 バイトを通し、端（1・8・9・16 バイト）と、位置が 8 桁を
+        // 超える行（`{:08x}` が伸びるところ）も見ます。
+        let mut all: Vec<u8> = (0..=255u8).collect();
+        all.extend((0..=255u8).rev());
+        for n in [1usize, 2, 7, 8, 9, 15, 16] {
+            for start in [0usize, 3, 100, 240] {
+                let chunk = &all[start..start + n];
+                for index in [0usize, 1, 15, 4095, 65535, 0x0fff_ffff, 0x1000_0000] {
+                    assert_eq!(
+                        hex_dump_line(index, chunk),
+                        plainly(index, chunk),
+                        "index={index} n={n} start={start}"
+                    );
+                }
+            }
+        }
+    }
 
     /// The buffer is what a save writes back, so it holds the file's own
     /// characters — tabs included. Drawing them four columns wide is the
