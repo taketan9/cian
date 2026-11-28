@@ -159,3 +159,105 @@ pub fn shell_filter(
         err: String::from_utf8_lossy(&out.stderr).trim().to_string(),
     })
 }
+
+/// Run a command and give up on it after `secs`.
+///
+/// **A command cian runs for itself can wait for ever, and something is
+/// always waiting on it.** `password_cmd` is the one most likely to do it —
+/// a password manager putting up a prompt nobody answers, a `vault` waiting
+/// on a network that is not there — and the engine ran it while answering a
+/// request, which is the thread the whole window waits on (2026-11-28, the
+/// sweep's first stage).
+///
+/// The child is killed when the time is up, and the message says how long it
+/// was given: "it failed" and "it was still going at 60 seconds" ask for
+/// different fixes.
+///
+/// Both pipes are drained on threads of their own. A command that writes more
+/// than a pipe holds and then waits for room would otherwise never exit, and
+/// a deadline that only ever fires because of our own reading would be a
+/// deadline measuring the wrong thing.
+pub fn output_within(mut cmd: Command, secs: u64) -> Result<std::process::Output> {
+    use std::io::Read;
+
+    cmd.stdin(std::process::Stdio::null());
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    let mut child = cmd.spawn().context("could not start it")?;
+    let mut out = child.stdout.take();
+    let mut err = child.stderr.take();
+    let reading = std::thread::spawn(move || {
+        let mut o = Vec::new();
+        let mut e = Vec::new();
+        if let Some(h) = out.as_mut() {
+            let _ = h.read_to_end(&mut o);
+        }
+        if let Some(h) = err.as_mut() {
+            let _ = h.read_to_end(&mut e);
+        }
+        (o, e)
+    });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(secs);
+    loop {
+        match child.try_wait().context("waiting for it")? {
+            Some(status) => {
+                let (stdout, stderr) = reading.join().unwrap_or_default();
+                return Ok(std::process::Output { status, stdout, stderr });
+            }
+            None if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = reading.join();
+                anyhow::bail!("{secs} 秒で返りませんでした");
+            }
+            None => std::thread::sleep(std::time::Duration::from_millis(50)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_command_that_never_returns_is_killed_and_says_so() {
+        // The failure this pins: `password_cmd = "sleep 600"` held the engine
+        // for ten minutes, and the engine answers one request at a time.
+        if cfg!(windows) {
+            return;
+        }
+        let mut cmd = quiet("sh");
+        cmd.args(["-c", "sleep 60"]);
+        let at = std::time::Instant::now();
+        let e = output_within(cmd, 1).unwrap_err().to_string();
+        assert!(at.elapsed().as_secs() < 10, "it gave up: {:?}", at.elapsed());
+        assert!(e.contains("1 秒"), "it says how long it waited: {e}");
+    }
+
+    #[test]
+    fn a_command_that_returns_in_time_hands_back_what_it_said() {
+        if cfg!(windows) {
+            return;
+        }
+        let mut cmd = quiet("sh");
+        cmd.args(["-c", "printf hello"]);
+        let got = output_within(cmd, 30).unwrap();
+        assert!(got.status.success());
+        assert_eq!(String::from_utf8_lossy(&got.stdout), "hello");
+    }
+
+    #[test]
+    fn a_command_that_writes_more_than_a_pipe_holds_still_finishes() {
+        // A pipe holds 64KB on Linux and 16KB on macOS. Waiting for the child
+        // without draining it is the classic way to hang on your own output,
+        // and the deadline would then be measuring this bug rather than the
+        // command.
+        if cfg!(windows) {
+            return;
+        }
+        let mut cmd = quiet("sh");
+        cmd.args(["-c", "yes abcdefghij | head -c 400000"]);
+        let got = output_within(cmd, 30).unwrap();
+        assert_eq!(got.stdout.len(), 400_000);
+    }
+}

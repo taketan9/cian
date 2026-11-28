@@ -931,6 +931,13 @@ impl App {
             self.message = Some(tr(self.lang, "nothing selected", "選択されていません").into());
             return;
         };
+        // **先頭だけ読む道でも、開くところで止まります。** 名前付きパイプは
+        // `File::open` が書く側を待ち、`/dev/zero` には終わりがありません
+        // （2026-11-28、所見 S12）。閲覧と同じ理由で、同じ言い方で断ります。
+        if let Some(what) = cian_core::attrs::special(&path) {
+            self.message = Some(crate::actions::special_reason(self.lang, &path, what));
+            return;
+        }
         match cian_core::inspect::peek(&path, end, n) {
             Ok(rows) => {
                 let which = if end == cian_core::inspect::End::Head { "head" } else { "tail" };

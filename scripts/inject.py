@@ -47,6 +47,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEADLINE = 5.0
 
+# 「存在しない」と嘘をついている断り方。
+#
+# **「読み終わりがありません」は嘘ではありません。** デバイスについての本当の
+# ことなのに、素朴に「がありません」で探すとこれに当たります ── 最初に書いた
+# ときは当たって、正しい断りを「嘘です」と報告しました。直前の4文字で分けます。
+WRONG_GONE = r"\bnot found\b|(?<!読み終わり)がありません|not an ordinary file"
+
 
 def engine() -> Path:
     """いちばん新しいエンジン。`gui/engine.js` と同じ選び方です。"""
@@ -195,7 +202,22 @@ def sandbox() -> Path:
     except OSError:
         pass
 
-    # ⑦ たくさんの項目 ── 一覧と容量が返るかどうかです
+    # ⑦ 返らない `password_cmd` を書いた設定。**接続の、握手より手前**に
+    #    ある待ちです。相手は繋がらなくてよい（そこへ行く前に止まります）。
+    conf = d / "slow-config"
+    conf.mkdir()
+    (conf / "init.lua").write_text(
+        'cian.ssh({\n'
+        '  hosts = {\n'
+        '    { name = "nowhere", host = "127.0.0.1", port = 1, users = {\n'
+        '        { name = "x", password_cmd = "sleep 600" },\n'
+        '    } },\n'
+        '  },\n'
+        '})\n',
+        encoding="utf-8",
+    )
+
+    # ⑧ たくさんの項目 ── 一覧と容量が返るかどうかです
     many = d / "many"
     many.mkdir()
     for i in range(50_000):
@@ -217,9 +239,21 @@ def cases(d: Path, port: int) -> list[dict]:
     return [
         {"name": "fifo", "what": "名前付きパイプを読む",
          "method": "viewpath", "params": {"path": str(d / "fifo.txt")},
-         "wrong": r"がありません|not found"},
+         "wrong": WRONG_GONE},
+        # **カーソルを置いてから流します。** `peek` も `path` を見ないので、
+        # 置かずに流していた間は `many`（ディレクトリ）を測っていました ──
+        # 「断りました: many はディレクトリです」で緑になっていたのが証拠です。
         {"name": "fifo-peek", "what": "名前付きパイプの先頭だけ読む",
-         "method": "peek", "params": {"path": str(d / "fifo.txt"), "arg": "-n 5"}},
+         "method": "peek", "params": {"arg": "-n 5"}, "cursor_on": "fifo.txt",
+         "wrong": WRONG_GONE},
+        # 窓が絵を描くために、ファイルを丸ごと読む道。大きさの上限はあります
+        # が、**名前付きパイプの大きさは 0 と答えます**。
+        {"name": "fifo-bytes", "what": "名前付きパイプを丸ごと読む",
+         "method": "bytes", "params": {"pane": "left"}, "cursor_on": "fifo.txt",
+         "wrong": WRONG_GONE},
+        {"name": "zero-bytes", "what": "/dev/zero を丸ごと読む",
+         "method": "bytes", "params": {"pane": "left"}, "cursor_on": "zero-link",
+         "wrong": WRONG_GONE},
         {"name": "fifo-hash", "what": "名前付きパイプのチェックサム",
          "method": "hash", "params": {"pane": "left"}, "cursor_on": "fifo.txt",
          "background": "hash", "want_row": r"名前付きパイプ"},
@@ -244,13 +278,22 @@ def cases(d: Path, port: int) -> list[dict]:
          "method": "list", "params": {"pane": "left", "path": str(d / "many")}},
         {"name": "many-du", "what": "5万件の容量",
          "method": "du", "params": {"pane": "left"}, "cursor_on": "many"},
-        # 上限は 20 秒（`cian-scp` の `HANDSHAKE`）。**窓はその間ずっと
-        # 止まります。** 5秒の基準を満たすには、接続を要求の処理から外へ
-        # 出す必要があります ── 所見 S4 に残しています。
-        {"name": "sftp-dead", "what": "応答しない相手へ SFTP で接続", "deadline": 25.0,
-         "method": "connect",
+        # **裏に回しました**（2026-11-28、本人の指示）。握手の上限は 20 秒
+        # （`cian-scp` の `HANDSHAKE`）で、それ自体は変わりません ── 変えたのは
+        # 「その 20 秒のあいだ窓が止まるかどうか」です。要求はすぐ返り、
+        # 結果は `connected` の知らせで届きます。
+        {"name": "sftp-dead", "what": "応答しない相手へ SFTP で接続",
+         "method": "connect", "background": "connected", "job": 40.0,
+         "want_error": r"did not answer within 20s",
          "params": {"pane": "left", "user": "x", "host": "127.0.0.1", "port": port,
                     "path": ".", "password": "x"}},
+        # 返らない `password_cmd`。**設定から引いた接続の、握手より手前**に
+        # ある待ちで、ここには上限がありませんでした（計画の第1段）。
+        {"name": "slow-password", "what": "返らない password_cmd で接続",
+         "method": "connect", "background": "connected", "job": 90.0,
+         "want_error": r"password_cmd が 60 秒で返りませんでした",
+         "params": {"pane": "left", "preset_host": 0, "preset_user": 0, "path": "."},
+         "config": "slow"},
     ]
 
 
@@ -291,6 +334,13 @@ def in_the_background(eng: Engine, c: dict, reply: dict) -> tuple[str, str, list
         return "✗", f"{job:.0f} 秒待っても終わりの知らせが来ません", [
             f"{c['name']}: 裏に回した仕事が終わりを知らせません"
         ]
+    if c.get("want_error"):
+        got = str(ev.get("error") or "")
+        if not re.search(c["want_error"], got):
+            return "✗", f"理由が期待と違います: {got[:40]}", [
+                f"{c['name']}: 知らせの理由が「{got[:60]}」です（{c['want_error']} を期待）"
+            ]
+        return "✓", f"裏で {job:.1f} 秒かけて断りました: {got[:40]}", []
     rows = ev.get("rows") or []
     if not rows:
         return "✗", "終わりましたが、結果が空です", [f"{c['name']}: 結果の行がありません"]
@@ -357,7 +407,8 @@ def main() -> int:
         for c in cases(d, port):
             if pick and c["name"] not in pick:
                 continue
-            eng = Engine(d)
+            # 設定から引く項目だけ、`init.lua` のある砂場を見せます。
+            eng = Engine(d, {"CIAN_CONFIG_DIR": str(d / "slow-config")} if c.get("config") else None)
             try:
                 params = dict(c["params"])
                 if c.get("cursor_on"):

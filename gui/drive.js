@@ -1050,6 +1050,20 @@ async function main() {
         ['shot:ask-grep@#ask .sheet', '入力シート'],
         ['type:行目'], ['Enter', ''], ['wait:1800', ''],
         ['top:#report', '結果が最前面'], ['Esc', '閉じる'], ['wait:400', ''],
+        // **繋がらない相手に、窓が止まらないこと。**
+        //
+        // 握手はエンジンの worker で進み、結果は `connected` の知らせで届く
+        // （所見 S4）。ここで見るのは窓の側の受け口 ── 断られた理由が状態行に
+        // 出ること、待っていた印（`connectWaiting`）が残らないこと。相手は
+        // ポート 1 なので即座に断られる。本物のサーバ相手は
+        // `scripts/remote.py` が通す。
+        ['read:(async()=>{const r=await connectThrough(state.focus,"x@127.0.0.1",'
+            + '{pane:state.focus,user:"x",host:"127.0.0.1",port:1,path:".",password:"x"});'
+            + 'return "繋がらない相手 → "+JSON.stringify(r);})()', '繋がらない相手へ'],
+        ['want:connectWaiting === null', '待っていた印が残らない'],
+        ['want:!state[state.focus].remote', 'ペインはサーバのものにならない'],
+        ['want:/127\.0\.0\.1|接続|connect/.test(document.querySelector("#status").textContent)', '理由が状態行に出る'],
+
         ['C', 'コマンドパレット'], ['wait:600', ''], ['Esc', ''], ['wait:300', ''],
         ['Ctrl+Shift+P', '同じものの別名'], ['wait:600', ''], ['Esc', ''], ['wait:300', ''],
         ['Ctrl+,', '同じものの三つ目'], ['wait:600', ''], ['Esc', ''], ['wait:300', ''],

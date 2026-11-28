@@ -42,6 +42,7 @@ cian-core` の片方向依存を保つ**。対応は macOS と Windows の2つ�
 | **資材は、自分がどのビルドかを名乗る** ── `--version` の `<版> (<SHA>)` が `Cargo.toml` といまの HEAD と一致し、`-dirty` でも `unknown` でもない | `scripts/buildstamp.py` ── CI が staging の直後、上げる前に当てる。**走らせずに読むので、落とした Windows の exe にも当てられる** |
 | **配る Windows の exe は、素の Windows で起動する** ── 再頒布可能パッケージ（`VCRUNTIME140.dll`）を当てにしない | `scripts/winstart.py` ── **走らせずに読む**ので、落とした exe にも当てられる。CI が資材を上げる前に当てる |
 | **pty の venv は `~/.cache/cian-tui-env`** ── `/tmp` は macOS の掃除で消える（2回踏んだ） | `scripts/claudemd.py` |
+| **子プロセスを待つところには上限を置く** ── 上限の無い待ちは増やさない（返らない `password_cmd` で窓が止まった） | `scripts/deadline.py` ── **天井と下限の両方を持つ**（増えたら落ち、探し方が壊れても落ちる） |
 | **設計書は、実在する名前だけを名乗る**（`docs/*.ja.md` の関数・パス・リンク） | `scripts/designdoc.py` ── **数に下限がある**（取りこぼして「所見なし」になるのを防ぐ） |
 | **Windows のジョブが呼ぶ検査は、cp1252 で落ちない** ── 日本語を1行出すと`UnicodeEncodeError` で、関門が自分で赤くする | `scripts/claudemd.py` ── 2026-10-31 に`buildstamp.py` で踏み、**2026-11-28 に新しい関門で同じ穴へ落ちた**（直しを書き写す必要を誰も見張っていなかった） |
 | **この表が名乗る関門は実在する** | `scripts/claudemd.py` |

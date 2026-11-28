@@ -20,6 +20,7 @@
 
 use std::io::BufRead;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
@@ -335,6 +336,14 @@ struct Session {
     /// manager that asks again for every directory you walk into is one nobody
     /// uses twice. Kept only in memory — never written anywhere.
     remotes: std::collections::HashMap<String, cian_scp::Target>,
+    /// Connections a worker has finished making, waiting to be adopted by
+    /// `connectdone`.
+    ///
+    /// **A credential lives in here.** One the window never comes back for —
+    /// the person pressed Esc, or closed the pane — would otherwise sit in
+    /// memory until cian exits, so anything older than `KEEP_CONNECT` is
+    /// dropped whenever another one lands.
+    connects: Arc<Mutex<std::collections::HashMap<u64, Made>>>,
 }
 
 impl Session {
@@ -400,6 +409,7 @@ impl Session {
             shell_at: 0,
             shell_next: 1,
             remotes: std::collections::HashMap::new(),
+            connects: Arc::new(Mutex::new(std::collections::HashMap::new())),
         })
     }
 
@@ -2370,6 +2380,12 @@ impl Session {
                 if is_dir {
                     anyhow::bail!("{name} はディレクトリです");
                 }
+                // **大きさの上限では捕まりません。** 名前付きパイプも
+                // `/dev/zero` も「0 バイト」と答えるので上限を素通りし、
+                // `fs::read` が返らなくなります（2026-11-28、所見 S13・S14）。
+                if let Some(what) = cian_core::attrs::special(&path) {
+                    return Err(special_refusal(&path, what));
+                }
                 const CAP: u64 = 24 * 1024 * 1024;
                 let len = std::fs::metadata(&path)?.len();
                 if len > CAP {
@@ -2712,12 +2728,29 @@ impl Session {
                     })).collect::<Vec<_>>(),
                 }))
             }
+            // Connecting, on a worker. **The handshake is the longest wait
+            // in here that a person starts on purpose**, and the engine
+            // answers one request at a time: a server that accepts the
+            // connection and then says nothing held the whole window for the
+            // full 20 seconds of `cian_scp::HANDSHAKE` (所見 S4). On a
+            // managed network — a sleeping host, a firewall that drops rather
+            // than refuses — that is not a rare case.
+            //
+            // So the call returns an operation number, and the answer arrives
+            // as a `connected` event. The connection itself is *not* adopted
+            // by the worker: the pane and the stored credentials belong to
+            // this thread, so the worker leaves its result in `connects` and
+            // `connectdone` installs it here.
             "connect" => {
                 let which = req.params["pane"].as_str().unwrap_or("left").to_string();
+                // Named now, used at `connectdone`: a pane that does not
+                // exist should be said so before twenty seconds of
+                // handshake, not after.
+                self.pane_mut(&which)?;
                 // Either spelled out, or named from the config. The named form
-                // resolves the stored password (or runs password_cmd) here, so
-                // the secret exists in the engine and nowhere else.
-                let target = if let Some(hi) = req.params["preset_host"].as_u64() {
+                // resolves the stored password (or names `password_cmd`) here,
+                // so the secret exists in the engine and nowhere else.
+                let (base, secret) = if let Some(hi) = req.params["preset_host"].as_u64() {
                     let cfg = cian_lua::load();
                     let h = cfg
                         .ssh_hosts
@@ -2731,62 +2764,77 @@ impl Session {
                     // a hole to be filled by asking: `cian_scp::connect` offers
                     // the key first. Whatever the window did send (a retry
                     // after the key was refused) is used as the fallback.
-                    let password = match (&u.password, &u.password_cmd) {
-                        (Some(p), _) => p.clone(),
-                        (None, Some(cmd)) => {
-                            let out = cian_core::proc::quiet(
-                                if cfg!(windows) { "cmd" } else { "sh" })
-                                .args(if cfg!(windows) { ["/C", cmd.as_str()] } else { ["-c", cmd.as_str()] })
-                                .output()?;
-                            String::from_utf8_lossy(&out.stdout).trim_end().to_string()
-                        }
-                        (None, None) => req.params["password"].as_str().unwrap_or("").to_string(),
+                    //
+                    // **`password_cmd` is not run here.** It is a command
+                    // someone else wrote — a password manager that puts up a
+                    // prompt, a `vault` that waits on the network — and
+                    // running it on this thread is the same freeze as the
+                    // handshake, with no limit on it at all. It goes to the
+                    // worker, with a deadline.
+                    let secret = match (&u.password, &u.password_cmd) {
+                        (Some(p), _) => Secret::Given(p.clone()),
+                        (None, Some(cmd)) => Secret::FromCommand(cmd.clone()),
+                        (None, None) => Secret::Given(
+                            req.params["password"].as_str().unwrap_or("").to_string(),
+                        ),
                     };
-                    cian_scp::Target {
-                        host: h.host.clone(),
-                        port: h.port.unwrap_or(22),
-                        user: u.name.clone(),
-                        password,
-                        key: u.key_path(),
-                        key_pass: u.key_pass.clone(),
-                    }
+                    (
+                        cian_scp::Target {
+                            host: h.host.clone(),
+                            port: h.port.unwrap_or(22),
+                            user: u.name.clone(),
+                            password: String::new(),
+                            key: u.key_path(),
+                            key_pass: u.key_pass.clone(),
+                        },
+                        secret,
+                    )
                 } else {
-                    cian_scp::Target {
-                        host: req.params["host"].as_str().unwrap_or("").to_string(),
-                        port: req.params["port"].as_u64().unwrap_or(22) as u16,
-                        user: req.params["user"].as_str().unwrap_or("").to_string(),
-                        password: req.params["password"].as_str().unwrap_or("").to_string(),
-                        // Typed by hand: a key would have to be typed too, and
-                        // the place to keep one is `init.lua`.
-                        key: req.params["key"].as_str().map(std::path::PathBuf::from),
-                        key_pass: req.params["key_pass"].as_str().map(str::to_string),
-                    }
+                    (
+                        cian_scp::Target {
+                            host: req.params["host"].as_str().unwrap_or("").to_string(),
+                            port: req.params["port"].as_u64().unwrap_or(22) as u16,
+                            user: req.params["user"].as_str().unwrap_or("").to_string(),
+                            password: String::new(),
+                            // Typed by hand: a key would have to be typed too,
+                            // and the place to keep one is `init.lua`.
+                            key: req.params["key"].as_str().map(std::path::PathBuf::from),
+                            key_pass: req.params["key_pass"].as_str().map(str::to_string),
+                        },
+                        Secret::Given(req.params["password"].as_str().unwrap_or("").to_string()),
+                    )
                 };
-                if target.host.is_empty() || target.user.is_empty() {
+                if base.host.is_empty() || base.user.is_empty() {
                     anyhow::bail!("ホストとユーザが要ります");
                 }
                 let start = req.params["path"].as_str().unwrap_or(".").to_string();
-                let label = format!("{}@{}", target.user, target.host);
-                let (resolved, entries) = match cian_scp::list_dir(&target, &start) {
-                    Ok(got) => got,
-                    Err(e) => {
-                        // The one failure worth answering with a question
-                        // instead of a message: the key is configured but this
-                        // server has never been given it. Say so, name the key,
-                        // and let the caller come back with a password.
-                        let refused = cian_scp::key_refused(&e).map(|k| k.key.clone());
-                        match refused {
-                            Some(key) => {
-                                return Ok(serde_json::json!({
-                                    "need_password": true,
-                                    "who": label,
-                                    "key": key.display().to_string(),
-                                }));
-                            }
-                            None => return Err(e),
-                        }
-                    }
+                let label = format!("{}@{}", base.user, base.host);
+                let op = self.jobs.next_op();
+                connect_in_background(
+                    op,
+                    base,
+                    secret,
+                    start,
+                    label.clone(),
+                    Arc::clone(&self.connects),
+                    self.out.clone(),
+                );
+                Ok(serde_json::json!({ "connecting": true, "op": op, "who": label }))
+            }
+            // Install a connection the worker finished making.
+            //
+            // Separate because the pane and the stored credentials are this
+            // thread's, and because the window may have given up in the
+            // meantime — a pane that turned into a server's five seconds
+            // after the person pressed Esc is worse than a slow connect.
+            // Nothing is adopted unless the window comes back and asks.
+            "connectdone" => {
+                let which = req.params["pane"].as_str().unwrap_or("left").to_string();
+                let op = req.params["op"].as_u64().unwrap_or(0);
+                let Some(made) = self.connects.lock().unwrap().remove(&op) else {
+                    anyhow::bail!("その接続は見つかりません");
                 };
+                let Made { target, label, resolved, entries, .. } = made;
                 self.remotes.insert(which.clone(), target);
                 let rows = remote_rows(&resolved, &entries);
                 let pane = self.pane_mut(&which)?;
@@ -5085,19 +5133,7 @@ impl Session {
                 // 実在します。読むと返らないだけで、消えているわけではない
                 // （2026-11-28、所見 S5・S6）。何であるかを言います。
                 if let Some(what) = cian_core::attrs::special(&path) {
-                    use cian_core::attrs::Special;
-                    anyhow::bail!(
-                        "{} {}",
-                        path.display(),
-                        match what {
-                            Special::Missing => "がありません",
-                            Special::Directory => "はディレクトリです",
-                            Special::Fifo => "は名前付きパイプです。読むと書く側が現れるまで返りません",
-                            Special::Device => "はデバイスです。読み終わりがありません",
-                            Special::Socket => "はソケットです",
-                            Special::Other => "は通常ファイルではありません",
-                        }
-                    );
+                    return Err(special_refusal(&path, what));
                 }
                 let name = path
                     .file_name()
@@ -5508,6 +5544,11 @@ impl Session {
                 } else {
                     cian_core::inspect::End::Head
                 };
+                // 先頭だけ読む道でも、**開くところで止まります** ── 名前付き
+                // パイプは `File::open` が書く側を待ちます（所見 S12）。
+                if let Some(what) = cian_core::attrs::special(&path) {
+                    return Err(special_refusal(&path, what));
+                }
                 let rows = cian_core::inspect::peek(&path, end, n)?;
                 Ok(serde_json::json!({ "name": name, "rows": rows }))
             }
@@ -6523,6 +6564,151 @@ fn paths_of(req: &Request) -> Vec<std::path::PathBuf> {
 
 
 
+
+/// Why this path is not going to be read, in the reader's own language.
+///
+/// **「ありません」は嘘でした。** 名前付きパイプも `/dev/zero` も実在します。
+/// 読むと返らないだけで、消えているわけではありません（所見 S5・S6）。
+///
+/// One function because there are now four doors onto the same room — the
+/// viewer, the bytes a window draws with, the first lines of a file, and the
+/// checksums — and a sentence kept in four places is a sentence that will be
+/// right in three of them.
+fn special_refusal(path: &std::path::Path, what: cian_core::attrs::Special) -> anyhow::Error {
+    use cian_core::attrs::Special;
+    anyhow::anyhow!(
+        "{} {}",
+        path.display(),
+        match what {
+            Special::Missing => "がありません",
+            Special::Directory => "はディレクトリです",
+            Special::Fifo => "は名前付きパイプです。読むと書く側が現れるまで返りません",
+            Special::Device => "はデバイスです。読み終わりがありません",
+            Special::Socket => "はソケットです",
+            Special::Other => "は通常ファイルではありません",
+        }
+    )
+}
+
+/// How long a finished-but-unadopted connection is kept.
+///
+/// Long enough for a window that is busy drawing, short enough that a
+/// password does not sit in memory for the afternoon.
+const KEEP_CONNECT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// Where the password for a connection comes from.
+///
+/// Spelled out as a type because one of the two cases must not run on the
+/// thread that answers requests: `password_cmd` is someone else's program,
+/// and the engine has no idea what it does before it does it.
+enum Secret {
+    /// Already known — stored in `init.lua`, or typed into the window.
+    Given(String),
+    /// To be asked for by running this, on a worker, with a deadline.
+    FromCommand(String),
+}
+
+/// A connection a worker finished making, waiting for `connectdone`.
+struct Made {
+    target: cian_scp::Target,
+    label: String,
+    resolved: String,
+    entries: Vec<cian_scp::RemoteEntry>,
+    at: std::time::Instant,
+}
+
+/// Make a connection off the request thread and say so when it is made.
+///
+/// The three ways it can end are the three the window already knows how to
+/// answer: it worked, the key was refused and a password would help, or it
+/// failed and here is why.
+fn connect_in_background(
+    op: u64,
+    mut target: cian_scp::Target,
+    secret: Secret,
+    start: String,
+    label: String,
+    stash: Arc<Mutex<std::collections::HashMap<u64, Made>>>,
+    out: Out,
+) {
+    std::thread::spawn(move || {
+        let began = std::time::Instant::now();
+        // **誰に繋げなかったのかを言います。** 下から上がってくる理由は
+        // `connect 127.0.0.1:1: Connection refused` のような英語の一行で、
+        // それだけが状態行に出ても、何をしようとして駄目だったのかが読め
+        // ません。主語をこちらで付けます。
+        let fail = |what: String| {
+            out.event(
+                "connected",
+                serde_json::json!({
+                    "op": op,
+                    "who": label,
+                    "error": format!("{label} に接続できません: {what}"),
+                }),
+            );
+        };
+        target.password = match secret {
+            Secret::Given(p) => p,
+            // Through `cian_lua`, which is where the deadline lives — the
+            // terminal build resolves the same secret by the same route, and
+            // a deadline in only one of them is a deadline in neither.
+            Secret::FromCommand(cmd) => match cian_lua::run_password_cmd(&cmd) {
+                Ok(p) => p,
+                // Named, because the fix is in `init.lua` and the person has
+                // to know which line to look at.
+                Err(why) => {
+                    fail(format!("password_cmd が {why}"));
+                    return;
+                }
+            },
+        };
+        match cian_scp::list_dir(&target, &start) {
+            Ok((resolved, entries)) => {
+                {
+                    let mut held = stash.lock().unwrap();
+                    held.retain(|_, m| m.at.elapsed() < KEEP_CONNECT);
+                    held.insert(
+                        op,
+                        Made {
+                            target,
+                            label: label.clone(),
+                            resolved: resolved.clone(),
+                            entries,
+                            at: std::time::Instant::now(),
+                        },
+                    );
+                }
+                out.event(
+                    "connected",
+                    serde_json::json!({
+                        "op": op,
+                        "who": label,
+                        "path": resolved,
+                        "ms": began.elapsed().as_millis() as u64,
+                    }),
+                );
+            }
+            Err(e) => {
+                // The one failure worth answering with a question instead of
+                // a message: the key is configured but this server has never
+                // been given it. Say so, name the key, and let the window
+                // come back with a password.
+                match cian_scp::key_refused(&e).map(|k| k.key.clone()) {
+                    Some(key) => out.event(
+                        "connected",
+                        serde_json::json!({
+                            "op": op,
+                            "who": label,
+                            "need_password": true,
+                            "key": key.display().to_string(),
+                        }),
+                    ),
+                    None => fail(e.to_string()),
+                }
+            }
+        }
+    });
+}
 
 /// One AI request, off the main loop, answered by an event.
 ///

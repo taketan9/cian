@@ -195,16 +195,38 @@ impl SshUser {
         if let Some(p) = &self.password {
             return Some(p.clone());
         }
-        let cmd = self.password_cmd.as_ref()?;
-        let out = if cfg!(windows) {
-            cian_core::proc::quiet("cmd").args(["/C", cmd]).output().ok()?
-        } else {
-            cian_core::proc::quiet("sh").arg("-c").arg(cmd).output().ok()?
-        };
-        if !out.status.success() {
-            return None;
+        run_password_cmd(self.password_cmd.as_ref()?).ok()
+    }
+}
+
+/// How long `password_cmd` is given before cian stops waiting for it.
+///
+/// Generous on purpose: a password manager may put up a prompt, and a person
+/// reaching for a fingerprint reader is not a hung command. What it rules out
+/// is the command that never answers at all.
+pub const PASSWORD_CMD_SECONDS: u64 = 60;
+
+/// Run a `password_cmd` and hand back what it printed, or why it did not.
+///
+/// **It used to be able to wait for ever.** `password_cmd` is a command
+/// someone else wrote, run at the one moment the program is least able to
+/// wait: the terminal build runs it while answering a key, the engine ran it
+/// while answering a request, and the engine answers one request at a time —
+/// so `password_cmd = "sleep 600"` was ten minutes of frozen window
+/// (2026-11-28, 所見 S11). One function, so both builds have the same
+/// deadline rather than one of them having none.
+pub fn run_password_cmd(cmd: &str) -> Result<String, String> {
+    let mut run = cian_core::proc::quiet(if cfg!(windows) { "cmd" } else { "sh" });
+    run.args(if cfg!(windows) { ["/C", cmd] } else { ["-c", cmd] });
+    match cian_core::proc::output_within(run, PASSWORD_CMD_SECONDS) {
+        Ok(out) if out.status.success() => {
+            Ok(String::from_utf8_lossy(&out.stdout).trim_end_matches(['\r', '\n']).to_string())
         }
-        Some(String::from_utf8_lossy(&out.stdout).trim_end_matches(['\r', '\n']).to_string())
+        // The command's own complaint is not repeated here: it is written by
+        // someone else and may hold the very thing this exists to keep out of
+        // sight. What went wrong is said; what it said is not.
+        Ok(out) => Err(format!("終了コード {} で終わりました", out.status.code().unwrap_or(-1))),
+        Err(e) => Err(e.to_string()),
     }
 }
 

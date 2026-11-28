@@ -8057,6 +8057,40 @@ async function cmdSshPicker() {
     });
 }
 
+/// The connection being made right now, and the promise waiting on it.
+///
+/// One at a time: a second attempt abandons the first, the same way `aiWaiting`
+/// does. The engine still finishes the one that was abandoned — it cannot be
+/// called off mid-handshake — but nothing adopts it, so the pane is not
+/// turned into a server's after the person has walked away.
+let connectWaiting = null;
+
+/// Ask for a connection and wait for the engine to finish making it.
+///
+/// **The handshake is not a reply.** The engine answers one request at a
+/// time, so waiting for it inside the call froze the whole window for up to
+/// twenty seconds — a sleeping host or a firewall that drops rather than
+/// refuses is enough to spend all of it (所見 S4). The call now returns an
+/// operation number, the answer arrives as a `connected` event, and
+/// `connectdone` installs it. The shape handed back is the one the callers
+/// already knew: a pane, or a request for a password.
+async function connectThrough(pane, who, params) {
+    const started = await ask('connect', params);
+    if (!started) return null;
+    // An engine that answered outright (a pane that does not exist, a host
+    // with no name) has already said so.
+    if (!started.connecting) return started;
+    say(tr(`connecting to ${who}…`, `${who} に接続しています`));
+    const ev = await new Promise((resolve) => {
+        if (connectWaiting) connectWaiting.resolve(null);
+        connectWaiting = { op: started.op, resolve };
+    });
+    if (!ev) return null;
+    if (ev.need_password) return ev;
+    if (ev.error) { say(ev.error, true); return null; }
+    return ask('connectdone', { pane, op: started.op });
+}
+
 /// Connect `pane` to a picked host row, and hand back what `connect` answered.
 ///
 /// **The password box came up for a login that did not need one.** A user with
@@ -8075,12 +8109,9 @@ async function cmdSshPicker() {
 /// Both callers wanted this and had a copy each, one of which is how the retry
 /// would have gone missing from the other.
 async function connectPreset(pane, row) {
-    const go = async (password) => {
-        say(tr(`connecting to ${row.who}…`, `${row.who} に繋いでいます…`));
-        return ask('connect', {
-            pane, preset_host: row.host, preset_user: row.user, password,
-        });
-    };
+    const go = (password) => connectThrough(pane, row.who, {
+        pane, preset_host: row.host, preset_user: row.user, password,
+    });
     const askPass = () => askFor(
         tr(`password for ${row.who}`, `${row.who} のパスワード`), '', { secret: true });
     let password;
@@ -8195,14 +8226,20 @@ async function cmdConnect() {
     // be better than not keeping one.
     const password = await askFor(tr(`password for ${user}@${host}`, `${user}@${host} のパスワード`), '', { secret: true });
     if (password === null) return;
-    say(tr(`connecting to ${user}@${host}…`, `${user}@${host} に繋いでいます…`));
-    const r = await ask('connect', {
+    const r = await connectThrough(state.focus, `${user}@${host}`, {
         pane: state.focus, user, host,
         port: port ? Number(port) : 22,
         path: path || '.',
         password,
     });
     if (!r) return;
+    // A hand-typed connection sends no key, so this is all but unreachable —
+    // said anyway, because a refusal nobody reports is the one that gets
+    // read as "nothing happened".
+    if (r.need_password) {
+        say(tr(`the key ${r.key} was refused by ${r.who}`, `鍵 ${r.key} が ${r.who} に断られました`), true);
+        return;
+    }
     state[state.focus] = r.pane;
     draw(state.focus);
     say(`${r.host}  ${r.path}`);
@@ -12762,6 +12799,17 @@ window.cian.onEvent(async (msg) => {
                 tr(`${rows.length} items`, `${rows.length} 件`),
                 rows.map((x) => ({ label: x.name, sub: x.sum })),
                 { foot: tr('Esc close', 'Esc 閉じる') });
+            return;
+        }
+
+        // A connection finished being made. Whoever asked for it is waiting
+        // on a promise; a number nobody is waiting on is one that was
+        // abandoned, and it is dropped rather than acted on.
+        case 'connected': {
+            if (!connectWaiting || connectWaiting.op !== msg.op) return;
+            const hand = connectWaiting;
+            connectWaiting = null;
+            hand.resolve(msg);
             return;
         }
 

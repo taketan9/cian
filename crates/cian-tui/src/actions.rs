@@ -10,7 +10,7 @@ use super::*;
 ///
 /// **「ありません」と言ってはいけません。** 名前付きパイプも `/dev/zero` も
 /// 実在していて、読むと返らないだけです（2026-11-28、所見 S5・S6）。
-fn special_reason(lang: Lang, path: &Path, what: cian_core::attrs::Special) -> String {
+pub(crate) fn special_reason(lang: Lang, path: &Path, what: cian_core::attrs::Special) -> String {
     use cian_core::attrs::Special;
     let ja = lang == Lang::Ja;
     let what = match (what, ja) {

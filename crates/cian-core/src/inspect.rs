@@ -198,6 +198,15 @@ const TAIL_WINDOW: u64 = 1024 * 1024;
 /// on a huge log; if the last `n` lines do not fit in the window it returns as
 /// many as do, with a note.
 pub fn peek(path: &Path, end: End, n: usize) -> Result<Vec<String>> {
+    // **Refuses anything that is not an ordinary file.** Reading only the
+    // first lines is no protection: `File::open` on a named pipe waits for a
+    // writer before a single byte is asked for, and the tail end reads to the
+    // end of something that has none. The callers say so in the reader's own
+    // language before getting here; this is the backstop (2026-11-28, 所見
+    // S12), the same one `hash_file` carries.
+    if let Some(what) = crate::attrs::special(path) {
+        anyhow::bail!("not an ordinary file ({what:?}): {}", path.display());
+    }
     let meta = fs::metadata(path).with_context(|| format!("stat {}", path.display()))?;
     if meta.is_dir() {
         anyhow::bail!("{} is a directory", path.display());
@@ -374,5 +383,35 @@ mod tests {
         assert_eq!(t[1], last, "the actual final line");
         // And no leading fragment sneaks in.
         assert!(t[0].contains(&line), "a whole line, not a fragment");
+    }
+}
+
+#[cfg(test)]
+mod peek_refuses {
+    use super::*;
+
+    /// The failure this pins: `head` on a named pipe never came back. It is
+    /// not the reading that blocks — it is `File::open`, before a byte has
+    /// been asked for — so "only the first few lines" was no protection at
+    /// all (2026-11-28, 所見 S12). The test would hang rather than fail if
+    /// the guard went, which is the honest shape for this one.
+    #[test]
+    fn peeking_refuses_what_never_opens() {
+        if cfg!(windows) {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("cian-peek-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let fifo = dir.join("pipe");
+        let made = std::process::Command::new("mkfifo").arg(&fifo).status();
+        if !matches!(made, Ok(s) if s.success()) {
+            return;
+        }
+        for end in [End::Head, End::Tail] {
+            let e = peek(&fifo, end, 5).unwrap_err().to_string();
+            assert!(e.contains("Fifo"), "it says what it is: {e}");
+        }
+        assert!(peek(Path::new("/dev/zero"), End::Head, 5).is_err());
+        fs::remove_dir_all(&dir).ok();
     }
 }

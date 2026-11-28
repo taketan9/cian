@@ -201,6 +201,44 @@ class Engine:
             else:
                 self.replies[d["id"]] = d.get("ok")
 
+    def wait_event(self, name, secs=30.0):
+        """`name` の知らせを待つ。貯まっている分を先に見る。"""
+        for d in list(self.events):
+            if d.get("event") == name:
+                self.events.remove(d)
+                return d
+        end = time.time() + secs
+        while time.time() < end:
+            d = self._take(0.3)
+            if d is None:
+                continue
+            if "event" in d:
+                if d["event"] == name:
+                    return d
+                self.events.append(d)
+            elif "id" in d:
+                self.replies[d["id"]] = d.get("ok")
+        return None
+
+    def connect(self, **params):
+        """接続は裏で進む（所見 S4）。知らせを待ってから取り込む。
+
+        **エンジンは要求を1本ずつ処理する。** 握手を要求の処理の中でやると、
+        応答しない相手に当たったとき窓全体が 20 秒止まる。要求は操作番号を
+        すぐ返し、繋がったら `connected` の知らせが来て、`connectdone` が
+        ペインに入れる ── 窓も同じ順で呼ぶ。
+        """
+        pane = params.get("pane", "left")
+        started = self.call("connect", **params)
+        if not started.get("connecting"):
+            return started
+        ev = self.wait_event("connected")
+        if ev is None:
+            raise RuntimeError("connect: 接続の知らせが来ません")
+        if ev.get("need_password") or ev.get("error"):
+            return ev
+        return self.call("connectdone", pane=pane, op=started["op"])
+
     def wait_done(self, secs=15.0):
         """転送は worker で走る。`done` が来るまで待つ。
 
@@ -290,9 +328,9 @@ def main():
         return sorted(os.listdir(os.path.join(*parts)))
 
     def connect(pane, path):
-        return e.call("connect", pane=pane, host="127.0.0.1", port=PORT,
-                      user=os.environ.get("USER") or os.environ.get("LOGNAME"),
-                      key=server.key, path=path)
+        return e.connect(pane=pane, host="127.0.0.1", port=PORT,
+                         user=os.environ.get("USER") or os.environ.get("LOGNAME"),
+                         key=server.key, path=path)
 
     try:
         print("鍵で入る")
@@ -340,14 +378,14 @@ def main():
         check("鍵と保存パスワードを取り違えない", [u["keyed"] for u in users], [True, True, False])
         # パスワードを **渡さずに** 繋ぐ。窓は欄を出さないので、これが窓の送る形。
         # **`r` を潰さないこと** ── 上の接続の返事を後の検査がまだ読んでいる。
-        keyed = e.call("connect", pane="right", preset_host=0, preset_user=0, path=root)
+        keyed = e.connect(pane="right", preset_host=0, preset_user=0, path=root)
         check("パスワード無しで繋がる", keyed.get("need_password"), None)
         check("繋いだ先が読める",
               sorted(x["name"] for x in keyed["pane"]["entries"] if not x.get("parent")),
               ["one.txt", "sub"])
 
         print("鍵が断られたときだけパスワードを聞く")
-        nope = e.call("connect", pane="right", preset_host=0, preset_user=1, path=root)
+        nope = e.connect(pane="right", preset_host=0, preset_user=1, path=root)
         check("断られたら need_password", nope.get("need_password"), True)
         check("どの鍵かを言う", nope.get("key"), other)
         check("繋いだことにはしない", nope.get("pane"), None)

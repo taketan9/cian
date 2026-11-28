@@ -151,6 +151,13 @@ impl Jobs {
         (op, 0)
     }
 
+    /// The next operation number, for work that reports through the same
+    /// events but is not a job in this queue (a connection being made).
+    /// One counter, so two numbers can never mean two different things.
+    pub fn next_op(&self) -> u64 {
+        self.inner.next.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
     /// The line, runner first — for `:queue`.
     pub fn listing(&self) -> Vec<serde_json::Value> {
         let mut rows = Vec::new();
