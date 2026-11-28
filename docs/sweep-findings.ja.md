@@ -71,6 +71,8 @@
 | --- | --- | --- |
 | S8 | 配る exe が、素の Windows で起動しない | **画面に何も出ないまま終了します。** 終了コードは `-1073741515`（`0xC0000135` ＝ DLL が見つかりません）です |
 
+| S9 | 起動直後のお知らせが、Windows Terminal を「legacy console」と呼ぶ | **本物の Windows Terminal で出ます。** 「`wt cian-tui` で起動し直してください」と、壊れていないものを直すよう案内していました |
+
 **原因は `VCRUNTIME140.dll` です。** Visual C++ の再頒布可能パッケージに入って
 いるもので、Windows の素の状態にはありません。会社の PC には別のアプリが置いて
 いったものがあるため、これまで表に出ませんでした。
@@ -78,6 +80,13 @@
 **直し方は静的に結び付けることです**（`.cargo/config.toml` の `crt-static`）。
 関門は `scripts/winstart.py` で、exe を**走らせずに**読み、再頒布が要る DLL を
 取り込んでいないかを見ます。CI が資材を上げる前に当てます。
+
+**S9 の原因は、環境変数だけで見ていたことです。** `WT_SESSION` は Windows
+Terminal が**自分で**プログラムを起動したときにしか付きません。Windows 11 の
+既定では、exe を叩くと conhost が Windows Terminal へ引き継ぐため、
+**本物の Windows Terminal でも印が1つも付きません**（仮想環境で `WT_SESSION`・
+`WT_PROFILE_ID`・`TERM_PROGRAM` のすべてが空であることを確認しました）。
+いまは描いている相手の窓の種類（`ConsoleWindowClass` かどうか）で判定します。
 
 > **注意**
 > この種類の故障は、実行して初めて分かるものでした。仮想環境を使う前は

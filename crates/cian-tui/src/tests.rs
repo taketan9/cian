@@ -15296,6 +15296,26 @@ mod advice_is_for_terminals {
         assert!(!wants_terminal_advice(false, false), "not a Windows problem");
     }
 
+    /// **The environment alone answered this wrongly.** Windows 11 hands a
+    /// console off to Windows Terminal without setting `WT_SESSION`, so a
+    /// real Windows Terminal was being told it was the legacy console and
+    /// sent to run `wt cian-tui` (seen 2026-11-28 in the virtual machine:
+    /// `WT_SESSION`, `WT_PROFILE_ID` and `TERM_PROGRAM` were all empty).
+    /// The window class is what actually distinguishes them.
+    #[test]
+    fn the_window_class_says_which_console_is_drawing() {
+        use crate::theme::host_is_legacy;
+        assert!(host_is_legacy("ConsoleWindowClass"), "the one that cannot");
+        assert!(
+            !host_is_legacy("PseudoConsoleWindow"),
+            "a pseudoconsole: Windows Terminal, an editor panel, ssh"
+        );
+        assert!(
+            !host_is_legacy("CASCADIA_HOSTING_WINDOW_CLASS"),
+            "Windows Terminal drawing it directly"
+        );
+    }
+
 }
 
 /// Where the desktop is. Not always `~/Desktop`: OneDrive takes the folder

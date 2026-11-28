@@ -89,12 +89,13 @@ HARNESS = {
 }
 
 # ── ここから届かないもの（毎回最後に出します）──────────────────────────
+# 2026-11-28 に3つに減りました。仮想環境の Windows（`~/workspace/edge-vm`）と、
+# 手元で本物の答えを返す AI（Claude CLI・Ollama）が入ったためです。
+# **ここが正本です。** 説明は `docs/verify-plan.ja.md` にあります。
 UNREACHED = [
-    ("Windows そのもの", "`ci.yml` の Windows ジョブと、会社の実機"),
-    ("彼の JIS 配列と IME", "実機のみ。`drive.js` は本物のキーを送りますが US 配列です"),
-    ("AI の本物の応答", "実機のみ。ここでは `auth_mode = \"mock\"` で経路だけ通します"),
+    ("会社の環境そのもの", "社内の経路・共有フォルダ・権限。仮想環境は素の Windows です"),
     ("配る資材の版名乗り", "`scripts/buildstamp.py <資材>`。CI の成果物に当てます"),
-    ("見た目の良し悪し", "実機のみ。桁と文言は機械が見ますが、良いかどうかは見ません"),
+    ("見た目の良し悪し", "**利用者が画像で判断します。** 改修のあとは画面を撮って出します"),
 ]
 
 
@@ -113,9 +114,13 @@ def pad(s: str, n: int) -> str:
 
 
 class Step:
-    def __init__(self, name, what, cmd, timeout=600, env=None, note=""):
+    def __init__(self, name, what, cmd, timeout=600, env=None, note="", when=None):
         self.name, self.what, self.cmd = name, what, cmd
         self.timeout, self.env, self.note = timeout, env or {}, note
+        # `when` は「走らせられるか」を返す関数。走らせられない理由を文字列で
+        # 返すと、その段は**理由つきで飛ばします** ── 黙って抜けると、
+        # 走ったのか走らなかったのか後から分かりません。
+        self.when = when
         self.rc = None
         self.took = 0.0
         self.log: Path | None = None
@@ -169,6 +174,18 @@ def mark(step: Step) -> str:
 
 
 # ── 準備 ────────────────────────────────────────────────────────────────
+
+def ollama_here() -> str | None:
+    """Ollama が答えるか。答えないなら理由を返します。"""
+    import urllib.error
+    import urllib.request
+
+    try:
+        urllib.request.urlopen("http://localhost:11434/api/tags", timeout=3).read(1)
+        return None
+    except (OSError, urllib.error.URLError):
+        return "Ollama が応答しません（`ollama serve` が要ります）"
+
 
 def git_head() -> str:
     out = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
@@ -308,6 +325,16 @@ def plan() -> list[tuple[str, list[Step]]]:
         Step("窓版 AI", "説明からコマンド生成を、答えが返る側まで",
              ["node", "gui/drive.js", "--ai"], timeout=900, env=mock,
              note="mock の設定で走ります（本物の接続先ではありません）"),
+        # **本物のモデルに訊く2つ。** mock は質問をそのまま返すので、経路は
+        # 測れても答えは測れません。どちらも鍵も社内の経路も要りません。
+        Step("窓版 AI（CLI）", "本物の答えが返り、プロンプトに載るまで",
+             ["node", "gui/drive.js", "--ai-real"], timeout=900,
+             env={"CIAN_CONFIG_DIR": str(Path.home() / ".cache" / "cian-cli")},
+             when=lambda: None if shutil.which("claude") else "claude が PATH にありません"),
+        Step("窓版 AI（Ollama）", "手元のモデルで、同じところまで",
+             ["node", "gui/drive.js", "--ai-real"], timeout=900,
+             env={"CIAN_CONFIG_DIR": str(Path.home() / ".cache" / "cian-ollama")},
+             when=ollama_here),
     ]
     return [("① 建つか・通るか", build),
             ("② 機械の物差し", machine),
@@ -358,13 +385,21 @@ def main() -> int:
     if a.prepare:
         return 1 if missing else 0
 
-    bad, late, ran = [], [], 0
+    bad, late, skipped, ran = [], [], [], 0
     for title, steps in groups:
         shown = [s for s in steps if not a.pick or any(k in s.name or k in s.what for k in a.pick)]
         if not shown:
             continue
         print(f"\n{title}")
         for s in shown:
+            why = s.when() if s.when else None
+            if why:
+                # 飛ばしたことを**必ず出します。** 走らなかった段が黙って
+                # 消えると、全部緑に見えます。
+                print(f"  {pad('飛ばす', 8)} {pad(s.name, 20)} {'':>6}   "
+                      f"{pad(s.what[:34], 36)} {why}")
+                skipped.append(f"{s.name}: {why}")
+                continue
             run(s)
             ran += 1
             tail = ""
@@ -383,7 +418,10 @@ def main() -> int:
                 bad.append(s)
 
     print("\n" + "=" * 72)
-    print(f"  {ran} 段のうち、落ちたもの {len(bad)} 件、時間切れ {len(late)} 件")
+    print(f"  {ran} 段のうち、落ちたもの {len(bad)} 件、時間切れ {len(late)} 件"
+          + (f"、飛ばしたもの {len(skipped)} 件" if skipped else ""))
+    for one in skipped:
+        print(f"  飛ばす {one}")
     for s in bad + late:
         print(f"  {mark(s)} {s.name} ── 記録: {s.log}")
     if missing:

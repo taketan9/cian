@@ -28,6 +28,17 @@ unicode-width = "0.2"
 # dependency, which would break the self-contained Windows binary).
 ratatui-image = { version = "11.0", default-features = false, features = ["crossterm"] }
 
+# **どの端末が描いているかを、Windows でだけ訊くため。**
+# `WT_SESSION` は Windows Terminal が自分で起動したときにしか付きません。
+# Windows 11 の既定では、exe を叩くと conhost が Windows Terminal へ引き継ぐ
+# ので、**本物の Windows Terminal なのに印が1つも無い**（仮想環境で確認)。
+# それで「legacy console です」と言い続けていました。新しい他人の部品では
+# ありません ── `crossterm` が Windows で既に引いています。
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation", "Win32_System_Console", "Win32_UI_WindowsAndMessaging",
+] }
+
 [dev-dependencies]
 tempfile = "3.27.0"
 # `:touch` stamps directories too, which no `File` handle can do. The test

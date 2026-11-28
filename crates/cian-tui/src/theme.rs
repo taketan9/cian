@@ -267,6 +267,58 @@ pub(crate) fn modern_terminal() -> bool {
     std::env::var_os("WT_SESSION").is_some()
         || std::env::var_os("WEZTERM_PANE").is_some()
         || std::env::var_os("TERM_PROGRAM").is_some()
+        || drawn_by_something_else()
+}
+
+/// Does the class name belong to the one console that cannot do this?
+///
+/// `ConsoleWindowClass` is the legacy console window. Anything else — above
+/// all `PseudoConsoleWindow`, which is what a console attached through a
+/// pseudoconsole gets — means some other program is drawing: Windows
+/// Terminal, an editor's panel, a session over ssh.
+// Windows でしか呼ばれませんが、**規則そのものは全部の環境で試せます** ──
+// 窓の種類の名前を渡すだけの関数にしてあるのはそのためです。
+#[cfg_attr(all(not(windows), not(test)), expect(dead_code, reason = "規則は Windows のものだが、試験は全環境で走る"))]
+pub(crate) fn host_is_legacy(class: &str) -> bool {
+    class == "ConsoleWindowClass"
+}
+
+/// Is something other than the legacy console drawing this?
+///
+/// **The environment is not enough on Windows.** `WT_SESSION` is set by
+/// Windows Terminal when *it* starts the program; under Windows 11's default
+/// hand-off, the program is started by conhost, which passes the session to
+/// Windows Terminal and sets nothing. So the one notice a Windows user sees
+/// first said "this looks like the legacy Windows console" in a real Windows
+/// Terminal, and told them to run `wt cian-tui` to fix what was not broken
+/// (seen 2026-11-28 in the virtual machine, where `WT_SESSION`,
+/// `WT_PROFILE_ID` and `TERM_PROGRAM` were all empty).
+///
+/// The window class answers it: ask the console for its window and read the
+/// class name.
+#[cfg(windows)]
+fn drawn_by_something_else() -> bool {
+    use windows_sys::Win32::System::Console::GetConsoleWindow;
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetClassNameW;
+
+    let window = unsafe { GetConsoleWindow() };
+    if window.is_null() {
+        // No console window at all. Not the legacy console, whatever it is.
+        return true;
+    }
+    let mut buf = [0u16; 128];
+    let n = unsafe { GetClassNameW(window, buf.as_mut_ptr(), buf.len() as i32) };
+    if n <= 0 {
+        return false; // 読めないときは、今までどおり環境変数の答えに任せる
+    }
+    !host_is_legacy(&String::from_utf16_lossy(&buf[..n as usize]))
+}
+
+/// Everywhere else the question does not arise: the notice is Windows-only,
+/// and the border style keeps answering to the environment as before.
+#[cfg(not(windows))]
+fn drawn_by_something_else() -> bool {
+    false
 }
 
 /// Interface language for the key manual / help text. Japanese is the default;
